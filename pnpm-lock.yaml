@@ -54,7 +54,20 @@ importers:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@22.20.0)(happy-dom@20.10.6)(jiti@2.7.0)
 
-  demo: {}
+  demo:
+    dependencies:
+      '@cluion/sigil':
+        specifier: workspace:*
+        version: link:../packages/editor
+      '@cluion/sigil-blocks':
+        specifier: workspace:*
+        version: link:../packages/blocks
+      '@cluion/sigil-core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@cluion/sigil-store-json':
+        specifier: workspace:*
+        version: link:../packages/store-json
 
   packages/blocks:
     dependencies:
@@ -66,15 +79,9 @@ importers:
 
   packages/editor:
     dependencies:
-      '@cluion/sigil-blocks':
-        specifier: workspace:*
-        version: link:../blocks
       '@cluion/sigil-core':
         specifier: workspace:*
         version: link:../core
-      '@cluion/sigil-shortcode':
-        specifier: workspace:*
-        version: link:../shortcode
       '@cluion/sigil-store-json':
         specifier: workspace:*
         version: link:../store-json

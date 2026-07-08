@@ -1,12 +1,44 @@
-// Sigil demo，createEditor() 於此掛載
+import { createEditor, type SigilEditor } from '@cluion/sigil'
+import { blockSection, blockText, blockButton, blockImage } from '@cluion/sigil-blocks'
+import { JsonProjectStore } from '@cluion/sigil-store-json'
+import type { SigilDoc } from '@cluion/sigil-core'
 
-const app = document.getElementById('app')
-if (app) {
-  const h1 = document.createElement('h1')
-  h1.textContent = 'Sigil — 編輯器骨架'
+const root = document.getElementById('app')
+if (!root) throw new Error('#app 不存在')
 
-  const p = document.createElement('p')
-  p.textContent = '工具鏈就緒：install／test／build／lint／size 全綠，createEditor() 待實作'
+const store = new JsonProjectStore()
 
-  app.append(h1, p)
-}
+// 範例頁
+const section = blockSection()
+section.children = [blockText('點我編輯'), blockButton('按鈕'), blockImage('https://placehold.co/120')]
+const doc: SigilDoc = { version: 1, root: section }
+
+let editor: SigilEditor = createEditor({ mount: root, doc, store })
+
+// 工具列：存／讀 JSON
+const toolbar = document.getElementById('toolbar')!
+const status = document.createElement('span')
+status.style.marginLeft = '8px'
+
+const saveBtn = document.createElement('button')
+saveBtn.textContent = '存 JSON'
+saveBtn.addEventListener('click', () => {
+  const json = store.exportJSON(editor.toJSON())
+  localStorage.setItem('sigil-demo', json)
+  status.textContent = '已存'
+})
+
+const loadBtn = document.createElement('button')
+loadBtn.textContent = '讀 JSON'
+loadBtn.addEventListener('click', () => {
+  const json = localStorage.getItem('sigil-demo')
+  if (!json) {
+    status.textContent = '無資料'
+    return
+  }
+  editor.destroy()
+  editor = createEditor({ mount: root, doc: store.importJSON(json), store })
+  status.textContent = '已讀'
+})
+
+toolbar.append(saveBtn, loadBtn, status)

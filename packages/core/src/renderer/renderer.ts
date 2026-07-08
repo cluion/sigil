@@ -32,6 +32,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
     const tag = node.tagName ?? registry.get(node.type)?.tagName ?? 'div'
     const el = document.createElement(tag)
     map.set(node.id, el)
+    el.setAttribute('data-sigil-id', node.id)
     if (node.attributes) {
       for (const [k, v] of Object.entries(node.attributes)) el.setAttribute(k, v)
     }

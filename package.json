@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "build": "pnpm -r --filter \"./packages/*\" run build",
     "lint": "eslint .",
+    "typecheck": "pnpm -r --filter \"./packages/*\" exec tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "publint": "pnpm -r --filter \"./packages/*\" exec publint",

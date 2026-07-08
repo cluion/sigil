@@ -5,5 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite"
+  },
+  "dependencies": {
+    "@cluion/sigil": "workspace:*",
+    "@cluion/sigil-core": "workspace:*",
+    "@cluion/sigil-blocks": "workspace:*",
+    "@cluion/sigil-store-json": "workspace:*"
   }
 }
