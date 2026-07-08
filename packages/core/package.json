@@ -1,0 +1,18 @@
+{
+  "name": "@cluion/sigil-core",
+  "version": "0.0.0",
+  "description": "Sigil core engine — zero-dependency, CSP-safe",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  }
+}

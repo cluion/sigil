@@ -1,0 +1,25 @@
+{
+  "name": "@cluion/sigil",
+  "version": "0.0.0",
+  "description": "Sigil — createEditor() one-stop composition (user-facing entry)",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cluion/sigil-core": "workspace:*",
+    "@cluion/sigil-shortcode": "workspace:*",
+    "@cluion/sigil-ui": "workspace:*",
+    "@cluion/sigil-blocks": "workspace:*",
+    "@cluion/sigil-store-json": "workspace:*"
+  }
+}

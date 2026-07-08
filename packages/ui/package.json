@@ -1,0 +1,21 @@
+{
+  "name": "@cluion/sigil-ui",
+  "version": "0.0.0",
+  "description": "Sigil default Web Components — canvas(iframe)/layers/props/blocks panels",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cluion/sigil-core": "workspace:*"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@cluion/sigil-shortcode",
+  "version": "0.0.0",
+  "description": "Sigil shortcode DSL — defineShortcode, parser, resolver, form",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cluion/sigil-core": "workspace:*"
+  }
+}

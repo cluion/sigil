@@ -1,0 +1,46 @@
+{
+  "name": "sigil",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Cluion Sigil — CSP-safe, shortcode-oriented, embeddable web editor engine",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.27.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite demo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "pnpm -r --filter \"./packages/*\" run build",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "publint": "pnpm -r --filter \"./packages/*\" exec publint",
+    "attw": "pnpm -r --filter \"./packages/*\" exec attw --pack",
+    "size": "size-limit",
+    "changeset": "changeset",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.17.4",
+    "@changesets/cli": "^2.27.12",
+    "@eslint/js": "^10.0.1",
+    "@size-limit/preset-small-lib": "^12.1.0",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.17.0",
+    "happy-dom": "^20.10.6",
+    "prettier": "^3.4.2",
+    "publint": "^0.3.2",
+    "size-limit": "^11.1.6",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.63.0",
+    "vite": "^6.0.7",
+    "vitest": "^3.0.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

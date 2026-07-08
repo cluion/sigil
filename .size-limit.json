@@ -1,0 +1,8 @@
+[
+  {
+    "name": "@cluion/sigil-core (gzip, hard budget)",
+    "path": "packages/core/dist/index.js",
+    "limit": "30 KB",
+    "gzip": true
+  }
+]
