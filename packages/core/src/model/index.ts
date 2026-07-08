@@ -1,2 +1,7 @@
-// model — ComponentNode schema、不可變樹操作、migrations、type-registry，待實作
-export {}
+export * from './types.js'
+export { createId } from './id.js'
+export type { IdFactory } from './id.js'
+export { createTypeRegistry } from './registry.js'
+export type { TypeRegistry, TypeEntry } from './registry.js'
+export { findNode, findParent, insertNode, removeNode, updateNode, moveNode } from './tree.js'
+export { migrate, SCHEMA_VERSION } from './migrations.js'

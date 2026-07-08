@@ -1,0 +1,159 @@
+import type { ComponentNode } from '../model/types.js'
+import {
+  insertNode,
+  removeNode,
+  updateNode,
+  moveNode,
+  findNode,
+  createId,
+} from '../model/index.js'
+import type { Engine, EngineEvent, EngineOptions, Patch } from './types.js'
+
+/**
+ * 建立 Engine
+ *
+ * 持有不可變樹 + undo／redo stack + 選取狀態；command 產新樹並發 patch 事件，
+ * undo／redo 發 tree 事件（全量）。batch 把多 command 包成一個 undo 單位
+ */
+export function createEngine(opts: EngineOptions = {}): Engine {
+  const idFactory = opts.idFactory ?? createId
+  let root: ComponentNode = opts.doc?.root ?? { id: idFactory(), type: 'section', children: [] }
+  let selection: string | null = null
+  const undoStack: ComponentNode[] = []
+  const redoStack: ComponentNode[] = []
+  const listeners = new Set<(e: EngineEvent) => void>()
+  let batching = false
+  let batchSnapshot: ComponentNode | null = null
+
+  function emit(e: EngineEvent): void {
+    for (const l of listeners) l(e)
+  }
+
+  function emitHistory(): void {
+    emit({ type: 'history', canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 })
+  }
+
+  // 記錄 snapshot；batch 中只記第一次
+  function pushHistory(prev: ComponentNode): void {
+    if (batching) {
+      if (batchSnapshot === null) batchSnapshot = prev
+      return
+    }
+    undoStack.push(prev)
+    redoStack.length = 0
+    emitHistory()
+  }
+
+  function beforeIdOf(parentId: string, index?: number): string | null {
+    if (index === undefined) return null
+    const parent = findNode(root, parentId)
+    const children = parent?.children ?? []
+    return index < children.length ? (children[index]?.id ?? null) : null
+  }
+
+  return {
+    getTree() {
+      return root
+    },
+    toJSON() {
+      return { version: 1 as const, root }
+    },
+    getSelection() {
+      return selection
+    },
+
+    insert(parentId, node, index) {
+      const beforeId = beforeIdOf(parentId, index)
+      const prev = root
+      root = insertNode(root, parentId, node, index)
+      pushHistory(prev)
+      emit({ type: 'patch', patch: { type: 'insert', parentId, beforeId, node } })
+      return node.id
+    },
+
+    remove(id) {
+      const prev = root
+      root = removeNode(root, id)
+      if (selection === id) selection = null
+      pushHistory(prev)
+      emit({ type: 'patch', patch: { type: 'remove', id } })
+    },
+
+    update(id, patch) {
+      const prev = root
+      root = updateNode(root, id, patch)
+      pushHistory(prev)
+      const p: Extract<Patch, { type: 'update' }> = { type: 'update', id }
+      if (patch.attributes) p.attrs = patch.attributes
+      if (patch.style) p.style = patch.style
+      if (patch.content !== undefined) p.content = patch.content
+      if (patch.className !== undefined) p.className = patch.className
+      emit({ type: 'patch', patch: p })
+    },
+
+    move(id, newParentId, index) {
+      const beforeId = beforeIdOf(newParentId, index)
+      const prev = root
+      root = moveNode(root, id, newParentId, index)
+      pushHistory(prev)
+      emit({ type: 'patch', patch: { type: 'move', id, newParentId, beforeId } })
+    },
+
+    batch(fn) {
+      batching = true
+      batchSnapshot = null
+      try {
+        fn()
+      } finally {
+        batching = false
+        if (batchSnapshot !== null) {
+          undoStack.push(batchSnapshot)
+          redoStack.length = 0
+          emitHistory()
+        }
+        batchSnapshot = null
+      }
+    },
+
+    select(id) {
+      selection = id
+      emit({ type: 'selection', id })
+    },
+
+    undo() {
+      const prev = undoStack.pop()
+      if (prev === undefined) return
+      redoStack.push(root)
+      root = prev
+      emit({ type: 'tree', tree: root })
+      emitHistory()
+    },
+
+    redo() {
+      const next = redoStack.pop()
+      if (next === undefined) return
+      undoStack.push(root)
+      root = next
+      emit({ type: 'tree', tree: root })
+      emitHistory()
+    },
+
+    canUndo() {
+      return undoStack.length > 0
+    },
+    canRedo() {
+      return redoStack.length > 0
+    },
+
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+
+    destroy() {
+      listeners.clear()
+    },
+  }
+}

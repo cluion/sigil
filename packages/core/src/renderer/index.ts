@@ -1,2 +1,2 @@
-// renderer — patch-driven 渲染與 morph fallback，待實作
-export {}
+export { createRenderer } from './renderer.js'
+export type { Renderer, RendererOptions } from './renderer.js'

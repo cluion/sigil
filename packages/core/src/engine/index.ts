@@ -1,2 +1,2 @@
-// engine — Engine、commands、transaction、undo、Patch，待實作
-export {}
+export { createEngine } from './engine.js'
+export type { Engine, EngineEvent, EngineOptions, Patch } from './types.js'
