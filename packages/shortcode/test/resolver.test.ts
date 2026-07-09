@@ -100,3 +100,39 @@ describe('resolver', () => {
     expect(runs).toBe(2) // destroy 後不再跑
   })
 })
+
+describe('resolver — renderStatic', () => {
+  it('render 優先,合併 def.props 與 node.props', () => {
+    const def = defineShortcode({
+      name: 'greet',
+      props: { name: 'world' },
+      template: '<span>fallback</span>',
+      render: (p) => `<b>hi ${p.name}</b>`,
+    })
+    const registry = createShortcodeRegistry([def])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
+    const html = resolver.renderStatic!({
+      id: 'x', type: 'shortcode', shortcode: { name: 'greet', props: { name: 'sam' } },
+    })
+    expect(html).toBe('<b>hi sam</b>')
+  })
+
+  it('無 render → fallback string template', () => {
+    const def = defineShortcode({ name: 'plain', template: '<div>static</div>' })
+    const registry = createShortcodeRegistry([def])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
+    const html = resolver.renderStatic!({
+      id: 'x', type: 'shortcode', shortcode: { name: 'plain', props: {} },
+    })
+    expect(html).toBe('<div>static</div>')
+  })
+
+  it('無 def → null', () => {
+    const registry = createShortcodeRegistry([])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
+    const html = resolver.renderStatic!({
+      id: 'x', type: 'shortcode', shortcode: { name: 'missing', props: {} },
+    })
+    expect(html).toBeNull()
+  })
+})

@@ -84,5 +84,15 @@ export function createShortcodeResolver(opts: CreateResolverOptions): ShortcodeR
         },
       }
     },
+    renderStatic(node) {
+      const ref = node.shortcode
+      if (!ref) return null
+      const def = opts.registry.get(ref.name)
+      if (!def) return null
+      const props = { ...(def.props ?? {}), ...ref.props } as Record<string, unknown>
+      if (def.render) return def.render(props)
+      if (typeof def.template === 'string') return def.template
+      return def.template.innerHTML
+    },
   }
 }

@@ -14,6 +14,7 @@ export interface ShortcodeDefinition<P = Record<string, unknown>> {
   props?: P
   template: string | HTMLTemplateElement
   bind?: (el: HTMLElement, ctx: BindContext<P>) => void | CleanupFn
+  render?: (props: P) => string
 }
 
 /**
