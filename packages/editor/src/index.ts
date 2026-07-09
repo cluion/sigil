@@ -1,11 +1,18 @@
 import { createEngine, type Engine, type SigilDoc } from '@cluion/sigil-core'
-import { createCanvas, createPropsPanel } from '@cluion/sigil-ui'
+import {
+  createCanvas,
+  createPropsPanel,
+  createBlocksPanel,
+  createLayersPanel,
+  type BlockFactory,
+} from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 
 export interface EditorOptions {
   mount: string | HTMLElement
   doc?: SigilDoc
   store?: JsonProjectStore
+  blocks?: Record<string, BlockFactory>
 }
 
 export interface SigilEditor {
@@ -15,7 +22,7 @@ export interface SigilEditor {
 }
 
 /**
- * 建立 editor — 一站式組合 engine + canvas + props 面板
+ * 建立 editor — 一站式組合區塊面板 + canvas + 圖層 + props 面板
  */
 export function createEditor(opts: EditorOptions): SigilEditor {
   const mountEl =
@@ -31,15 +38,34 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   const layout = document.createElement('div')
   layout.style.display = 'flex'
   layout.style.gap = '12px'
+  const blocksBox = document.createElement('div')
+  blocksBox.style.width = '140px'
   const canvasBox = document.createElement('div')
   canvasBox.style.flex = '1'
+  const rightBox = document.createElement('div')
+  rightBox.style.width = '260px'
+  rightBox.style.display = 'flex'
+  rightBox.style.flexDirection = 'column'
+  rightBox.style.gap = '8px'
+  const layersTitle = document.createElement('h4')
+  layersTitle.textContent = '圖層'
+  const layersBox = document.createElement('div')
+  layersBox.style.height = '200px'
+  layersBox.style.overflow = 'auto'
+  layersBox.style.border = '1px solid #eee'
+  const propsTitle = document.createElement('h4')
+  propsTitle.textContent = '屬性'
   const propsBox = document.createElement('div')
-  propsBox.style.width = '280px'
-  layout.append(canvasBox, propsBox)
+  rightBox.append(layersTitle, layersBox, propsTitle, propsBox)
+  layout.append(blocksBox, canvasBox, rightBox)
   mountEl.appendChild(layout)
 
   const canvas = createCanvas(engine, canvasBox)
   const props = createPropsPanel(engine, propsBox)
+  const layers = createLayersPanel(engine, layersBox)
+  const blocksPanel = opts.blocks
+    ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)
+    : null
 
   return {
     engine,
@@ -49,8 +75,10 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       return doc
     },
     destroy() {
-      canvas.destroy()
+      blocksPanel?.destroy()
+      layers.destroy()
       props.destroy()
+      canvas.destroy()
       engine.destroy()
     },
   }

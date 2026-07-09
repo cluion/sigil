@@ -1,5 +1,5 @@
 import { createEditor, type SigilEditor } from '@cluion/sigil'
-import { blockSection, blockText, blockButton, blockImage } from '@cluion/sigil-blocks'
+import { basicBlocks, blockSection, blockText, blockButton, blockImage } from '@cluion/sigil-blocks'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import type { SigilDoc } from '@cluion/sigil-core'
 
@@ -13,7 +13,7 @@ const section = blockSection()
 section.children = [blockText('點我編輯'), blockButton('按鈕'), blockImage('https://placehold.co/120')]
 const doc: SigilDoc = { version: 1, root: section }
 
-let editor: SigilEditor = createEditor({ mount: root, doc, store })
+let editor: SigilEditor = createEditor({ mount: root, doc, store, blocks: basicBlocks })
 
 // 工具列：存／讀 JSON
 const toolbar = document.getElementById('toolbar')!
@@ -37,7 +37,7 @@ loadBtn.addEventListener('click', () => {
     return
   }
   editor.destroy()
-  editor = createEditor({ mount: root, doc: store.importJSON(json), store })
+  editor = createEditor({ mount: root, doc: store.importJSON(json), store, blocks: basicBlocks })
   status.textContent = '已讀'
 })
 
