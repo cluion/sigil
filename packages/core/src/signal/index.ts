@@ -198,3 +198,5 @@ export function untrack<T>(fn: () => T): T {
     active = prev
   }
 }
+
+export * from './event-bus.js'
