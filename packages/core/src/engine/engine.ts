@@ -24,6 +24,9 @@ export function createEngine(opts: EngineOptions = {}): Engine {
   const listeners = new Set<(e: EngineEvent) => void>()
   let batching = false
   let batchSnapshot: ComponentNode | null = null
+  let lastMergeKey: string | null = null
+  let lastMergeTime = 0
+  const MERGE_MS = 500
 
   function emit(e: EngineEvent): void {
     for (const l of listeners) l(e)
@@ -41,6 +44,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     }
     undoStack.push(prev)
     redoStack.length = 0
+    lastMergeKey = null
     emitHistory()
   }
 
@@ -82,7 +86,21 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     update(id, patch) {
       const prev = root
       root = updateNode(root, id, patch)
-      pushHistory(prev)
+      // 合併連續 content/className 更新(同節點同欄位 + 時間窗)→ 不 push
+      const key =
+        patch.content !== undefined
+          ? `${id}:content`
+          : patch.className !== undefined
+            ? `${id}:className`
+            : null
+      const now = Date.now()
+      if (key !== null && key === lastMergeKey && now - lastMergeTime < MERGE_MS) {
+        // 合併:沿用上次 undo step
+      } else {
+        pushHistory(prev)
+      }
+      lastMergeKey = key
+      lastMergeTime = now
       const p: Extract<Patch, { type: 'update' }> = { type: 'update', id }
       if (patch.attributes) p.attrs = patch.attributes
       if (patch.style) p.style = patch.style

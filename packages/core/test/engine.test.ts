@@ -99,3 +99,38 @@ describe('subscribe / select', () => {
     expect(doc.root).toBe(e.getTree())
   })
 })
+
+describe('engine — undo 合併', () => {
+  it('連續 content update 合併一 undo step', () => {
+    const e = createEngine({
+      doc: { version: 1 as const, root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: '' }] } },
+    })
+    e.update('c', { content: 'a' })
+    e.update('c', { content: 'ab' })
+    e.update('c', { content: 'abc' })
+    e.undo()
+    expect(e.getTree().children![0]!.content).toBe('')
+  })
+
+  it('不同節點不合併', () => {
+    const e = createEngine({
+      doc: { version: 1 as const, root: { id: 'r', type: 'section', children: [{ id: 'a', type: 'text', content: '' }, { id: 'b', type: 'text', content: '' }] } },
+    })
+    e.update('a', { content: 'x' })
+    e.update('b', { content: 'y' })
+    e.undo()
+    expect(e.getTree().children![1]!.content).toBe('')
+    expect(e.getTree().children![0]!.content).toBe('x')
+  })
+
+  it('insert 中斷合併', () => {
+    const e = createEngine({
+      doc: { version: 1 as const, root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: '' }] } },
+    })
+    e.update('c', { content: 'a' })
+    e.insert('r', { id: 'n', type: 'text', content: 'N' })
+    e.update('c', { content: 'ab' })
+    e.undo()
+    expect(e.getTree().children![0]!.content).toBe('a')
+  })
+})
