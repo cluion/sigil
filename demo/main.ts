@@ -11,6 +11,8 @@ import { JsonProjectStore } from '@cluion/sigil-store-json'
 import type { SigilDoc } from '@cluion/sigil-core'
 import { counterDef } from './shortcodes/counter'
 import { cardDef } from './shortcodes/card'
+import { pingDef } from './shortcodes/ping'
+import { pongDef } from './shortcodes/pong'
 
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
@@ -26,6 +28,8 @@ const blocks = {
   ...basicBlocks,
   計數器: () => blockShortcode('counter', { step: 1 }),
   卡片: () => blockShortcode('card', {}),
+  發送: () => blockShortcode('ping', {}),
+  接收: () => blockShortcode('pong', {}),
 }
 
 let editor: SigilEditor = createEditor({
@@ -33,7 +37,7 @@ let editor: SigilEditor = createEditor({
   doc,
   store,
   blocks,
-  shortcodes: [counterDef, cardDef],
+  shortcodes: [counterDef, cardDef, pingDef, pongDef],
 })
 
 // 工具列：存／讀 JSON
@@ -63,7 +67,7 @@ loadBtn.addEventListener('click', () => {
     doc: store.importJSON(json),
     store,
     blocks,
-    shortcodes: [counterDef, cardDef],
+    shortcodes: [counterDef, cardDef, pingDef, pongDef],
   })
   status.textContent = '已讀'
 })

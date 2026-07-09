@@ -2,6 +2,7 @@ import {
   createEngine,
   createDefaultPolicy,
   toHTML,
+  createEventBus,
   type Engine,
   type SigilDoc,
   type SanitizeFn,
@@ -54,7 +55,8 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     sanitize: opts.sanitize,
   })
   const shortcodeRegistry = createShortcodeRegistry(opts.shortcodes)
-  const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy })
+  const bus = createEventBus()
+  const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy, bus })
 
   mountEl.replaceChildren()
   const layout = document.createElement('div')
