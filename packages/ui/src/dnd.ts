@@ -1,10 +1,17 @@
 import type { Engine, ComponentNode } from '@cluion/sigil-core'
 import { findNode, findParent } from '@cluion/sigil-core'
 
+export type Side = 'before' | 'after'
+export type Orient = 'h' | 'v'
+export type DropMode = 'sibling' | 'child'
+
 export interface DropTarget {
   parentId: string
   index: number
   hitId: string
+  side: Side
+  orient: Orient
+  mode: DropMode
 }
 
 /**
@@ -15,38 +22,40 @@ function contains(node: ComponentNode, id: string): boolean {
   return (node.children ?? []).some((c) => contains(c, id))
 }
 
-function elRectTop(el: HTMLElement): number {
-  return el.getBoundingClientRect().top
-}
-
 /**
- * 建立 drop 高亮器（每次拖拽獨立,追蹤上一個高亮元素）
+ * 判斷節點是否為容器（可接子元件）
  */
-function makeHighlighter(iframe: HTMLIFrameElement): {
-  highlight: (hitId: string | null) => void
-} {
-  let highlighted: Element | null = null
-  return {
-    highlight(hitId) {
-      const doc = iframe.contentDocument
-      if (!doc) return
-      if (highlighted) highlighted.classList.remove('sigil-drop-target')
-      highlighted = null
-      if (hitId) {
-        const el = doc.querySelector(`[data-sigil-id="${hitId}"]`)
-        if (el) {
-          el.classList.add('sigil-drop-target')
-          highlighted = el
-        }
-      }
-    },
-  }
+function isContainer(node: ComponentNode, rootId: string): boolean {
+  return node.id === rootId || node.type === 'section' || node.type === 'column'
 }
 
 /**
- * 計算 iframe 內的 drop 目標（parent + index + 命中 id）
+ * 反查 iframe 內命中元素的節點 id
  *
- * 游標在命中元素上半 → 插前面；下半 → 插後面；命中 root → append
+ * canvas 的 iframe 為 pointer-events:none,pointer 由主文檔 overlay 接收,
+ * 再用 elementFromPoint 反查 iframe 內元素
+ */
+export function hitTest(
+  iframe: HTMLIFrameElement,
+  clientX: number,
+  clientY: number,
+): string | null {
+  const doc = iframe.contentDocument
+  if (!doc) return null
+  const rect = iframe.getBoundingClientRect()
+  const el = doc
+    .elementFromPoint(clientX - rect.left, clientY - rect.top)
+    ?.closest('[data-sigil-id]') as HTMLElement | null
+  return el?.getAttribute('data-sigil-id') ?? null
+}
+
+/**
+ * 計算 drop 目標
+ *
+ * 命中容器（section／column／root）且游標在「中間區」（15~85%）→ 進入容器（append child）
+ * 命中容器的最外邊緣,或命中葉節點 → 在該層排序（sibling）
+ *
+ * 也就是「拖到容器上 → 預設進去」,只有刻意貼最邊邊才是排序該容器
  */
 export function computeDrop(
   iframe: HTMLIFrameElement,
@@ -59,22 +68,56 @@ export function computeDrop(
   const rect = iframe.getBoundingClientRect()
   const x = clientX - rect.left
   const y = clientY - rect.top
-  const raw = doc.elementFromPoint(x, y)
-  const el = raw?.closest('[data-sigil-id]') as HTMLElement | null
+  const el = doc.elementFromPoint(x, y)?.closest('[data-sigil-id]') as HTMLElement | null
   if (!el) return null
   const id = el.getAttribute('data-sigil-id')
   if (!id) return null
+  const node = findNode(root, id)
+  if (!node) return null
+  const r = el.getBoundingClientRect()
+  const relX = r.width > 0 ? (x - r.left) / r.width : 0.5
+  const relY = r.height > 0 ? (y - r.top) / r.height : 0.5
+  const onEdge = relX < 0.05 || relX > 0.95 || relY < 0.05 || relY > 0.95
 
-  if (id === root.id) {
-    return { parentId: root.id, index: root.children?.length ?? 0, hitId: id }
+  // 容器且非邊緣 → 進入（append）
+  if (isContainer(node, root.id) && !onEdge) {
+    return {
+      parentId: id,
+      index: node.children?.length ?? 0,
+      hitId: id,
+      side: 'after',
+      orient: 'v',
+      mode: 'child',
+    }
   }
+
+  // root 無 parent,邊緣也只能 append
+  if (id === root.id) {
+    return {
+      parentId: root.id,
+      index: root.children?.length ?? 0,
+      hitId: id,
+      side: 'after',
+      orient: 'v',
+      mode: 'child',
+    }
+  }
+
+  // 葉節點 或 容器邊緣 → sibling（在命中節點的父層內排序）
+  const orient: Orient = Math.abs(relX - 0.5) > Math.abs(relY - 0.5) ? 'h' : 'v'
+  const before = orient === 'h' ? relX < 0.5 : relY < 0.5
   const parent = findParent(root, id)
   if (!parent) return null
-  const siblings = parent.children ?? []
-  const idx = siblings.findIndex((c) => c.id === id)
+  const idx = (parent.children ?? []).findIndex((c) => c.id === id)
   if (idx < 0) return null
-  const after = y > elRectTop(el) + el.offsetHeight / 2
-  return { parentId: parent.id, index: after ? idx + 1 : idx, hitId: id }
+  return {
+    parentId: parent.id,
+    index: before ? idx : idx + 1,
+    hitId: id,
+    side: before ? 'before' : 'after',
+    orient,
+    mode: 'sibling',
+  }
 }
 
 /**
@@ -95,6 +138,67 @@ export function computeDropForMove(
 }
 
 /**
+ * 建立 drop 指示 — child 模式畫容器框,sibling 模式畫插入線
+ */
+function makeIndicator(iframe: HTMLIFrameElement): {
+  show: (t: DropTarget | null) => void
+  clear: () => void
+} {
+  let line: HTMLElement | null = null
+  function ensure(doc: Document): HTMLElement {
+    if (!line) {
+      line = doc.createElement('div')
+      line.style.cssText =
+        'position:fixed;z-index:9999;pointer-events:none;display:none'
+      doc.body.appendChild(line)
+    }
+    return line
+  }
+  return {
+    show(t) {
+      const doc = iframe.contentDocument
+      if (!doc) return
+      if (!t) {
+        if (line) line.style.display = 'none'
+        return
+      }
+      const el = doc.querySelector(`[data-sigil-id="${t.hitId}"]`) as HTMLElement | null
+      if (!el) return
+      const l = ensure(doc)
+      const r = el.getBoundingClientRect()
+      l.style.display = 'block'
+      if (t.mode === 'child') {
+        l.style.border = '2px solid #3b82f6'
+        l.style.background = 'rgba(59,130,246,0.10)'
+        l.style.boxSizing = 'border-box'
+        l.style.width = `${r.width}px`
+        l.style.height = `${r.height}px`
+        l.style.left = `${r.left}px`
+        l.style.top = `${r.top}px`
+      } else {
+        l.style.border = 'none'
+        l.style.background = '#3b82f6'
+        l.style.boxSizing = 'content-box'
+        if (t.orient === 'v') {
+          l.style.width = `${r.width}px`
+          l.style.height = '2px'
+          l.style.left = `${r.left}px`
+          l.style.top = `${t.side === 'before' ? r.top : r.bottom}px`
+        } else {
+          l.style.height = `${r.height}px`
+          l.style.width = '2px'
+          l.style.top = `${r.top}px`
+          l.style.left = `${t.side === 'before' ? r.left : r.right}px`
+        }
+      }
+    },
+    clear() {
+      if (line) line.style.display = 'none'
+    },
+  }
+}
+
+/**
  * 啟動拖入 — 從面板拖新節點進 canvas
  */
 export function startInsertDrag(opts: {
@@ -104,14 +208,13 @@ export function startInsertDrag(opts: {
   pointerId: number
 }): { cancel: () => void } {
   const { engine, iframe, node, pointerId } = opts
-  iframe.style.pointerEvents = 'none'
-  const { highlight } = makeHighlighter(iframe)
+  const indicator = makeIndicator(iframe)
   let target: DropTarget | null = null
 
   function onMove(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
     target = computeDrop(iframe, engine.getTree(), e.clientX, e.clientY)
-    highlight(target?.hitId ?? null)
+    indicator.show(target)
   }
   function onUp(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
@@ -121,8 +224,7 @@ export function startInsertDrag(opts: {
   function cleanup(): void {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
-    iframe.style.pointerEvents = ''
-    highlight(null)
+    indicator.clear()
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -132,6 +234,7 @@ export function startInsertDrag(opts: {
 /**
  * 啟動移動 — 拖 canvas 內現有節點排序／換層
  *
+ * pointer 由 overlay（主文檔）接收,window 監聽有效；
  * 移動超過門檻才開始(未移動則視為點擊,交由 click 處理選取)
  */
 export function startMoveDrag(opts: {
@@ -143,7 +246,7 @@ export function startMoveDrag(opts: {
   startY: number
 }): { cancel: () => void } {
   const { engine, iframe, id, pointerId, startX, startY } = opts
-  const { highlight } = makeHighlighter(iframe)
+  const indicator = makeIndicator(iframe)
   let started = false
   let target: DropTarget | null = null
 
@@ -152,10 +255,9 @@ export function startMoveDrag(opts: {
     if (!started) {
       if (Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY) <= 4) return
       started = true
-      iframe.style.pointerEvents = 'none'
     }
     target = computeDropForMove(iframe, engine.getTree(), id, e.clientX, e.clientY)
-    highlight(target?.hitId ?? null)
+    indicator.show(target)
   }
   function onUp(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
@@ -165,8 +267,7 @@ export function startMoveDrag(opts: {
   function cleanup(): void {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
-    iframe.style.pointerEvents = ''
-    highlight(null)
+    indicator.clear()
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
