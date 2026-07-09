@@ -66,4 +66,16 @@ loadBtn.addEventListener('click', () => {
   status.textContent = '已讀'
 })
 
-toolbar.append(saveBtn, loadBtn, status)
+const exportBtn = document.createElement('button')
+exportBtn.textContent = '匯出 HTML'
+const htmlOut = document.createElement('textarea')
+htmlOut.readOnly = true
+htmlOut.style.cssText =
+  'display:block;width:100%;min-height:120px;margin-top:8px;font-family:monospace;font-size:12px'
+
+exportBtn.addEventListener('click', () => {
+  htmlOut.value = editor.toHTML()
+  status.textContent = `已輸出 ${htmlOut.value.length} 字`
+})
+
+toolbar.append(saveBtn, loadBtn, exportBtn, status, htmlOut)
