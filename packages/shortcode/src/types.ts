@@ -1,4 +1,4 @@
-import type { PropSchema } from '@cluion/sigil-core'
+import type { PropSchema, Store } from '@cluion/sigil-core'
 
 export type CleanupFn = () => void
 
@@ -45,4 +45,5 @@ export interface BindContext<P = Record<string, unknown>> {
   emit: (name: string, data?: unknown) => void
   on: (name: string, handler: (data?: unknown) => void) => () => void
   fetchJSON: (url: string, signal?: AbortSignal) => Promise<unknown>
+  store: Store
 }

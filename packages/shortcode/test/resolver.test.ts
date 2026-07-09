@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createDefaultPolicy, createEventBus } from '@cluion/sigil-core'
+import { createDefaultPolicy, createEventBus, createStore } from '@cluion/sigil-core'
 import { createShortcodeRegistry, createShortcodeResolver, defineShortcode } from '../src/index.js'
 
 describe('resolver', () => {
@@ -275,5 +275,40 @@ describe('resolver — fetchJSON', () => {
     inst.destroy()
     await new Promise((r) => setTimeout(r, 0))
     expect(aborted).toBe(true)
+  })
+})
+
+describe('resolver — store', () => {
+  it('ctx.store 共享(A set → B get 響應式更新)', () => {
+    const store = createStore()
+    let val: number | undefined
+    const defB = defineShortcode({
+      name: 'b', template: '<i></i>',
+      bind: (_el, ctx) => { ctx.effect(() => { val = ctx.store.get<number>('n') }) },
+    })
+    const defA = defineShortcode({
+      name: 'a', template: '<i></i>',
+      bind: (_el, ctx) => { ctx.store.set('n', 7) },
+    })
+    const registry = createShortcodeRegistry([defA, defB])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy(), store })
+    resolver.resolve({ id: 'b', type: 'shortcode', shortcode: { name: 'b', props: {} } }, document.createElement('div'), 'edit')
+    resolver.resolve({ id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } }, document.createElement('div'), 'edit')
+    expect(val).toBe(7)
+  })
+
+  it('未注入 store:fallback 不拋錯', () => {
+    const def = defineShortcode({
+      name: 'a', template: '<i></i>',
+      bind: (_el, ctx) => { ctx.store.set('x', 1) },
+    })
+    const registry = createShortcodeRegistry([def])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
+    const inst = resolver.resolve(
+      { id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )
+    expect(inst).not.toBeNull()
   })
 })

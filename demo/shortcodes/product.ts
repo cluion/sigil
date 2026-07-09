@@ -35,9 +35,10 @@ export const productDef = defineShortcode({
     }
 
     color.addEventListener('change', loadPrice)
-    add.addEventListener('click', () =>
-      ctx.emit('cart:add', { id: ctx.props.productId, color: color.value }),
-    )
+    add.addEventListener('click', () => {
+      const n = ctx.store.get<number>('cart') ?? 0
+      ctx.store.set('cart', n + 1)
+    })
     // productId 變(props 面板改)→ 換圖 + 重載價格(race:cleanup abort 舊)
     ctx.effect(() => {
       const id = ctx.props.productId

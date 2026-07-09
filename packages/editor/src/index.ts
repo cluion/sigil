@@ -3,6 +3,7 @@ import {
   createDefaultPolicy,
   toHTML,
   createEventBus,
+  createStore,
   type Engine,
   type SigilDoc,
   type SanitizeFn,
@@ -62,7 +63,8 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       : undefined
   const fetchJSON = opts.fetchJSON ?? defaultFetch
   const bus = createEventBus()
-  const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy, bus, fetchJSON })
+  const sharedStore = createStore()
+  const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy, bus, fetchJSON, store: sharedStore })
 
   mountEl.replaceChildren()
   const layout = document.createElement('div')

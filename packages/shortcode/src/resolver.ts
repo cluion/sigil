@@ -1,5 +1,5 @@
-import { state, effect, escapeHtml } from '@cluion/sigil-core'
-import type { HtmlPolicy, ShortcodeResolver, EventBus } from '@cluion/sigil-core'
+import { state, effect, escapeHtml, createStore } from '@cluion/sigil-core'
+import type { HtmlPolicy, ShortcodeResolver, EventBus, Store } from '@cluion/sigil-core'
 import type { ShortcodeDefinition, BindContext, CleanupFn } from './types.js'
 import type { ShortcodeRegistry } from './registry.js'
 
@@ -10,6 +10,7 @@ export interface CreateResolverOptions {
   policy: HtmlPolicy
   bus?: EventBus
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
+  store?: Store
 }
 
 /**
@@ -21,6 +22,7 @@ export interface CreateResolverOptions {
  */
 export function createShortcodeResolver(opts: CreateResolverOptions): ShortcodeResolver {
   const templateCache = new Map<string, HTMLTemplateElement>()
+  const store = opts.store ?? createStore()
 
   function getTemplate(def: ShortcodeDefinition): HTMLTemplateElement {
     const cached = templateCache.get(def.name)
@@ -76,6 +78,7 @@ export function createShortcodeResolver(opts: CreateResolverOptions): ShortcodeR
         },
         fetchJSON: (url, signal) =>
           (opts.fetchJSON ?? (() => Promise.reject(new Error('fetchJSON 未注入'))))(url, signal),
+        store,
       }
 
       const cleanup = def.bind?.(host, ctx)

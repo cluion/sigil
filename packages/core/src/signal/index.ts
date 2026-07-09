@@ -200,3 +200,31 @@ export function untrack<T>(fn: () => T): T {
 }
 
 export * from './event-bus.js'
+
+export interface Store {
+  get<T>(key: string): T | undefined
+  set<T>(key: string, value: T): void
+}
+
+/**
+ * 共享鍵值 store — 每鍵一個 signal,get 在 effect 內自動訂閱,set 觸發訂閱者重跑
+ */
+export function createStore(): Store {
+  const signals = new Map<string, SignalState<unknown>>()
+  function ensure(key: string): SignalState<unknown> {
+    let s = signals.get(key)
+    if (!s) {
+      s = state<unknown>(undefined)
+      signals.set(key, s)
+    }
+    return s
+  }
+  return {
+    get<T>(key: string) {
+      return ensure(key).get() as T | undefined
+    },
+    set<T>(key: string, value: T) {
+      ensure(key).set(value)
+    },
+  }
+}
