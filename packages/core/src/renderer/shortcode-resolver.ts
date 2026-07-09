@@ -21,4 +21,5 @@ export interface ShortcodeInstance {
  */
 export interface ShortcodeResolver {
   resolve(node: ComponentNode, host: HTMLElement, mode: 'edit' | 'live'): ShortcodeInstance | null
+  renderStatic?(node: ComponentNode): string | null
 }
