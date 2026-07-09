@@ -109,3 +109,44 @@ describe('toHTML — shortcode', () => {
     expect(toHTML(doc, { shortcodeResolver: resolver })).toBe('')
   })
 })
+
+describe('toHTML — shortcode slot', () => {
+  const mkResolver = (fn: (n: ComponentNode) => string | null): ShortcodeResolver => ({
+    resolve: () => null,
+    renderStatic: fn,
+  })
+
+  it('shortcode children 填 <slot>', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: {
+        id: 'r', type: 'shortcode', shortcode: { name: 'card', props: {} },
+        children: [{ id: 'c', type: 'text', content: 'Hi' }],
+      },
+    }
+    expect(toHTML(doc, { shortcodeResolver: mkResolver(() => '<div><slot>fb</slot></div>') })).toBe(
+      '<div><span>Hi</span></div>',
+    )
+  })
+
+  it('無 children → fallback 保留', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: { id: 'r', type: 'shortcode', shortcode: { name: 'card', props: {} } },
+    }
+    expect(toHTML(doc, { shortcodeResolver: mkResolver(() => '<div><slot>fb</slot></div>') })).toBe(
+      '<div><slot>fb</slot></div>',
+    )
+  })
+
+  it('render 無 <slot> → 不 replace(children 忽略)', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: {
+        id: 'r', type: 'shortcode', shortcode: { name: 'x', props: {} },
+        children: [{ id: 'c', type: 'text', content: 'Hi' }],
+      },
+    }
+    expect(toHTML(doc, { shortcodeResolver: mkResolver(() => '<div>noslot</div>') })).toBe('<div>noslot</div>')
+  })
+})

@@ -33,7 +33,12 @@ function renderNode(
   resolver?: ShortcodeResolver,
 ): string {
   if (node.shortcode) {
-    return resolver?.renderStatic?.(node) ?? ''
+    const tmpl = resolver?.renderStatic?.(node) ?? ''
+    if (node.children?.length) {
+      const childrenHtml = node.children.map((c) => renderNode(c, registry, resolver)).join('')
+      return tmpl.replace(/<slot\b[^>]*>[\s\S]*?<\/slot>|<slot\b[^>]*\/>/, childrenHtml)
+    }
+    return tmpl
   }
 
   const tag = node.tagName ?? registry.get(node.type)?.tagName ?? 'div'
