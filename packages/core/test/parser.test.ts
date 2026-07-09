@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stringify } from '../src/index.js'
+import { parse, stringify } from '../src/index.js'
 import type { ComponentNode } from '../src/index.js'
 
 const sc = (name: string, props: Record<string, unknown> = {}): ComponentNode =>
@@ -32,5 +32,60 @@ describe('stringify', () => {
 
   it('非 shortcode 節點拋錯', () => {
     expect(() => stringify({ id: 'x', type: 'section' } as ComponentNode)).toThrow()
+  })
+})
+
+describe('parse', () => {
+  it('number 依 schema 還原', () => {
+    const schema = [{ name: 'step', type: 'number' as const }]
+    const nodes = parse('[counter step="1"/]', { getSchema: () => schema })
+    expect(nodes[0]!.shortcode!.props.step).toBe(1)
+  })
+
+  it('boolean 依 schema 還原', () => {
+    const schema = [{ name: 'on', type: 'boolean' as const }]
+    const nodes = parse('[box on="true"/]', { getSchema: () => schema })
+    expect(nodes[0]!.shortcode!.props.on).toBe(true)
+  })
+
+  it('無 schema → 退字串', () => {
+    const nodes = parse('[counter step="1"/]')
+    expect(nodes[0]!.shortcode!.props.step).toBe('1')
+  })
+
+  it('未知 name 仍產節點', () => {
+    const nodes = parse('[mystery k="v"/]')
+    expect(nodes[0]!.shortcode!.name).toBe('mystery')
+  })
+
+  it('多 shortcode', () => {
+    expect(parse('[a/][b/]')).toHaveLength(2)
+  })
+
+  it('unescape 引號', () => {
+    const nodes = parse(`[a k="a\\"b"/]`)
+    expect(nodes[0]!.shortcode!.props.k).toBe('a"b')
+  })
+
+  it('格式錯誤忽略 → []', () => {
+    expect(parse('[broken')).toEqual([])
+  })
+
+  it('空字串 → []', () => {
+    expect(parse('')).toEqual([])
+  })
+})
+
+describe('round-trip', () => {
+  it('stringify → parse 等價(name + props)', () => {
+    const schema = [
+      { name: 'step', type: 'number' as const },
+      { name: 'on', type: 'boolean' as const },
+    ]
+    const orig: ComponentNode = {
+      id: 'x', type: 'shortcode', shortcode: { name: 'c', props: { step: 5, on: true } },
+    }
+    const nodes = parse(stringify(orig), { getSchema: () => schema })
+    expect(nodes[0]!.shortcode).toEqual({ name: 'c', props: { step: 5, on: true } })
   })
 })

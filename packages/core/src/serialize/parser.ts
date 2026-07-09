@@ -1,5 +1,6 @@
 import type { ComponentNode } from '../model/types.js'
-import type { PropSchema } from '../model/schema.js'
+import type { PropSchema, PropType } from '../model/schema.js'
+import { createId } from '../model/index.js'
 
 export interface ParserOptions {
   /** 取 shortcode 的 PropSchema;parse 時依型別還原 prop 值 */
@@ -25,4 +26,41 @@ export function stringify(node: ComponentNode): string {
 /** escape 值:\ → \\、" → \\"(stringify 用;parse 用 unescapeString 反向) */
 function escapeString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+const SHORTCODE_RE = /\[([A-Za-z0-9_-]+)((?:\s+[A-Za-z0-9_-]+="(?:[^"\\]|\\.)*")*)\s*\/\]/g
+const PROP_RE = /([A-Za-z0-9_-]+)="((?:[^"\\]|\\.)*)"/g
+
+/**
+ * 掃描字串中所有 shortcode,產 ComponentNode[];非 shortcode 文字忽略
+ *
+ * 格式不合法的 token 視為文字忽略,不中斷;
+ * prop 值依 getSchema 的 PropType 還原(number/boolean),其餘字串
+ */
+export function parse(text: string, opts?: ParserOptions): ComponentNode[] {
+  const idFactory = opts?.idFactory ?? createId
+  const nodes: ComponentNode[] = []
+  for (const m of text.matchAll(SHORTCODE_RE)) {
+    const name = m[1]!
+    const schemaByName = opts?.getSchema
+      ? new Map(opts.getSchema(name)?.map((s) => [s.name, s.type]))
+      : undefined
+    const props: Record<string, unknown> = {}
+    for (const pm of (m[2] ?? '').matchAll(PROP_RE)) {
+      props[pm[1]!] = convert(unescapeString(pm[2]!), schemaByName?.get(pm[1]!))
+    }
+    nodes.push({ id: idFactory(), type: 'shortcode', shortcode: { name, props } })
+  }
+  return nodes
+}
+
+/** unescape 值:\x → x(處理 \\ → \ 與 \" → ") */
+function unescapeString(s: string): string {
+  return s.replace(/\\(.)/g, '$1')
+}
+
+function convert(v: string, type?: PropType): unknown {
+  if (type === 'number') return Number(v)
+  if (type === 'boolean') return v === 'true'
+  return v
 }
