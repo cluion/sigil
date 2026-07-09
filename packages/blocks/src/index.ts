@@ -10,14 +10,14 @@ export function blockSection(): ComponentNode {
 /**
  * 建立文字區塊
  */
-export function blockText(content = ''): ComponentNode {
+export function blockText(content = '文字'): ComponentNode {
   return { id: createId(), type: 'text', content }
 }
 
 /**
  * 建立圖片區塊
  */
-export function blockImage(src = ''): ComponentNode {
+export function blockImage(src = 'https://placehold.co/120'): ComponentNode {
   return { id: createId(), type: 'image', attributes: { src } }
 }
 

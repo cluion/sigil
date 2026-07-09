@@ -44,7 +44,8 @@ export function createCanvas(engine: Engine, container: HTMLElement): CanvasHand
     const style = doc.createElement('style')
     style.textContent =
       'body{margin:8px;font-family:system-ui}[data-sigil-id]{cursor:default}' +
-      '.sigil-drop-target{outline:2px solid #3b82f6;outline-offset:-2px}'
+      '.sigil-drop-target{outline:2px solid #3b82f6;outline-offset:-2px}' +
+      'section[data-sigil-id],div[data-sigil-id]{min-height:24px;outline:1px dashed #e5e5e5;outline-offset:-1px}'
     doc.head.appendChild(style)
   }
 

@@ -15,9 +15,8 @@ function contains(node: ComponentNode, id: string): boolean {
   return (node.children ?? []).some((c) => contains(c, id))
 }
 
-function elRectTop(iframe: HTMLIFrameElement, el: HTMLElement): number {
-  const rect = iframe.getBoundingClientRect()
-  return el.getBoundingClientRect().top - rect.top
+function elRectTop(el: HTMLElement): number {
+  return el.getBoundingClientRect().top
 }
 
 /**
@@ -74,7 +73,7 @@ export function computeDrop(
   const siblings = parent.children ?? []
   const idx = siblings.findIndex((c) => c.id === id)
   if (idx < 0) return null
-  const after = y > elRectTop(iframe, el) + el.offsetHeight / 2
+  const after = y > elRectTop(el) + el.offsetHeight / 2
   return { parentId: parent.id, index: after ? idx + 1 : idx, hitId: id }
 }
 
