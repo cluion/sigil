@@ -1,3 +1,5 @@
+import type { PropSchema } from '@cluion/sigil-core'
+
 export type CleanupFn = () => void
 
 /**
@@ -15,6 +17,7 @@ export interface ShortcodeDefinition<P = Record<string, unknown>> {
   template: string | HTMLTemplateElement
   bind?: (el: HTMLElement, ctx: BindContext<P>) => void | CleanupFn
   render?: (props: P, ctx: RenderContext) => string
+  schema?: PropSchema[]
 }
 
 /**

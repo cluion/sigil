@@ -151,3 +151,14 @@ describe('resolver — renderStatic', () => {
     expect(html).toBeNull()
   })
 })
+
+describe('defineShortcode — schema', () => {
+  it('schema 欄位可設定(PropSchema 表單描述)', () => {
+    const def = defineShortcode({
+      name: 'x',
+      template: '<i></i>',
+      schema: [{ name: 'a', type: 'text', label: 'A' }],
+    })
+    expect(def.schema?.[0]).toMatchObject({ name: 'a', type: 'text', label: 'A' })
+  })
+})
