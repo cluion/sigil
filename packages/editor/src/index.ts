@@ -85,7 +85,9 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   const canvas = createCanvas(engine, canvasBox, {
     rendererOptions: { shortcodeResolver },
   })
-  const props = createPropsPanel(engine, propsBox)
+  const props = createPropsPanel(engine, propsBox, {
+    getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
+  })
   const layers = createLayersPanel(engine, layersBox)
   const blocksPanel = opts.blocks
     ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)

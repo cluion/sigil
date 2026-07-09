@@ -11,6 +11,7 @@ export const counterDef = defineShortcode({
   name: 'counter',
   label: '計數器',
   props: { step: 1 },
+  schema: [{ name: 'step', type: 'number', label: '步進' }],
   template:
     '<span style="display:inline-flex;align-items:center;gap:6px">' +
     '<button data-ref="dec" type="button">－</button>' +
