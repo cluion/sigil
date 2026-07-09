@@ -107,7 +107,7 @@ describe('resolver — renderStatic', () => {
       name: 'greet',
       props: { name: 'world' },
       template: '<span>fallback</span>',
-      render: (p) => `<b>hi ${p.name}</b>`,
+      render: (p, { escape }) => `<b>hi ${escape(p.name)}</b>`,
     })
     const registry = createShortcodeRegistry([def])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
@@ -115,6 +115,21 @@ describe('resolver — renderStatic', () => {
       id: 'x', type: 'shortcode', shortcode: { name: 'greet', props: { name: 'sam' } },
     })
     expect(html).toBe('<b>hi sam</b>')
+  })
+
+  it('render 的 escape 真實作用(props 含 < > 被 escape)', () => {
+    const def = defineShortcode({
+      name: 'greet',
+      props: { name: '' },
+      template: '<b>fb</b>',
+      render: (p, { escape }) => `<b>${escape(p.name)}</b>`,
+    })
+    const registry = createShortcodeRegistry([def])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
+    const html = resolver.renderStatic!({
+      id: 'x', type: 'shortcode', shortcode: { name: 'greet', props: { name: '<script>' } },
+    })
+    expect(html).toBe('<b>&lt;script&gt;</b>')
   })
 
   it('無 render → fallback string template', () => {

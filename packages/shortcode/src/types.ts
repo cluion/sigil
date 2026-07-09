@@ -14,7 +14,17 @@ export interface ShortcodeDefinition<P = Record<string, unknown>> {
   props?: P
   template: string | HTMLTemplateElement
   bind?: (el: HTMLElement, ctx: BindContext<P>) => void | CleanupFn
-  render?: (props: P) => string
+  render?: (props: P, ctx: RenderContext) => string
+}
+
+/**
+ * render 執行環境(static 輸出)
+ *
+ * escape 為 escapeHtml,供作者 escape 動態 props 後再進 HTML 字串;
+ * 作者對靜態結構自行負責(同 template 信任模型)
+ */
+export interface RenderContext {
+  escape: (input: string) => string
 }
 
 /**

@@ -1,4 +1,4 @@
-import { state, effect } from '@cluion/sigil-core'
+import { state, effect, escapeHtml } from '@cluion/sigil-core'
 import type { HtmlPolicy, ShortcodeResolver } from '@cluion/sigil-core'
 import type { ShortcodeDefinition, BindContext, CleanupFn } from './types.js'
 import type { ShortcodeRegistry } from './registry.js'
@@ -90,7 +90,7 @@ export function createShortcodeResolver(opts: CreateResolverOptions): ShortcodeR
       const def = opts.registry.get(ref.name)
       if (!def) return null
       const props = { ...(def.props ?? {}), ...ref.props } as Record<string, unknown>
-      if (def.render) return def.render(props)
+      if (def.render) return def.render(props, { escape: escapeHtml })
       if (typeof def.template === 'string') return def.template
       return def.template.innerHTML
     },

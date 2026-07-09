@@ -8,7 +8,7 @@ describe('editor — toHTML', () => {
       name: 'greet',
       props: { name: 'world' },
       template: '<span>fb</span>',
-      render: (p) => `<b>${p.name}</b>`,
+      render: (p, { escape }) => `<b>${escape(p.name)}</b>`,
     })
     const el = document.createElement('div')
     const editor = createEditor({
