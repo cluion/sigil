@@ -221,3 +221,59 @@ describe('resolver — emit/on', () => {
     expect(inst).not.toBeNull()
   })
 })
+
+describe('resolver — fetchJSON', () => {
+  it('ctx.fetchJSON 注入:bind 收到資料', async () => {
+    let received: unknown
+    const fetchJSON = async (url: string) => ({ url })
+    const def = defineShortcode({
+      name: 'a', template: '<i></i>',
+      bind: (_el, ctx) => { ctx.fetchJSON('/x').then((d) => { received = d }) },
+    })
+    const resolver = createShortcodeResolver({
+      registry: createShortcodeRegistry([def]), policy: createDefaultPolicy(), fetchJSON,
+    })
+    resolver.resolve({ id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } }, document.createElement('div'), 'edit')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(received).toEqual({ url: '/x' })
+  })
+
+  it('未注入:fetchJSON reject', async () => {
+    let err: unknown
+    const def = defineShortcode({
+      name: 'a', template: '<i></i>',
+      bind: (_el, ctx) => { ctx.fetchJSON('/x').catch((e) => { err = e }) },
+    })
+    const resolver = createShortcodeResolver({ registry: createShortcodeRegistry([def]), policy: createDefaultPolicy() })
+    resolver.resolve({ id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } }, document.createElement('div'), 'edit')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(err).toBeInstanceOf(Error)
+  })
+
+  it('destroy 觸發 cleanup abort signal', async () => {
+    let aborted = false
+    const fetchJSON = (_url: string, signal?: AbortSignal) =>
+      new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => { aborted = true; reject(new Error('abort')) })
+      })
+    const def = defineShortcode({
+      name: 'a', template: '<i></i>',
+      bind: (_el, ctx) => {
+        const ac = new AbortController()
+        ctx.fetchJSON('/x', ac.signal).catch(() => {})
+        return () => ac.abort()
+      },
+    })
+    const resolver = createShortcodeResolver({
+      registry: createShortcodeRegistry([def]), policy: createDefaultPolicy(), fetchJSON,
+    })
+    const inst = resolver.resolve(
+      { id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )!
+    inst.destroy()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(aborted).toBe(true)
+  })
+})

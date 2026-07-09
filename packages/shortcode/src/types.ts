@@ -44,4 +44,5 @@ export interface BindContext<P = Record<string, unknown>> {
   abort: AbortSignal
   emit: (name: string, data?: unknown) => void
   on: (name: string, handler: (data?: unknown) => void) => () => void
+  fetchJSON: (url: string, signal?: AbortSignal) => Promise<unknown>
 }

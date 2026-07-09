@@ -9,6 +9,7 @@ export interface CreateResolverOptions {
   registry: ShortcodeRegistry
   policy: HtmlPolicy
   bus?: EventBus
+  fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
 }
 
 /**
@@ -73,6 +74,8 @@ export function createShortcodeResolver(opts: CreateResolverOptions): ShortcodeR
           disposers.push(dispose)
           return dispose
         },
+        fetchJSON: (url, signal) =>
+          (opts.fetchJSON ?? (() => Promise.reject(new Error('fetchJSON 未注入'))))(url, signal),
       }
 
       const cleanup = def.bind?.(host, ctx)
