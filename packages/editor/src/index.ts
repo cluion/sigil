@@ -1,6 +1,7 @@
 import {
   createEngine,
   createDefaultPolicy,
+  toHTML,
   type Engine,
   type SigilDoc,
   type SanitizeFn,
@@ -32,6 +33,7 @@ export interface EditorOptions {
 export interface SigilEditor {
   engine: Engine
   toJSON(): SigilDoc
+  toHTML(): string
   destroy(): void
 }
 
@@ -95,6 +97,9 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       const doc = engine.toJSON()
       store.save(doc)
       return doc
+    },
+    toHTML() {
+      return toHTML(engine.toJSON(), { shortcodeResolver })
     },
     destroy() {
       blocksPanel?.destroy()
