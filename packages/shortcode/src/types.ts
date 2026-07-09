@@ -42,4 +42,6 @@ export interface BindContext<P = Record<string, unknown>> {
   effect: (fn: () => void | CleanupFn) => CleanupFn
   mode: 'edit' | 'live'
   abort: AbortSignal
+  emit: (name: string, data?: unknown) => void
+  on: (name: string, handler: (data?: unknown) => void) => () => void
 }

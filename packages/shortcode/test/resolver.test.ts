@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createDefaultPolicy } from '@cluion/sigil-core'
+import { createDefaultPolicy, createEventBus } from '@cluion/sigil-core'
 import { createShortcodeRegistry, createShortcodeResolver, defineShortcode } from '../src/index.js'
 
 describe('resolver', () => {
@@ -160,5 +160,64 @@ describe('defineShortcode — schema', () => {
       schema: [{ name: 'a', type: 'text', label: 'A' }],
     })
     expect(def.schema?.[0]).toMatchObject({ name: 'a', type: 'text', label: 'A' })
+  })
+})
+
+describe('resolver — emit/on', () => {
+  it('ctx.emit/on 連 bus(A emit、B on 收到)', () => {
+    const bus = createEventBus()
+    const received: unknown[] = []
+    const defB = defineShortcode({
+      name: 'b', template: '<i></i>',
+      bind: (_el, ctx) => { ctx.on('hi', (d) => received.push(d)) },
+    })
+    const defA = defineShortcode({
+      name: 'a', template: '<i></i>',
+      bind: (_el, ctx) => { ctx.emit('hi', 1) },
+    })
+    const registry = createShortcodeRegistry([defA, defB])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy(), bus })
+    resolver.resolve({ id: 'b', type: 'shortcode', shortcode: { name: 'b', props: {} } }, document.createElement('div'), 'edit')
+    resolver.resolve({ id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } }, document.createElement('div'), 'edit')
+    expect(received).toEqual([1])
+  })
+
+  it('destroy 後 on 不再收', () => {
+    const bus = createEventBus()
+    let received = 0
+    const def = defineShortcode({
+      name: 'b', template: '<i></i>',
+      bind: (_el, ctx) => { ctx.on('hi', () => received++) },
+    })
+    const registry = createShortcodeRegistry([def])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy(), bus })
+    const inst = resolver.resolve(
+      { id: 'b', type: 'shortcode', shortcode: { name: 'b', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )!
+    bus.emit('hi')
+    inst.destroy()
+    bus.emit('hi')
+    expect(received).toBe(1)
+  })
+
+  it('無 bus 時 emit/on noop', () => {
+    const def = defineShortcode({
+      name: 'a', template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.emit('hi', 1)
+        const off = ctx.on('hi', () => undefined)
+        off()
+      },
+    })
+    const registry = createShortcodeRegistry([def])
+    const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
+    const inst = resolver.resolve(
+      { id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )
+    expect(inst).not.toBeNull()
   })
 })

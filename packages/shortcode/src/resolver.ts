@@ -1,5 +1,5 @@
 import { state, effect, escapeHtml } from '@cluion/sigil-core'
-import type { HtmlPolicy, ShortcodeResolver } from '@cluion/sigil-core'
+import type { HtmlPolicy, ShortcodeResolver, EventBus } from '@cluion/sigil-core'
 import type { ShortcodeDefinition, BindContext, CleanupFn } from './types.js'
 import type { ShortcodeRegistry } from './registry.js'
 
@@ -8,6 +8,7 @@ type Signal<T> = { get(): T; set(v: T): void }
 export interface CreateResolverOptions {
   registry: ShortcodeRegistry
   policy: HtmlPolicy
+  bus?: EventBus
 }
 
 /**
@@ -66,6 +67,12 @@ export function createShortcodeResolver(opts: CreateResolverOptions): ShortcodeR
         },
         mode: resolveMode,
         abort: ac.signal,
+        emit: (name, data) => opts.bus?.emit(name, data),
+        on: (name, handler) => {
+          const dispose = opts.bus?.on(name, handler) ?? (() => {})
+          disposers.push(dispose)
+          return dispose
+        },
       }
 
       const cleanup = def.bind?.(host, ctx)
