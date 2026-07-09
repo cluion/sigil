@@ -7,6 +7,7 @@ import {
   type Engine,
   type SigilDoc,
   type SanitizeFn,
+  type HtmlMode,
 } from '@cluion/sigil-core'
 import {
   createCanvas,
@@ -36,7 +37,7 @@ export interface EditorOptions {
 export interface SigilEditor {
   engine: Engine
   toJSON(): SigilDoc
-  toHTML(): string
+  toHTML(mode?: HtmlMode): string
   destroy(): void
 }
 
@@ -110,8 +111,8 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       store.save(doc)
       return doc
     },
-    toHTML() {
-      return toHTML(engine.toJSON(), { shortcodeResolver })
+    toHTML(mode?: HtmlMode) {
+      return toHTML(engine.toJSON(), { shortcodeResolver, mode })
     },
     destroy() {
       blocksPanel?.destroy()

@@ -111,4 +111,11 @@ exportBtn.addEventListener('click', () => {
   status.textContent = `已輸出 ${htmlOut.value.length} 字`
 })
 
-toolbar.append(saveBtn, loadBtn, exportBtn, status, htmlOut)
+const hydratedBtn = document.createElement('button')
+hydratedBtn.textContent = '匯出 HTML(hydrated)'
+hydratedBtn.addEventListener('click', () => {
+  htmlOut.value = editor.toHTML('hydrated')
+  status.textContent = `已輸出 hydrated ${htmlOut.value.length} 字`
+})
+
+toolbar.append(saveBtn, loadBtn, exportBtn, hydratedBtn, status, htmlOut)

@@ -150,3 +150,28 @@ describe('toHTML — shortcode slot', () => {
     expect(toHTML(doc, { shortcodeResolver: mkResolver(() => '<div>noslot</div>') })).toBe('<div>noslot</div>')
   })
 })
+
+describe('toHTML — hydrated', () => {
+  const resolver: ShortcodeResolver = {
+    resolve: () => null,
+    renderStatic: () => '<b>hi</b>',
+  }
+
+  it('shortcode 包 host 標記(data-shortcode/data-props)', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: { id: 's', type: 'shortcode', shortcode: { name: 'card', props: { a: 1 } } },
+    }
+    expect(toHTML(doc, { shortcodeResolver: resolver, mode: 'hydrated' })).toBe(
+      '<div data-sigil-id="s" data-shortcode="card" data-props="{&quot;a&quot;:1}"><b>hi</b></div>',
+    )
+  })
+
+  it('static 模式不加 host(現有行為)', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: { id: 's', type: 'shortcode', shortcode: { name: 'card', props: { a: 1 } } },
+    }
+    expect(toHTML(doc, { shortcodeResolver: resolver })).toBe('<b>hi</b>')
+  })
+})
