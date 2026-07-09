@@ -54,8 +54,14 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
         if (inst) shortcodeInstances.set(node.id, inst)
       }
     }
-    if (node.children) {
-      for (const c of node.children) el.append(renderNode(c))
+    if (node.children?.length) {
+      if (node.shortcode) {
+        const slot = el.querySelector('slot')
+        if (slot) slot.replaceWith(...node.children.map((c) => renderNode(c)))
+        // 無 <slot> → 忽略 children(不 append 末尾)
+      } else {
+        for (const c of node.children) el.append(renderNode(c))
+      }
     }
     return el
   }

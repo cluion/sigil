@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createRenderer } from '../src/index.js'
+import { createRenderer, type ShortcodeResolver } from '../src/index.js'
 
 describe('renderer — mount', () => {
   it('渲染樹', () => {
@@ -89,5 +89,57 @@ describe('renderer — reconcile', () => {
       children: [{ id: 'a', type: 'text', content: 'X' }],
     })
     expect(container.textContent).toBe('X')
+  })
+})
+
+describe('renderer — shortcode slot', () => {
+  const slotResolver = (fallback: string | null): ShortcodeResolver => ({
+    resolve: (_n, host) => {
+      if (fallback === null) {
+        const d = document.createElement('div')
+        d.textContent = 'noslot'
+        host.append(d)
+      } else {
+        const slot = document.createElement('slot')
+        slot.textContent = fallback
+        host.append(slot)
+      }
+      return { el: host, setProps() {}, destroy() {} }
+    },
+  })
+
+  it('shortcode children 填 <slot>(slot 被取代)', () => {
+    const r = createRenderer({ shortcodeResolver: slotResolver('fb') })
+    const container = document.createElement('div')
+    r.mount(
+      {
+        id: 'root', type: 'shortcode', shortcode: { name: 'card', props: {} },
+        children: [{ id: 'c', type: 'text', content: 'Hi' }],
+      },
+      container,
+    )
+    const host = container.firstElementChild as HTMLElement
+    expect(host.querySelector('slot')).toBeNull()
+    expect(host.querySelector('span')?.textContent).toBe('Hi')
+  })
+
+  it('無 children → slot fallback 保留', () => {
+    const r = createRenderer({ shortcodeResolver: slotResolver('fb') })
+    const container = document.createElement('div')
+    r.mount({ id: 'root', type: 'shortcode', shortcode: { name: 'card', props: {} } }, container)
+    expect(container.querySelector('slot')?.textContent).toBe('fb')
+  })
+
+  it('shortcode 無 <slot> → children 忽略', () => {
+    const r = createRenderer({ shortcodeResolver: slotResolver(null) })
+    const container = document.createElement('div')
+    r.mount(
+      {
+        id: 'root', type: 'shortcode', shortcode: { name: 'x', props: {} },
+        children: [{ id: 'c', type: 'text', content: 'Hi' }],
+      },
+      container,
+    )
+    expect(container.textContent).toBe('noslot')
   })
 })
