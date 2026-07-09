@@ -2,8 +2,11 @@ import type { Engine, EngineEvent, RendererOptions } from '@cluion/sigil-core'
 import { createRenderer } from '@cluion/sigil-core'
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
 
+export type CanvasMode = 'edit' | 'preview'
+
 export interface CanvasHandle {
   iframe: HTMLIFrameElement
+  setMode: (mode: CanvasMode) => void
   destroy: () => void
 }
 
@@ -32,6 +35,21 @@ export function createCanvas(
   const overlay = document.createElement('div')
   overlay.style.cssText = 'position:absolute;inset:0;cursor:default'
   container.appendChild(overlay)
+
+  // 編輯/預覽切換:預覽時 iframe 可互動(shortcode 按鈕可點)、overlay 隱藏
+  const toggle = document.createElement('button')
+  toggle.textContent = '✏ 編輯'
+  toggle.style.cssText = 'position:absolute;top:4px;right:4px;z-index:10;padding:2px 8px'
+  container.appendChild(toggle)
+
+  let mode: CanvasMode = 'edit'
+  function setMode(next: CanvasMode): void {
+    mode = next
+    iframe.style.pointerEvents = next === 'preview' ? 'auto' : 'none'
+    overlay.style.display = next === 'preview' ? 'none' : ''
+    toggle.textContent = next === 'preview' ? '👁 預覽' : '✏ 編輯'
+  }
+  toggle.addEventListener('click', () => setMode(mode === 'edit' ? 'preview' : 'edit'))
 
   const renderer = createRenderer(opts?.rendererOptions)
 
@@ -99,6 +117,7 @@ export function createCanvas(
 
   return {
     iframe,
+    setMode,
     destroy() {
       overlay.removeEventListener('click', onOverlayClick)
       overlay.removeEventListener('pointerdown', onOverlayPointerDown)
@@ -107,6 +126,7 @@ export function createCanvas(
       renderer.destroy()
       iframe.remove()
       overlay.remove()
+      toggle.remove()
     },
   }
 }
