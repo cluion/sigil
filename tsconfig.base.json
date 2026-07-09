@@ -17,6 +17,15 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "types": []
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@cluion/sigil-core": ["./packages/core/src/index.ts"],
+      "@cluion/sigil-shortcode": ["./packages/shortcode/src/index.ts"],
+      "@cluion/sigil-ui": ["./packages/ui/src/index.ts"],
+      "@cluion/sigil-blocks": ["./packages/blocks/src/index.ts"],
+      "@cluion/sigil-store-json": ["./packages/store-json/src/index.ts"],
+      "@cluion/sigil": ["./packages/editor/src/index.ts"]
+    }
   }
 }
