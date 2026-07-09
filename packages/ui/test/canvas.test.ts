@@ -29,3 +29,28 @@ describe('createCanvas — preview mode', () => {
     expect(iframe.style.pointerEvents).toBe('none')
   })
 })
+
+describe('createCanvas — device', () => {
+  it('預設 desktop:width 100%', () => {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    const { iframe } = createCanvas(engine, container)
+    expect(iframe.style.width).toBe('100%')
+  })
+
+  it('setDevice tablet:width 768px', () => {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    const { iframe, setDevice } = createCanvas(engine, container)
+    setDevice('tablet')
+    expect(iframe.style.width).toBe('768px')
+  })
+
+  it('setDevice mobile:width 375px', () => {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    const { iframe, setDevice } = createCanvas(engine, container)
+    setDevice('mobile')
+    expect(iframe.style.width).toBe('375px')
+  })
+})

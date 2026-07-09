@@ -3,10 +3,12 @@ import { createRenderer } from '@cluion/sigil-core'
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
 
 export type CanvasMode = 'edit' | 'preview'
+export type CanvasDevice = 'desktop' | 'tablet' | 'mobile'
 
 export interface CanvasHandle {
   iframe: HTMLIFrameElement
   setMode: (mode: CanvasMode) => void
+  setDevice: (device: CanvasDevice) => void
   destroy: () => void
 }
 
@@ -50,6 +52,34 @@ export function createCanvas(
     toggle.textContent = next === 'preview' ? '👁 預覽' : '✏ 編輯'
   }
   toggle.addEventListener('click', () => setMode(mode === 'edit' ? 'preview' : 'edit'))
+
+  // 裝置預覽切換(desktop/tablet/mobile 寬度)
+  const deviceWidths: Record<CanvasDevice, string> = {
+    desktop: '100%',
+    tablet: '768px',
+    mobile: '375px',
+  }
+  const deviceBar = document.createElement('div')
+  deviceBar.style.cssText = 'position:absolute;top:4px;left:4px;z-index:10;display:flex;gap:4px'
+  const deviceBtns: HTMLButtonElement[] = []
+  for (const d of Object.keys(deviceWidths) as CanvasDevice[]) {
+    const btn = document.createElement('button')
+    btn.textContent = d
+    btn.style.padding = '2px 8px'
+    btn.addEventListener('click', () => setDevice(d))
+    deviceBar.appendChild(btn)
+    deviceBtns.push(btn)
+  }
+  container.appendChild(deviceBar)
+
+  function setDevice(next: CanvasDevice): void {
+    iframe.style.width = deviceWidths[next]
+    iframe.style.margin = next === 'desktop' ? '' : '0 auto'
+    for (const btn of deviceBtns) {
+      btn.style.fontWeight = btn.textContent === next ? 'bold' : 'normal'
+    }
+  }
+  setDevice('desktop')
 
   const renderer = createRenderer(opts?.rendererOptions)
 
@@ -118,6 +148,7 @@ export function createCanvas(
   return {
     iframe,
     setMode,
+    setDevice,
     destroy() {
       overlay.removeEventListener('click', onOverlayClick)
       overlay.removeEventListener('pointerdown', onOverlayPointerDown)
@@ -127,6 +158,7 @@ export function createCanvas(
       iframe.remove()
       overlay.remove()
       toggle.remove()
+      deviceBar.remove()
     },
   }
 }
