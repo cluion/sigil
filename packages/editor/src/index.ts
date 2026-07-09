@@ -104,6 +104,26 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)
     : null
 
+  function onKeyDown(e: KeyboardEvent): void {
+    const t = e.target as HTMLElement | null
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+    const id = engine.getSelection()
+    if ((e.key === 'Delete' || e.key === 'Backspace') && id && id !== engine.getTree().id) {
+      e.preventDefault()
+      engine.remove(id)
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      engine.undo()
+    } else if (
+      (e.ctrlKey || e.metaKey) &&
+      (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))
+    ) {
+      e.preventDefault()
+      engine.redo()
+    }
+  }
+  document.addEventListener('keydown', onKeyDown)
+
   return {
     engine,
     toJSON() {
@@ -115,6 +135,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       return toHTML(engine.toJSON(), { shortcodeResolver, mode })
     },
     destroy() {
+      document.removeEventListener('keydown', onKeyDown)
       blocksPanel?.destroy()
       layers.destroy()
       props.destroy()

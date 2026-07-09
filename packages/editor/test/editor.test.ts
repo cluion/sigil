@@ -69,3 +69,45 @@ describe('editor — toHTML', () => {
     expect(el.textContent).toContain('步進')
   })
 })
+
+describe('editor — 快捷鍵', () => {
+  it('Delete 鍵刪除選取節點', () => {
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: 'x' }] },
+      },
+    })
+    editor.engine.select('c')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    expect(editor.engine.getTree().children).toHaveLength(0)
+  })
+
+  it('Delete 不刪 root', () => {
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    editor.engine.select('r')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    expect(editor.engine.getTree().id).toBe('r')
+  })
+
+  it('Ctrl+Z undo', () => {
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: 'x' }] },
+      },
+    })
+    editor.engine.remove('c')
+    expect(editor.engine.getTree().children).toHaveLength(0)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))
+    expect(editor.engine.getTree().children).toHaveLength(1)
+  })
+})
