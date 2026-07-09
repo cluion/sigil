@@ -1,6 +1,7 @@
 export { createCanvas } from './canvas.js'
 export type { CanvasHandle } from './canvas.js'
 export { createPropsPanel } from './props.js'
+export { createPropForm } from './form.js'
 export { createBlocksPanel } from './blocks-panel.js'
 export { createLayersPanel } from './layers.js'
 export type { BlockFactory } from './blocks-panel.js'
