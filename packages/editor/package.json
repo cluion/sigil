@@ -18,6 +18,7 @@
   "dependencies": {
     "@cluion/sigil-core": "workspace:*",
     "@cluion/sigil-ui": "workspace:*",
-    "@cluion/sigil-store-json": "workspace:*"
+    "@cluion/sigil-store-json": "workspace:*",
+    "@cluion/sigil-shortcode": "workspace:*"
   }
 }

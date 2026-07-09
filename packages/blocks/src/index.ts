@@ -35,6 +35,16 @@ export function blockColumn(): ComponentNode {
   return { id: createId(), type: 'column', children: [] }
 }
 
+/**
+ * 建立 shortcode 區塊
+ */
+export function blockShortcode(
+  name: string,
+  props: Record<string, unknown> = {},
+): ComponentNode {
+  return { id: createId(), type: 'shortcode', shortcode: { name, props } }
+}
+
 // 預設區塊工廠集
 export const basicBlocks = {
   section: blockSection,

@@ -1,4 +1,4 @@
-import type { Engine, EngineEvent } from '@cluion/sigil-core'
+import type { Engine, EngineEvent, RendererOptions } from '@cluion/sigil-core'
 import { createRenderer } from '@cluion/sigil-core'
 import { hitTest, startMoveDrag } from './dnd.js'
 
@@ -13,7 +13,15 @@ export interface CanvasHandle {
  * iframe 設 pointer-events:none,由主文檔透明 overlay 接收所有 pointer,
  * 再用 elementFromPoint 反查命中節點（pointer 不跨 iframe,避免事件斷在邊界）
  */
-export function createCanvas(engine: Engine, container: HTMLElement): CanvasHandle {
+export interface CanvasOptions {
+  rendererOptions?: RendererOptions
+}
+
+export function createCanvas(
+  engine: Engine,
+  container: HTMLElement,
+  opts?: CanvasOptions,
+): CanvasHandle {
   container.style.position = 'relative'
   const iframe = document.createElement('iframe')
   iframe.style.cssText =
@@ -25,7 +33,7 @@ export function createCanvas(engine: Engine, container: HTMLElement): CanvasHand
   overlay.style.cssText = 'position:absolute;inset:0;cursor:default'
   container.appendChild(overlay)
 
-  const renderer = createRenderer()
+  const renderer = createRenderer(opts?.rendererOptions)
 
   function onOverlayClick(e: MouseEvent): void {
     const id = hitTest(iframe, e.clientX, e.clientY)

@@ -10,6 +10,7 @@
     "@cluion/sigil": "workspace:*",
     "@cluion/sigil-core": "workspace:*",
     "@cluion/sigil-blocks": "workspace:*",
-    "@cluion/sigil-store-json": "workspace:*"
+    "@cluion/sigil-store-json": "workspace:*",
+    "@cluion/sigil-shortcode": "workspace:*"
   }
 }

@@ -65,6 +65,9 @@ importers:
       '@cluion/sigil-core':
         specifier: workspace:*
         version: link:../packages/core
+      '@cluion/sigil-shortcode':
+        specifier: workspace:*
+        version: link:../packages/shortcode
       '@cluion/sigil-store-json':
         specifier: workspace:*
         version: link:../packages/store-json
@@ -82,6 +85,9 @@ importers:
       '@cluion/sigil-core':
         specifier: workspace:*
         version: link:../core
+      '@cluion/sigil-shortcode':
+        specifier: workspace:*
+        version: link:../shortcode
       '@cluion/sigil-store-json':
         specifier: workspace:*
         version: link:../store-json

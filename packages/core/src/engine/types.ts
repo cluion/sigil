@@ -1,4 +1,4 @@
-import type { ComponentNode, SigilDoc, Attrs, Style } from '../model/types.js'
+import type { ComponentNode, SigilDoc, Attrs, Style, ShortcodeRef } from '../model/types.js'
 import type { IdFactory } from '../model/id.js'
 
 /**
@@ -14,6 +14,7 @@ export type Patch =
       style?: Style
       content?: string
       className?: string
+      shortcode?: ShortcodeRef
     }
   | { type: 'move'; id: string; newParentId: string; beforeId: string | null }
   | { type: 'replace'; id: string; node: ComponentNode }

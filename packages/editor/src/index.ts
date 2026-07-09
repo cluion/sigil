@@ -1,4 +1,10 @@
-import { createEngine, type Engine, type SigilDoc } from '@cluion/sigil-core'
+import {
+  createEngine,
+  createDefaultPolicy,
+  type Engine,
+  type SigilDoc,
+  type SanitizeFn,
+} from '@cluion/sigil-core'
 import {
   createCanvas,
   createPropsPanel,
@@ -7,12 +13,20 @@ import {
   type BlockFactory,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
+import {
+  createShortcodeRegistry,
+  createShortcodeResolver,
+  type ShortcodeDefinition,
+} from '@cluion/sigil-shortcode'
 
 export interface EditorOptions {
   mount: string | HTMLElement
   doc?: SigilDoc
   store?: JsonProjectStore
   blocks?: Record<string, BlockFactory>
+  shortcodes?: ShortcodeDefinition[]
+  trustedTypesPolicyName?: string
+  sanitize?: SanitizeFn
 }
 
 export interface SigilEditor {
@@ -33,6 +47,12 @@ export function createEditor(opts: EditorOptions): SigilEditor {
 
   const engine = createEngine({ doc: opts.doc })
   const store = opts.store ?? new JsonProjectStore()
+  const policy = createDefaultPolicy({
+    trustedTypesPolicyName: opts.trustedTypesPolicyName,
+    sanitize: opts.sanitize,
+  })
+  const shortcodeRegistry = createShortcodeRegistry(opts.shortcodes)
+  const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy })
 
   mountEl.replaceChildren()
   const layout = document.createElement('div')
@@ -60,7 +80,9 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   layout.append(blocksBox, canvasBox, rightBox)
   mountEl.appendChild(layout)
 
-  const canvas = createCanvas(engine, canvasBox)
+  const canvas = createCanvas(engine, canvasBox, {
+    rendererOptions: { shortcodeResolver },
+  })
   const props = createPropsPanel(engine, propsBox)
   const layers = createLayersPanel(engine, layersBox)
   const blocksPanel = opts.blocks

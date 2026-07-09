@@ -88,6 +88,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       if (patch.style) p.style = patch.style
       if (patch.content !== undefined) p.content = patch.content
       if (patch.className !== undefined) p.className = patch.className
+      if (patch.shortcode !== undefined) p.shortcode = patch.shortcode
       emit({ type: 'patch', patch: p })
     },
 

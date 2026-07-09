@@ -11,6 +11,7 @@ export default defineConfig({
       '@cluion/sigil-store-json': src('../packages/store-json/src/index.ts'),
       '@cluion/sigil-blocks': src('../packages/blocks/src/index.ts'),
       '@cluion/sigil-ui': src('../packages/ui/src/index.ts'),
+      '@cluion/sigil-shortcode': src('../packages/shortcode/src/index.ts'),
       '@cluion/sigil': src('../packages/editor/src/index.ts'),
     },
   },
