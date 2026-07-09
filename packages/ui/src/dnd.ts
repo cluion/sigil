@@ -1,4 +1,4 @@
-import type { Engine, ComponentNode } from '@cluion/sigil-core'
+import type { Engine, ComponentNode, Patch } from '@cluion/sigil-core'
 import { findNode, findParent } from '@cluion/sigil-core'
 
 export type Side = 'before' | 'after'
@@ -26,7 +26,12 @@ function contains(node: ComponentNode, id: string): boolean {
  * 判斷節點是否為容器（可接子元件）
  */
 function isContainer(node: ComponentNode, rootId: string): boolean {
-  return node.id === rootId || node.type === 'section' || node.type === 'column'
+  return (
+    node.id === rootId ||
+    node.type === 'section' ||
+    node.type === 'column' ||
+    node.type === 'shortcode'
+  )
 }
 
 /**
@@ -272,4 +277,19 @@ export function startMoveDrag(opts: {
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
   return { cancel: cleanup }
+}
+
+/**
+ * patch 是否影響 shortcode 的 slot(children)→ canvas 據此走全量 reconcile
+ *
+ * shortcode 的 children 變動(insert/remove/move)無法用細粒度 patch 維護 slot 位置,
+ * 故全量 reconcile 重填
+ */
+export function affectsShortcodeSlot(patch: Patch, tree: ComponentNode): boolean {
+  if (patch.type === 'insert') return !!findNode(tree, patch.parentId)?.shortcode
+  if (patch.type === 'move') {
+    return !!findNode(tree, patch.newParentId)?.shortcode || !!findParent(tree, patch.id)?.shortcode
+  }
+  if (patch.type === 'remove') return !!findParent(tree, patch.id)?.shortcode
+  return false
 }

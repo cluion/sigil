@@ -1,6 +1,6 @@
 import type { Engine, EngineEvent, RendererOptions } from '@cluion/sigil-core'
 import { createRenderer } from '@cluion/sigil-core'
-import { hitTest, startMoveDrag } from './dnd.js'
+import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
 
 export interface CanvasHandle {
   iframe: HTMLIFrameElement
@@ -91,8 +91,10 @@ export function createCanvas(
   const unsub = engine.subscribe((ev: EngineEvent) => {
     const d = iframe.contentDocument
     if (!d) return
-    if (ev.type === 'patch') renderer.applyPatch(ev.patch)
-    else if (ev.type === 'tree') renderer.reconcile(ev.tree)
+    if (ev.type === 'patch') {
+      if (affectsShortcodeSlot(ev.patch, engine.getTree())) renderer.reconcile(engine.getTree())
+      else renderer.applyPatch(ev.patch)
+    } else if (ev.type === 'tree') renderer.reconcile(ev.tree)
   })
 
   return {
