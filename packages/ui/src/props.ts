@@ -1,12 +1,21 @@
-import type { Engine } from '@cluion/sigil-core'
+import type { Engine, PropSchema } from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
+import { createPropForm } from './form.js'
 
 /**
  * 建立 props 面板 — 顯示並編輯選取節點的屬性
  *
  * 僅在 selection／tree 重建（不在 patch 重建，避免 input 打字失焦）
  */
-export function createPropsPanel(engine: Engine, container: HTMLElement): {
+export interface PropsPanelOptions {
+  getShortcodeSchema?: (name: string) => PropSchema[] | undefined
+}
+
+export function createPropsPanel(
+  engine: Engine,
+  container: HTMLElement,
+  opts?: PropsPanelOptions,
+): {
   destroy: () => void
 } {
   function render(): void {
@@ -27,7 +36,7 @@ export function createPropsPanel(engine: Engine, container: HTMLElement): {
 
     appendContentField(container, engine, node)
     appendClassField(container, engine, node)
-    appendShortcodePropsField(container, engine, node)
+    appendShortcodePropsField(container, engine, node, opts?.getShortcodeSchema)
   }
 
   const unsub = engine.subscribe((ev) => {
@@ -70,17 +79,29 @@ function appendClassField(container: HTMLElement, engine: Engine, node: Componen
 }
 
 /**
- * shortcode props 編輯欄位（通用 key/value,非 PropSchema 表單）
+ * shortcode props 編輯欄位
+ *
+ * 有 PropSchema → 用 createPropForm 生成型別控制項;
+ * 無 schema → fallback 通用 key/value
  */
 function appendShortcodePropsField(
   container: HTMLElement,
   engine: Engine,
   node: ComponentNode,
+  getShortcodeSchema?: (name: string) => PropSchema[] | undefined,
 ): void {
   if (!node.shortcode) return
   const heading = document.createElement('h4')
   heading.textContent = 'shortcode props'
   container.appendChild(heading)
+
+  const schema = getShortcodeSchema?.(node.shortcode.name)
+  if (schema && schema.length > 0) {
+    container.appendChild(createPropForm({ engine, node, schema }))
+    return
+  }
+
+  // fallback:通用 key/value(無 schema)
   for (const [k, v] of Object.entries(node.shortcode.props)) {
     const label = document.createElement('label')
     label.textContent = `${k}：`
