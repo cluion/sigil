@@ -13,9 +13,19 @@ import { counterDef } from './shortcodes/counter'
 import { cardDef } from './shortcodes/card'
 import { pingDef } from './shortcodes/ping'
 import { pongDef } from './shortcodes/pong'
+import { loaderDef } from './shortcodes/loader'
 
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
+
+const mockFetchJSON = (url: string, signal?: AbortSignal) =>
+  new Promise<unknown>((resolve, reject) => {
+    const t = setTimeout(() => resolve({ url, ts: 123 }), 300)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(t)
+      reject(new DOMException('aborted', 'AbortError'))
+    })
+  })
 
 const store = new JsonProjectStore()
 
@@ -30,6 +40,7 @@ const blocks = {
   卡片: () => blockShortcode('card', {}),
   發送: () => blockShortcode('ping', {}),
   接收: () => blockShortcode('pong', {}),
+  載入器: () => blockShortcode('loader', { id: 1 }),
 }
 
 let editor: SigilEditor = createEditor({
@@ -37,7 +48,8 @@ let editor: SigilEditor = createEditor({
   doc,
   store,
   blocks,
-  shortcodes: [counterDef, cardDef, pingDef, pongDef],
+  shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef],
+  fetchJSON: mockFetchJSON,
 })
 
 // 工具列：存／讀 JSON
@@ -67,7 +79,8 @@ loadBtn.addEventListener('click', () => {
     doc: store.importJSON(json),
     store,
     blocks,
-    shortcodes: [counterDef, cardDef, pingDef, pongDef],
+    shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef],
+    fetchJSON: mockFetchJSON,
   })
   status.textContent = '已讀'
 })

@@ -29,6 +29,7 @@ export interface EditorOptions {
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
   sanitize?: SanitizeFn
+  fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
 }
 
 export interface SigilEditor {
@@ -55,8 +56,13 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     sanitize: opts.sanitize,
   })
   const shortcodeRegistry = createShortcodeRegistry(opts.shortcodes)
+  const defaultFetch =
+    typeof fetch !== 'undefined'
+      ? (url: string, signal?: AbortSignal) => fetch(url, { signal }).then((r) => r.json())
+      : undefined
+  const fetchJSON = opts.fetchJSON ?? defaultFetch
   const bus = createEventBus()
-  const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy, bus })
+  const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy, bus, fetchJSON })
 
   mountEl.replaceChildren()
   const layout = document.createElement('div')
