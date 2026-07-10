@@ -37,6 +37,7 @@ export function createPropsPanel(
     appendContentField(container, engine, node)
     appendClassField(container, engine, node)
     appendShortcodePropsField(container, engine, node, opts?.getShortcodeSchema)
+    appendStyleField(container, engine, node)
   }
 
   const unsub = engine.subscribe((ev) => {
@@ -118,6 +119,75 @@ function appendShortcodePropsField(
       })
     })
     label.appendChild(input)
+    container.appendChild(label)
+    container.appendChild(document.createElement('br'))
+  }
+}
+
+/**
+ * 樣式編輯欄位(核心 CSS):margin/padding/font-size(文字)、color(color);font-weight/text-align(select)
+ *
+ * 值取 node.style[prop];改 → engine.update(id, { style: { [prop]: value } })(updateNode style 合併)
+ */
+function appendStyleField(
+  container: HTMLElement,
+  engine: Engine,
+  node: ComponentNode,
+): void {
+  const heading = document.createElement('h4')
+  heading.textContent = '樣式'
+  container.appendChild(heading)
+
+  const textFields = ['margin', 'padding', 'font-size']
+  for (const prop of textFields) {
+    const label = document.createElement('label')
+    label.textContent = `${prop}：`
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.value = node.style?.[prop] ?? ''
+    input.addEventListener('input', () => {
+      engine.update(node.id, { style: { [prop]: input.value } })
+    })
+    label.appendChild(input)
+    container.appendChild(label)
+    container.appendChild(document.createElement('br'))
+  }
+
+  const colorLabel = document.createElement('label')
+  colorLabel.textContent = 'color：'
+  const colorInput = document.createElement('input')
+  colorInput.type = 'color'
+  colorInput.value = node.style?.color ?? '#000000'
+  colorInput.addEventListener('input', () => {
+    engine.update(node.id, { style: { color: colorInput.value } })
+  })
+  colorLabel.appendChild(colorInput)
+  container.appendChild(colorLabel)
+  container.appendChild(document.createElement('br'))
+
+  const selectFields: Record<string, string[]> = {
+    'font-weight': ['normal', 'bold'],
+    'text-align': ['left', 'center', 'right'],
+  }
+  for (const [prop, options] of Object.entries(selectFields)) {
+    const label = document.createElement('label')
+    label.textContent = `${prop}：`
+    const sel = document.createElement('select')
+    const empty = document.createElement('option')
+    empty.value = ''
+    empty.textContent = '(未設)'
+    sel.appendChild(empty)
+    for (const opt of options) {
+      const o = document.createElement('option')
+      o.value = opt
+      o.textContent = opt
+      sel.appendChild(o)
+    }
+    sel.value = node.style?.[prop] ?? ''
+    sel.addEventListener('change', () => {
+      engine.update(node.id, { style: { [prop]: sel.value } })
+    })
+    label.appendChild(sel)
     container.appendChild(label)
     container.appendChild(document.createElement('br'))
   }

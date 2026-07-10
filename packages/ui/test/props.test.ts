@@ -24,9 +24,8 @@ describe('createPropsPanel — shortcode props', () => {
 
   it('無 schema → fallback 通用 key/value', () => {
     const { box } = panel(undefined, { foo: 'bar' })
-    const inputs = box.querySelectorAll('input')
-    const input = inputs[inputs.length - 1] as HTMLInputElement // 最後一個 = shortcode props 區(class 欄在前)
-    expect(input.value).toBe('bar')
+    const input = [...box.querySelectorAll('input')].find((i) => i.value === 'bar')
+    expect(input).toBeTruthy()
   })
 
   it('非 shortcode 節點 → 無 shortcode props 區', () => {
@@ -37,5 +36,32 @@ describe('createPropsPanel — shortcode props', () => {
     const box = document.createElement('div')
     createPropsPanel(engine, box)
     expect(box.textContent).not.toContain('shortcode props')
+  })
+
+  it('樣式:color 改值 → engine.update style', () => {
+    const engine = createEngine({
+      doc: { version: 1 as const, root: { id: 'n', type: 'section' } },
+    }) as Engine
+    engine.select('n')
+    const box = document.createElement('div')
+    createPropsPanel(engine, box)
+    const colorInput = box.querySelector('input[type=color]') as HTMLInputElement
+    colorInput.value = '#ff0000'
+    colorInput.dispatchEvent(new Event('input'))
+    expect(engine.getTree().style?.color).toBe('#ff0000')
+  })
+
+  it('樣式:text-align select 改值', () => {
+    const engine = createEngine({
+      doc: { version: 1 as const, root: { id: 'n', type: 'section' } },
+    }) as Engine
+    engine.select('n')
+    const box = document.createElement('div')
+    createPropsPanel(engine, box)
+    const sels = box.querySelectorAll('select')
+    const align = sels[sels.length - 1] as HTMLSelectElement // 最後 select = text-align
+    align.value = 'center'
+    align.dispatchEvent(new Event('change'))
+    expect(engine.getTree().style?.['text-align']).toBe('center')
   })
 })
