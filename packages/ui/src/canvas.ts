@@ -31,6 +31,7 @@ export function createCanvas(
   const iframe = document.createElement('iframe')
   iframe.style.cssText =
     'border:1px solid #ccc;width:100%;height:420px;background:#fff;pointer-events:none'
+  iframe.title = '編輯畫布'
   container.appendChild(iframe)
 
   // 主文檔 overlay 蓋 iframe,接收所有 pointer
@@ -50,6 +51,7 @@ export function createCanvas(
     iframe.style.pointerEvents = next === 'preview' ? 'auto' : 'none'
     overlay.style.display = next === 'preview' ? 'none' : ''
     toggle.textContent = next === 'preview' ? '👁 預覽' : '✏ 編輯'
+    toggle.setAttribute('aria-pressed', String(next === 'preview'))
   }
   toggle.addEventListener('click', () => setMode(mode === 'edit' ? 'preview' : 'edit'))
 
@@ -77,6 +79,7 @@ export function createCanvas(
     iframe.style.margin = next === 'desktop' ? '' : '0 auto'
     for (const btn of deviceBtns) {
       btn.style.fontWeight = btn.textContent === next ? 'bold' : 'normal'
+      btn.setAttribute('aria-pressed', String(btn.textContent === next))
     }
   }
   setDevice('desktop')

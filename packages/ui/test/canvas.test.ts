@@ -38,6 +38,13 @@ describe('createCanvas — device', () => {
     expect(iframe.style.width).toBe('100%')
   })
 
+  it('iframe 有 title(無障礙名稱)', () => {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    const { iframe } = createCanvas(engine, container)
+    expect(iframe.title).toBeTruthy()
+  })
+
   it('setDevice tablet:width 768px', () => {
     const engine = createEngine({ doc })
     const container = document.createElement('div')

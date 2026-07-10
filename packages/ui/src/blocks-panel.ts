@@ -18,6 +18,9 @@ export function createBlocksPanel(
   for (const [name, factory] of Object.entries(blocks)) {
     const item = document.createElement('div')
     item.textContent = name
+    item.setAttribute('role', 'button')
+    item.setAttribute('aria-label', `拖入 ${name}`)
+    item.tabIndex = 0
     item.style.cssText =
       'padding:6px 8px;border:1px solid #ddd;border-radius:4px;cursor:grab;user-select:none;background:#fafafa'
     item.addEventListener('pointerdown', (e: PointerEvent) => {
