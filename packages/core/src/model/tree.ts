@@ -1,4 +1,5 @@
 import type { ComponentNode } from './types.js'
+import { createId } from './id.js'
 
 /**
  * 深找節點 by id
@@ -121,4 +122,18 @@ export function moveNode(
   if (!node || node.id === root.id) return root
   const removed = removeNode(root, id)
   return insertNode(removed, newParentId, node, index)
+}
+
+/**
+ * 深拷貝節點並遞迴產生新 id(copy/paste 用)
+ */
+export function cloneWithNewIds(
+  node: ComponentNode,
+  idFactory: () => string = createId,
+): ComponentNode {
+  const cloned: ComponentNode = { ...node, id: idFactory() }
+  if (node.children) {
+    cloned.children = node.children.map((c) => cloneWithNewIds(c, idFactory))
+  }
+  return cloned
 }

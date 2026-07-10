@@ -4,10 +4,14 @@ import {
   toHTML,
   createEventBus,
   createStore,
+  findNode,
+  findParent,
+  cloneWithNewIds,
   type Engine,
   type SigilDoc,
   type SanitizeFn,
   type HtmlMode,
+  type ComponentNode,
 } from '@cluion/sigil-core'
 import {
   createCanvas,
@@ -104,6 +108,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)
     : null
 
+  let clipboard: ComponentNode | null = null
   function onKeyDown(e: KeyboardEvent): void {
     const t = e.target as HTMLElement | null
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
@@ -120,6 +125,17 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     ) {
       e.preventDefault()
       engine.redo()
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && id) {
+      const node = findNode(engine.getTree(), id)
+      if (node) {
+        e.preventDefault()
+        clipboard = node
+      }
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && clipboard) {
+      e.preventDefault()
+      const parent = id ? findParent(engine.getTree(), id) : null
+      const pid = parent ? parent.id : engine.getTree().id
+      engine.insert(pid, cloneWithNewIds(clipboard))
     }
   }
   document.addEventListener('keydown', onKeyDown)

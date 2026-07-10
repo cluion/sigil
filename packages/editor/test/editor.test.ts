@@ -110,4 +110,20 @@ describe('editor — 快捷鍵', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))
     expect(editor.engine.getTree().children).toHaveLength(1)
   })
+
+  it('Ctrl+C / Ctrl+V 複製貼上節點', () => {
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: 'hi' }] },
+      },
+    })
+    editor.engine.select('c')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }))
+    expect(editor.engine.getTree().children).toHaveLength(2)
+    expect(editor.engine.getTree().children![1]!.content).toBe('hi')
+  })
 })
