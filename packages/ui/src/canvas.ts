@@ -1,4 +1,4 @@
-import type { Engine, EngineEvent, RendererOptions } from '@cluion/sigil-core'
+import type { Engine, EngineEvent, RendererOptions, I18n } from '@cluion/sigil-core'
 import { createRenderer } from '@cluion/sigil-core'
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
 
@@ -20,6 +20,7 @@ export interface CanvasHandle {
  */
 export interface CanvasOptions {
   rendererOptions?: RendererOptions
+  i18n?: I18n
 }
 
 export function createCanvas(
@@ -27,11 +28,12 @@ export function createCanvas(
   container: HTMLElement,
   opts?: CanvasOptions,
 ): CanvasHandle {
+  const i18n = opts?.i18n
   container.style.position = 'relative'
   const iframe = document.createElement('iframe')
   iframe.style.cssText =
     'border:1px solid #ccc;width:100%;height:420px;background:#fff;pointer-events:none'
-  iframe.title = '編輯畫布'
+  iframe.title = i18n?.t('canvas.title') ?? '編輯畫布'
   container.appendChild(iframe)
 
   // 主文檔 overlay 蓋 iframe,接收所有 pointer
@@ -50,7 +52,9 @@ export function createCanvas(
     mode = next
     iframe.style.pointerEvents = next === 'preview' ? 'auto' : 'none'
     overlay.style.display = next === 'preview' ? 'none' : ''
-    toggle.textContent = next === 'preview' ? '👁 預覽' : '✏ 編輯'
+    toggle.textContent =
+      i18n?.t(next === 'preview' ? 'canvas.preview' : 'canvas.edit') ??
+      (next === 'preview' ? '👁 預覽' : '✏ 編輯')
     toggle.setAttribute('aria-pressed', String(next === 'preview'))
   }
   toggle.addEventListener('click', () => setMode(mode === 'edit' ? 'preview' : 'edit'))

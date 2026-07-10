@@ -7,11 +7,13 @@ import {
   findNode,
   findParent,
   cloneWithNewIds,
+  createI18n,
   type Engine,
   type SigilDoc,
   type SanitizeFn,
   type HtmlMode,
   type ComponentNode,
+  type Locale,
 } from '@cluion/sigil-core'
 import {
   createCanvas,
@@ -27,6 +29,11 @@ import {
   type ShortcodeDefinition,
 } from '@cluion/sigil-shortcode'
 
+const i18nMessages = {
+  zh: { 'canvas.title': '編輯畫布', 'canvas.edit': '✏ 編輯', 'canvas.preview': '👁 預覽' },
+  en: { 'canvas.title': 'Canvas', 'canvas.edit': '✏ Edit', 'canvas.preview': '👁 Preview' },
+}
+
 export interface EditorOptions {
   mount: string | HTMLElement
   doc?: SigilDoc
@@ -36,6 +43,7 @@ export interface EditorOptions {
   trustedTypesPolicyName?: string
   sanitize?: SanitizeFn
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
+  locale?: Locale
 }
 
 export interface SigilEditor {
@@ -68,6 +76,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       : undefined
   const fetchJSON = opts.fetchJSON ?? defaultFetch
   const bus = createEventBus()
+  const i18n = createI18n(i18nMessages, opts.locale ?? 'zh')
   const sharedStore = createStore()
   const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy, bus, fetchJSON, store: sharedStore })
 
@@ -99,6 +108,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
 
   const canvas = createCanvas(engine, canvasBox, {
     rendererOptions: { shortcodeResolver },
+    i18n,
   })
   const props = createPropsPanel(engine, propsBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,

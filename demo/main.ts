@@ -57,6 +57,7 @@ const blocks = {
   購物車: () => blockShortcode('cart', {}),
 }
 
+let locale: 'zh' | 'en' = 'zh'
 let editor: SigilEditor = createEditor({
   mount: root,
   doc,
@@ -64,6 +65,7 @@ let editor: SigilEditor = createEditor({
   blocks,
   shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef],
   fetchJSON: mockFetchJSON,
+  locale,
 })
 
 // 工具列：存／讀 JSON
@@ -95,6 +97,7 @@ loadBtn.addEventListener('click', () => {
     blocks,
     shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef],
     fetchJSON: mockFetchJSON,
+    locale,
   })
   status.textContent = '已讀'
 })
@@ -118,4 +121,14 @@ hydratedBtn.addEventListener('click', () => {
   status.textContent = `已輸出 hydrated ${htmlOut.value.length} 字`
 })
 
-toolbar.append(saveBtn, loadBtn, exportBtn, hydratedBtn, status, htmlOut)
+const localeBtn = document.createElement('button')
+localeBtn.textContent = '中/EN'
+localeBtn.addEventListener('click', () => {
+  locale = locale === 'zh' ? 'en' : 'zh'
+  const doc = editor.toJSON()
+  editor.destroy()
+  editor = createEditor({ mount: root, doc, store, blocks, shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef], fetchJSON: mockFetchJSON, locale })
+  status.textContent = `語系 ${locale}`
+})
+
+toolbar.append(saveBtn, loadBtn, exportBtn, hydratedBtn, localeBtn, status, htmlOut)
