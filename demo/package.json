@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@cluion/sigil": "workspace:*",
+    "@cluion/sigil-app": "workspace:*",
     "@cluion/sigil-core": "workspace:*",
     "@cluion/sigil-blocks": "workspace:*",
     "@cluion/sigil-store-json": "workspace:*",

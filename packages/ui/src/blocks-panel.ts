@@ -15,19 +15,47 @@ export function createBlocksPanel(
   blocks: Record<string, BlockFactory>,
 ): { destroy: () => void } {
   container.replaceChildren()
-  for (const [name, factory] of Object.entries(blocks)) {
-    const item = document.createElement('div')
-    item.textContent = name
-    item.setAttribute('role', 'button')
-    item.setAttribute('aria-label', `拖入 ${name}`)
-    item.tabIndex = 0
-    item.style.cssText =
-      'padding:6px 8px;border:1px solid #ddd;border-radius:4px;cursor:grab;user-select:none;background:#fafafa'
-    item.addEventListener('pointerdown', (e: PointerEvent) => {
-      e.preventDefault()
-      startInsertDrag({ engine, iframe, node: factory(), pointerId: e.pointerId })
-    })
-    container.appendChild(item)
+  container.classList.add('sigil-blocks-panel')
+
+  const search = document.createElement('input')
+  search.type = 'search'
+  search.className = 'sigil-input'
+  search.placeholder = '搜尋區塊…'
+  search.setAttribute('aria-label', '搜尋區塊')
+  container.appendChild(search)
+
+  const list = document.createElement('div')
+  list.className = 'sigil-blocks-list'
+  container.appendChild(list)
+
+  const entries = Object.entries(blocks)
+
+  function renderList(filter: string): void {
+    list.replaceChildren()
+    const q = filter.trim().toLowerCase()
+    for (const [name, factory] of entries) {
+      if (q && !name.toLowerCase().includes(q)) continue
+      const item = document.createElement('div')
+      item.className = 'sigil-block-item'
+      item.textContent = name
+      item.setAttribute('role', 'button')
+      item.setAttribute('aria-label', `拖入 ${name}`)
+      item.tabIndex = 0
+      item.addEventListener('pointerdown', (e: PointerEvent) => {
+        e.preventDefault()
+        startInsertDrag({ engine, iframe, node: factory(), pointerId: e.pointerId })
+      })
+      list.appendChild(item)
+    }
+    if (!list.childElementCount) {
+      const empty = document.createElement('p')
+      empty.className = 'sigil-muted'
+      empty.textContent = '無符合區塊'
+      list.appendChild(empty)
+    }
   }
+
+  search.addEventListener('input', () => renderList(search.value))
+  renderList('')
   return { destroy() {} }
 }

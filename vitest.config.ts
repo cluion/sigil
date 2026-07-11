@@ -13,6 +13,7 @@ const alias: Record<string, string> = {
   '@cluion/sigil-blocks': path.resolve(root, 'packages/blocks/src/index.ts'),
   '@cluion/sigil-store-json': path.resolve(root, 'packages/store-json/src/index.ts'),
   '@cluion/sigil': path.resolve(root, 'packages/editor/src/index.ts'),
+  '@cluion/sigil-app': path.resolve(root, 'packages/app/src/index.ts'),
 }
 
 export default defineConfig({

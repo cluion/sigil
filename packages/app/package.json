@@ -1,0 +1,25 @@
+{
+  "name": "@cluion/sigil-app",
+  "version": "0.0.0",
+  "description": "Sigil product shell — design tokens + open-box editor UI",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./tokens.css": "./src/tokens.css"
+  },
+  "files": ["dist", "src/tokens.css"],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cluion/sigil-core": "workspace:*",
+    "@cluion/sigil-ui": "workspace:*",
+    "@cluion/sigil-store-json": "workspace:*",
+    "@cluion/sigil-shortcode": "workspace:*"
+  }
+}

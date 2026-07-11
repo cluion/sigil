@@ -21,6 +21,8 @@ export interface CanvasHandle {
 export interface CanvasOptions {
   rendererOptions?: RendererOptions
   i18n?: I18n
+  /** false 時隱藏內建裝置／編輯切換，改由產品殼 Topbar 控制 */
+  chrome?: boolean
 }
 
 export function createCanvas(
@@ -29,23 +31,29 @@ export function createCanvas(
   opts?: CanvasOptions,
 ): CanvasHandle {
   const i18n = opts?.i18n
+  const showChrome = opts?.chrome !== false
   container.style.position = 'relative'
+  container.classList.add('sigil-canvas-host')
   const iframe = document.createElement('iframe')
+  iframe.className = 'sigil-canvas-iframe'
   iframe.style.cssText =
-    'border:1px solid #ccc;width:100%;height:420px;background:#fff;pointer-events:none'
+    'border:1px solid var(--sigil-color-border, #ccc);width:100%;height:100%;min-height:420px;background:var(--sigil-color-canvas, #fff);pointer-events:none;display:block;border-radius:var(--sigil-radius-sm, 6px)'
   iframe.title = i18n?.t('canvas.title') ?? '編輯畫布'
   container.appendChild(iframe)
 
   // 主文檔 overlay 蓋 iframe,接收所有 pointer
   const overlay = document.createElement('div')
+  overlay.className = 'sigil-canvas-overlay'
   overlay.style.cssText = 'position:absolute;inset:0;cursor:default'
   container.appendChild(overlay)
 
   // 編輯/預覽切換:預覽時 iframe 可互動(shortcode 按鈕可點)、overlay 隱藏
   const toggle = document.createElement('button')
+  toggle.type = 'button'
+  toggle.className = 'sigil-btn sigil-btn--ghost sigil-canvas-mode-btn'
   toggle.textContent = '✏ 編輯'
-  toggle.style.cssText = 'position:absolute;top:4px;right:4px;z-index:10;padding:2px 8px'
-  container.appendChild(toggle)
+  toggle.style.cssText = 'position:absolute;top:8px;right:8px;z-index:10'
+  if (showChrome) container.appendChild(toggle)
 
   let mode: CanvasMode = 'edit'
   function setMode(next: CanvasMode): void {
@@ -66,17 +74,19 @@ export function createCanvas(
     mobile: '375px',
   }
   const deviceBar = document.createElement('div')
-  deviceBar.style.cssText = 'position:absolute;top:4px;left:4px;z-index:10;display:flex;gap:4px'
+  deviceBar.className = 'sigil-canvas-device-bar'
+  deviceBar.style.cssText = 'position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:4px'
   const deviceBtns: HTMLButtonElement[] = []
   for (const d of Object.keys(deviceWidths) as CanvasDevice[]) {
     const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'sigil-btn sigil-btn--ghost'
     btn.textContent = d
-    btn.style.padding = '2px 8px'
     btn.addEventListener('click', () => setDevice(d))
     deviceBar.appendChild(btn)
     deviceBtns.push(btn)
   }
-  container.appendChild(deviceBar)
+  if (showChrome) container.appendChild(deviceBar)
 
   function setDevice(next: CanvasDevice): void {
     iframe.style.width = deviceWidths[next]
@@ -123,16 +133,27 @@ export function createCanvas(
   function injectStyle(doc: Document): void {
     const style = doc.createElement('style')
     style.textContent =
-      'body{margin:8px;font-family:system-ui}' +
-      'section[data-sigil-id]{padding:6px;min-height:24px;outline:1px dashed #cbd5e1;outline-offset:-1px}' +
-      'div[data-sigil-id]{padding:6px;min-height:24px;outline:1px dashed #86efac;outline-offset:-1px;background:rgba(134,239,172,0.06)}' +
-      'section[data-sigil-id]>*,div[data-sigil-id]>*{margin:3px;vertical-align:middle}' +
-      // 圖片明確為 inline-block,與按鈕一致,確保可水平並排
+      'body{margin:12px;font-family:system-ui,sans-serif;color:#0f172a}' +
+      'section[data-sigil-id]{padding:8px;min-height:28px;outline:1px dashed #cbd5e1;outline-offset:-1px;border-radius:6px}' +
+      'div[data-sigil-id]{padding:8px;min-height:28px;outline:1px dashed #86efac;outline-offset:-1px;background:rgba(134,239,172,0.06);border-radius:6px}' +
+      'section[data-sigil-id]>*,div[data-sigil-id]>*{margin:4px;vertical-align:middle}' +
       'img[data-sigil-id]{display:inline-block;vertical-align:middle}' +
-      // 空容器放大命中區並顯示提示（限定 section/column,避免誤套到 void 的 img）
-      'section[data-sigil-id]:empty,div[data-sigil-id]:empty{min-height:56px;display:flex;align-items:center;justify-content:center}' +
-      'section[data-sigil-id]:empty::before,div[data-sigil-id]:empty::before{content:"拖入元件";color:#94a3b8;font-size:12px;pointer-events:none}'
+      'section[data-sigil-id]:empty,div[data-sigil-id]:empty{min-height:64px;display:flex;align-items:center;justify-content:center}' +
+      'section[data-sigil-id]:empty::before,div[data-sigil-id]:empty::before{content:"拖入元件";color:#94a3b8;font-size:12px;pointer-events:none}' +
+      '[data-sigil-id][data-sigil-selected="1"]{outline:2px solid #4f46e5!important;outline-offset:2px;box-shadow:0 0 0 4px rgba(79,70,229,0.15)}'
     doc.head.appendChild(style)
+  }
+
+  function paintSelection(): void {
+    const d = iframe.contentDocument
+    if (!d) return
+    d.querySelectorAll('[data-sigil-selected]').forEach((el) => el.removeAttribute('data-sigil-selected'))
+    const id = engine.getSelection()
+    if (!id) return
+    const safe =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(id) : id
+    const el = d.querySelector(`[data-sigil-id="${safe}"]`)
+    if (el) el.setAttribute('data-sigil-selected', '1')
   }
 
   iframe.srcdoc = '<!doctype html><html><head></head><body></body></html>'
@@ -141,6 +162,7 @@ export function createCanvas(
     if (!d) return
     injectStyle(d)
     renderer.mount(engine.getTree(), d.body)
+    paintSelection()
   })
 
   const unsub = engine.subscribe((ev: EngineEvent) => {
@@ -149,7 +171,13 @@ export function createCanvas(
     if (ev.type === 'patch') {
       if (affectsShortcodeSlot(ev.patch, engine.getTree())) renderer.reconcile(engine.getTree())
       else renderer.applyPatch(ev.patch)
-    } else if (ev.type === 'tree') renderer.reconcile(ev.tree)
+      paintSelection()
+    } else if (ev.type === 'tree') {
+      renderer.reconcile(ev.tree)
+      paintSelection()
+    } else if (ev.type === 'selection') {
+      paintSelection()
+    }
   })
 
   return {

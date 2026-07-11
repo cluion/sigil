@@ -56,7 +56,8 @@ export interface SigilEditor {
 }
 
 /**
- * 建立 editor — 一站式組合區塊面板 + canvas + 圖層 + props 面板
+ * 建立 editor — SDK 級組合
+ * 開箱產品殼請用 `@cluion/sigil-app` 的 createApp
  */
 export function createEditor(opts: EditorOptions): SigilEditor {
   const mountEl =

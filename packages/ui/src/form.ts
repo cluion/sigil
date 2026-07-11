@@ -15,15 +15,18 @@ export function createPropForm(opts: FormOptions): HTMLElement {
   const { engine, node, schema } = opts
   const props = node.shortcode?.props ?? {}
   const wrap = document.createElement('div')
+  wrap.className = 'sigil-prop-form'
 
   for (const s of schema) {
     const label = document.createElement('label')
-    label.textContent = `${s.label ?? s.name}：`
-    label.style.display = 'block'
+    label.className = 'sigil-field'
+    const span = document.createElement('span')
+    span.className = 'sigil-field-label'
+    span.textContent = s.label ?? s.name
     const control = createControl(s, props[s.name])
     const evt = s.type === 'text' || s.type === 'number' ? 'input' : 'change'
     control.addEventListener(evt, () => emit(engine, node, s, control))
-    label.appendChild(control)
+    label.append(span, control)
     wrap.appendChild(label)
   }
   return wrap
@@ -39,6 +42,7 @@ function createControl(schema: PropSchema, value: unknown): HTMLElement {
     }
     case 'select': {
       const el = document.createElement('select')
+      el.className = 'sigil-input'
       for (const opt of schema.options ?? []) {
         const o = document.createElement('option')
         o.value = opt.value
@@ -50,12 +54,14 @@ function createControl(schema: PropSchema, value: unknown): HTMLElement {
     }
     case 'color': {
       const el = document.createElement('input')
+      el.className = 'sigil-input'
       el.type = 'color'
       el.value = String(value ?? '#000000')
       return el
     }
     case 'number': {
       const el = document.createElement('input')
+      el.className = 'sigil-input'
       el.type = 'number'
       el.value = value === undefined ? '' : String(value)
       return el
@@ -63,6 +69,7 @@ function createControl(schema: PropSchema, value: unknown): HTMLElement {
     case 'text':
     default: {
       const el = document.createElement('input')
+      el.className = 'sigil-input'
       el.type = 'text'
       el.value = String(value ?? '')
       return el

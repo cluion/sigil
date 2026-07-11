@@ -25,7 +25,8 @@
       "@cluion/sigil-ui": ["./packages/ui/src/index.ts"],
       "@cluion/sigil-blocks": ["./packages/blocks/src/index.ts"],
       "@cluion/sigil-store-json": ["./packages/store-json/src/index.ts"],
-      "@cluion/sigil": ["./packages/editor/src/index.ts"]
+      "@cluion/sigil": ["./packages/editor/src/index.ts"],
+      "@cluion/sigil-app": ["./packages/app/src/index.ts"]
     }
   }
 }

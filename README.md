@@ -33,7 +33,8 @@ pnpm docs:build    # 靜態輸出 docs/.vitepress/dist
 
 | 套件 | 職責 | 說明 |
 |---|---|---|
-| [`@cluion/sigil`](./packages/editor/README.md) | `createEditor` 一站式入口 | 多數整合只需這包 |
+| [`@cluion/sigil-app`](./packages/app/README.md) | `createApp` 開箱產品殼 | 預設 UI／UX，建議終端產品用這包 |
+| [`@cluion/sigil`](./packages/editor/README.md) | `createEditor` SDK 入口 | 自組版面時用 |
 | [`@cluion/sigil-core`](./packages/core/README.md) | Engine、模型、renderer、HtmlPolicy、序列化 | 零第三方依賴 |
 | [`@cluion/sigil-shortcode`](./packages/shortcode/README.md) | `defineShortcode`、resolver | 宣告式區塊 |
 | [`@cluion/sigil-ui`](./packages/ui/README.md) | 畫布、面板、拖拽 | 進階自組 UI |

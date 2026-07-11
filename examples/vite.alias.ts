@@ -10,5 +10,6 @@ export function sigilSrcAliases(): Record<string, string> {
     '@cluion/sigil-ui': root('../packages/ui/src/index.ts'),
     '@cluion/sigil-shortcode': root('../packages/shortcode/src/index.ts'),
     '@cluion/sigil': root('../packages/editor/src/index.ts'),
+    '@cluion/sigil-app': root('../packages/app/src/index.ts'),
   }
 }

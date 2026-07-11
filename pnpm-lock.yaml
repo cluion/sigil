@@ -68,6 +68,9 @@ importers:
       '@cluion/sigil':
         specifier: workspace:*
         version: link:../packages/editor
+      '@cluion/sigil-app':
+        specifier: workspace:*
+        version: link:../packages/app
       '@cluion/sigil-blocks':
         specifier: workspace:*
         version: link:../packages/blocks
@@ -163,6 +166,21 @@ importers:
       vite:
         specifier: ^6.0.7
         version: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(yaml@2.9.0)
+
+  packages/app:
+    dependencies:
+      '@cluion/sigil-core':
+        specifier: workspace:*
+        version: link:../core
+      '@cluion/sigil-shortcode':
+        specifier: workspace:*
+        version: link:../shortcode
+      '@cluion/sigil-store-json':
+        specifier: workspace:*
+        version: link:../store-json
+      '@cluion/sigil-ui':
+        specifier: workspace:*
+        version: link:../ui
 
   packages/blocks:
     dependencies:

@@ -28,8 +28,10 @@ pnpm build   # 建置 packages/*
 
 ## 2. 最小 embed
 
+開箱產品殼用 `createApp`，自組 UI 用 `createEditor`
+
 ```ts
-import { createEditor } from '@cluion/sigil'
+import { createApp } from '@cluion/sigil-app'
 import { basicBlocks, blockSection, blockText } from '@cluion/sigil-blocks'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import type { SigilDoc } from '@cluion/sigil-core'
@@ -45,24 +47,23 @@ const doc: SigilDoc = {
   },
 }
 
-const editor = createEditor({
+const app = createApp({
   mount: root,
   doc,
   store,
   blocks: basicBlocks,
-  locale: 'zh', // 或 'en'
+  locale: 'zh',
 })
 
-// 序列化
-const json = editor.toJSON()
-const html = editor.toHTML() // static
-const hydrated = editor.toHTML('hydrated')
+const json = app.toJSON()
+const html = app.toHTML()
+const hydrated = app.toHTML('hydrated')
 
-editor.destroy()
+app.destroy()
 ```
 
-`createEditor` 會掛上區塊面板、iframe 畫布、圖層與屬性面板  
-進階場景可改用 `@cluion/sigil-core` 的 `createEngine` 自行組裝
+`createApp` 含 Topbar、區塊搜尋、畫布選取框、Inspector 分頁、狀態列  
+SDK 級 `createEditor` 或 core `createEngine` 可完全自組
 
 ## 3. 定義 shortcode
 

@@ -1,4 +1,4 @@
-import { createEditor, type SigilEditor } from '@cluion/sigil'
+import { createApp, type SigilApp } from '@cluion/sigil-app'
 import {
   basicBlocks,
   blockSection,
@@ -69,7 +69,6 @@ const mockFetchJSON = (url: string, signal?: AbortSignal) =>
 
 const store = new JsonProjectStore()
 
-// 範例頁
 const section = blockSection()
 section.children = [blockText('點我編輯'), blockButton('按鈕'), blockImage('https://placehold.co/120')]
 const doc: SigilDoc = { version: 1, root: section }
@@ -85,83 +84,78 @@ const blocks = {
   購物車: () => blockShortcode('cart', {}),
 }
 
+const shortcodes = [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef]
+
 let locale: 'zh' | 'en' = 'zh'
-let editor: SigilEditor = createEditor({
+let app: SigilApp = createApp({
   mount: root,
   doc,
   store,
   blocks,
-  shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef],
+  shortcodes,
   fetchJSON: mockFetchJSON,
   locale,
 })
 
-// 工具列：存／讀 JSON
 const toolbar = document.getElementById('toolbar')!
 const status = document.createElement('span')
 status.style.marginLeft = '8px'
 
-const saveBtn = document.createElement('button')
-saveBtn.textContent = '存 JSON'
-saveBtn.addEventListener('click', () => {
-  const json = store.exportJSON(editor.toJSON())
-  localStorage.setItem('sigil-demo', json)
-  status.textContent = '已存'
-})
-
 const loadBtn = document.createElement('button')
-loadBtn.textContent = '讀 JSON'
+loadBtn.textContent = '讀 localStorage'
 loadBtn.addEventListener('click', () => {
   const json = localStorage.getItem('sigil-demo')
   if (!json) {
-    status.textContent = '無資料'
+    status.textContent = ' 無資料'
     return
   }
   try {
     const loaded = store.importJSON(json)
-    editor.destroy()
-    editor = createEditor({
+    app.destroy()
+    app = createApp({
       mount: root,
       doc: loaded,
       store,
       blocks,
-      shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef],
+      shortcodes,
       fetchJSON: mockFetchJSON,
       locale,
     })
-    status.textContent = '已讀'
+    status.textContent = ' 已讀'
   } catch (e) {
-    status.textContent = `讀取失敗：${e instanceof Error ? e.message : String(e)}`
+    status.textContent = ` 讀取失敗：${e instanceof Error ? e.message : String(e)}`
   }
 })
 
-const exportBtn = document.createElement('button')
-exportBtn.textContent = '匯出 HTML'
-const htmlOut = document.createElement('textarea')
-htmlOut.readOnly = true
-htmlOut.style.cssText =
-  'display:block;width:100%;min-height:120px;margin-top:8px;font-family:monospace;font-size:12px'
-
-exportBtn.addEventListener('click', () => {
-  htmlOut.value = editor.toHTML()
-  status.textContent = `已輸出 ${htmlOut.value.length} 字`
-})
-
-const hydratedBtn = document.createElement('button')
-hydratedBtn.textContent = '匯出 HTML(hydrated)'
-hydratedBtn.addEventListener('click', () => {
-  htmlOut.value = editor.toHTML('hydrated')
-  status.textContent = `已輸出 hydrated ${htmlOut.value.length} 字`
+const persistBtn = document.createElement('button')
+persistBtn.textContent = '寫入 localStorage'
+persistBtn.addEventListener('click', () => {
+  localStorage.setItem('sigil-demo', store.exportJSON(app.toJSON()))
+  status.textContent = ' 已寫入 LS'
 })
 
 const localeBtn = document.createElement('button')
 localeBtn.textContent = '中/EN'
 localeBtn.addEventListener('click', () => {
   locale = locale === 'zh' ? 'en' : 'zh'
-  const doc = editor.toJSON()
-  editor.destroy()
-  editor = createEditor({ mount: root, doc, store, blocks, shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef], fetchJSON: mockFetchJSON, locale })
-  status.textContent = `語系 ${locale}`
+  const d = app.toJSON()
+  app.destroy()
+  app = createApp({
+    mount: root,
+    doc: d,
+    store,
+    blocks,
+    shortcodes,
+    fetchJSON: mockFetchJSON,
+    locale,
+  })
+  status.textContent = ` 語系 ${locale}`
 })
 
-toolbar.append(saveBtn, loadBtn, exportBtn, hydratedBtn, localeBtn, status, htmlOut)
+const note = document.createElement('span')
+note.style.marginLeft = '12px'
+note.style.color = '#64748b'
+note.style.fontSize = '13px'
+note.textContent = '主 UI 已改 createApp 產品殼 · 存檔／匯出／裝置／預覽在編輯器頂欄'
+
+toolbar.append(persistBtn, loadBtn, localeBtn, status, note)
