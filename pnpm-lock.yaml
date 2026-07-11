@@ -40,7 +40,7 @@ importers:
         version: 11.2.0
       tsdown:
         specifier: ^0.22.0
-        version: 0.22.3(publint@0.3.21)(typescript@5.9.3)
+        version: 0.22.3(publint@0.3.21)(typescript@5.9.3)(unrun@0.3.1)
       typedoc:
         specifier: ^0.28.20
         version: 0.28.20(typescript@5.9.3)
@@ -53,6 +53,9 @@ importers:
       typescript-eslint:
         specifier: ^8.63.0
         version: 8.63.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      unrun:
+        specifier: ^0.3.1
+        version: 0.3.1
       vite:
         specifier: ^6.0.7
         version: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(yaml@2.9.0)
@@ -2880,6 +2883,16 @@ packages:
     resolution: {integrity: sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==}
     engines: {node: '>= 4.0.0'}
 
+  unrun@0.3.1:
+    resolution: {integrity: sha512-onIck/oNnCaytwths1ZVp1LK2Gq2hPoyFhiHebObuUXqR3S0uHuLLaBK8K6mRRgV7Ptip8AnNvaUsgzwWwBZuA==}
+    engines: {node: ^22.13.0 || >=24.0.0}
+    hasBin: true
+    peerDependencies:
+      synckit: ^0.11.11
+    peerDependenciesMeta:
+      synckit:
+        optional: true
+
   update-browserslist-db@1.2.3:
     resolution: {integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==}
     hasBin: true
@@ -5599,7 +5612,7 @@ snapshots:
     dependencies:
       typescript: 5.9.3
 
-  tsdown@0.22.3(publint@0.3.21)(typescript@5.9.3):
+  tsdown@0.22.3(publint@0.3.21)(typescript@5.9.3)(unrun@0.3.1):
     dependencies:
       ansis: 4.3.1
       cac: 7.0.0
@@ -5619,6 +5632,7 @@ snapshots:
     optionalDependencies:
       publint: 0.3.21
       typescript: 5.9.3
+      unrun: 0.3.1
     transitivePeerDependencies:
       - '@ts-macro/tsc'
       - '@typescript/native-preview'
@@ -5695,6 +5709,10 @@ snapshots:
       unist-util-visit-parents: 6.0.2
 
   universalify@0.1.2: {}
+
+  unrun@0.3.1:
+    dependencies:
+      rolldown: 1.1.4
 
   update-browserslist-db@1.2.3(browserslist@4.28.5):
     dependencies:
