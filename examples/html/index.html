@@ -3,11 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sigil — HTML embed</title>
+    <title>Sigil — HTML</title>
     <style>
+      html,
       body {
+        height: 100%;
+        margin: 0;
         font-family: system-ui, sans-serif;
-        margin: 16px;
+        background: #e2e8f0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        padding: 12px;
+        box-sizing: border-box;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 18px;
       }
       #toolbar {
         margin-bottom: 8px;
@@ -15,11 +28,14 @@
       #toolbar button {
         margin-right: 6px;
       }
+      #app {
+        flex: 1;
+        min-height: 0;
+      }
     </style>
   </head>
   <body>
-    <h1>Sigil · HTML</h1>
-    <p>純 HTML 加 TypeScript 最小 embed・不依賴前端框架</p>
+    <h1>Sigil · HTML · createApp</h1>
     <div id="toolbar"></div>
     <div id="app"></div>
     <script type="module" src="./main.ts"></script>
