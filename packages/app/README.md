@@ -1,37 +1,24 @@
 # `@cluion/sigil-app`
 
-開箱即用產品殼：Design tokens、Topbar、三欄版面、Inspector 分頁、狀態列
-
-## 安裝
+`createApp` 產品殼。
 
 ```bash
-pnpm add @cluion/sigil-app
+pnpm add @cluion/sigil-app @cluion/sigil-blocks @cluion/sigil-shortcode
 ```
-
-## 用法
 
 ```ts
 import { createApp } from '@cluion/sigil-app'
 import { basicBlocks } from '@cluion/sigil-blocks'
 
-const app = createApp({
-  mount: '#app',
-  blocks: basicBlocks,
-  shortcodes: [/* defineShortcode(...) */],
-})
-
+const app = createApp({ mount: '#app', blocks: basicBlocks })
 app.toJSON()
 app.toHTML()
 app.destroy()
 ```
 
-進階自組 UI 請用 `@cluion/sigil` 的 `createEditor` 或 core + ui 面板
+樣式於執行時注入，或 `import '@cluion/sigil-app/tokens.css'`。  
+自組 UI：`@cluion/sigil`。
 
-## 樣式
-
-tokens 會在 `createApp` 時自動注入  
-亦可 `import '@cluion/sigil-app/tokens.css'`
-
-## 授權
+## License
 
 MIT

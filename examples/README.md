@@ -1,19 +1,13 @@
 # Examples
 
-最小可跑的整合範例  
-開發時 resolve 到 monorepo 內各套件 src
-
-| 目錄 | 說明 | 指令 |
-|---|---|---|
-| [`html/`](./html/) | 純 HTML 加 TypeScript | `pnpm example:html` |
-| [`vue/`](./vue/) | Vue 3 | `pnpm example:vue` |
-| [`react/`](./react/) | React | `pnpm example:react` |
-| [`laravel/`](./laravel/) | Laravel ProjectStore API 參考・非完整專案 | 見該目錄 README |
-
-先在 repo 根目錄：
+| 目錄 | 指令 |
+|---|---|
+| `html/` | `pnpm example:html` |
+| `vue/` | `pnpm example:vue` |
+| `react/` | `pnpm example:react` |
+| `laravel/` | 見目錄 README |
 
 ```bash
 pnpm install
+pnpm dev
 ```
-
-上手文件見 [docs/guide/getting-started.md](../docs/guide/getting-started.md)
