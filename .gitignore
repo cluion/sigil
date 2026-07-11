@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 *.tsbuildinfo
+*.tgz
+
+# npm pack / publint 產物
 
 # Test / coverage
 coverage/
