@@ -1,0 +1,17 @@
+{
+  "name": "sigil-example-html",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@cluion/sigil": "workspace:*",
+    "@cluion/sigil-blocks": "workspace:*",
+    "@cluion/sigil-core": "workspace:*",
+    "@cluion/sigil-shortcode": "workspace:*",
+    "@cluion/sigil-store-json": "workspace:*"
+  }
+}

@@ -1,8 +1,9 @@
 # Getting Started
 
-五分鐘內在本機跑起 Sigil 編輯器，並自訂一個 shortcode。
+五分鐘內在本機跑起 Sigil 編輯器  
+並自訂一個 shortcode
 
-需求：Node ≥ 20、[pnpm](https://pnpm.io/) 10。
+需求：Node ≥ 20、[pnpm](https://pnpm.io/) 10
 
 ## 1. 安裝與 demo
 
@@ -13,14 +14,17 @@ pnpm install
 pnpm dev
 ```
 
-瀏覽器開啟 Vite 提示的本機位址。demo 含區塊拖拽、屬性面板、shortcode（含商品卡／購物車）與 JSON／HTML 匯出。
+瀏覽器開啟 Vite 提示的本機位址  
+demo 含區塊拖拽、屬性面板、shortcode・含商品卡與購物車・以及 JSON／HTML 匯出
 
 ```bash
 pnpm test    # 單元測試
 pnpm build   # 建置 packages/*
 ```
 
-> 套件尚未正式發佈到 npm 時，請以 monorepo workspace 依賴使用；發佈後可改為 `pnpm add @cluion/sigil`。
+> 套件尚未正式發佈到 npm 時  
+> 請以 monorepo workspace 依賴使用  
+> 發佈後可改為 `pnpm add @cluion/sigil`
 
 ## 2. 最小 embed
 
@@ -57,7 +61,8 @@ const hydrated = editor.toHTML('hydrated')
 editor.destroy()
 ```
 
-`createEditor` 會掛上區塊面板、iframe 畫布、圖層與屬性面板。進階場景可改用 `@cluion/sigil-core` 的 `createEngine` 自行組裝。
+`createEditor` 會掛上區塊面板、iframe 畫布、圖層與屬性面板  
+進階場景可改用 `@cluion/sigil-core` 的 `createEngine` 自行組裝
 
 ## 3. 定義 shortcode
 
@@ -95,14 +100,16 @@ createEditor({
 
 | 能力 | 用途 |
 |---|---|
-| `ctx.props` | 節點 props（signal getter；請在 `effect` 內讀取） |
-| `ctx.effect` | 細粒度副作用；回傳 cleanup |
-| `ctx.fetchJSON(url, signal?)` | 非同步資料；用 `AbortSignal` 避 race |
+| `ctx.props` | 節點 props・signal getter・請在 `effect` 內讀取 |
+| `ctx.effect` | 細粒度副作用・回傳 cleanup |
+| `ctx.fetchJSON` | 非同步資料・可傳 `AbortSignal` 避 race |
 | `ctx.store` | 跨 shortcode 共享狀態 |
 | `ctx.emit` / `ctx.on` | 跨 shortcode 事件 |
-| `ctx.mode` | `'edit'` \| `'live'`（編輯／預覽） |
+| `ctx.mode` | `edit` 或 `live`・編輯／預覽 |
 
-結構請放在 `template`（或 `<template>`），動態值用 `textContent`／`setAttribute`，不要拼接 HTML 字串。
+結構請放在 `template` 或 HTMLTemplateElement  
+動態值用 `textContent`／`setAttribute`  
+不要拼接 HTML 字串
 
 ## 4. 存檔：ProjectStore
 
@@ -153,7 +160,7 @@ import { hydrate } from '@cluion/sigil-core'
 // hydrate(document.body, { shortcodeResolver })
 ```
 
-詳見套件說明：[`@cluion/sigil-core`](../packages/core/README.md)。
+詳見套件說明 [`@cluion/sigil-core`](../packages/core/README.md)
 
 ## 6. 套件一覽
 
@@ -162,18 +169,30 @@ import { hydrate } from '@cluion/sigil-core'
 | [`@cluion/sigil`](../packages/editor/README.md) | 一站式 `createEditor` |
 | [`@cluion/sigil-core`](../packages/core/README.md) | 引擎、模型、序列化、policy |
 | [`@cluion/sigil-shortcode`](../packages/shortcode/README.md) | `defineShortcode` / resolver |
-| [`@cluion/sigil-ui`](../packages/ui/README.md) | 畫布與面板（進階自組） |
+| [`@cluion/sigil-ui`](../packages/ui/README.md) | 畫布與面板・進階自組 |
 | [`@cluion/sigil-blocks`](../packages/blocks/README.md) | 預設區塊工廠 |
 | [`@cluion/sigil-store-json`](../packages/store-json/README.md) | JSON `ProjectStore` |
 
 ## 安全提示
 
-- 核心路徑使用 `createElement`／`textContent`，避免 `innerHTML` 拼接。
-- shortcode `template` 視為受信任結構；動態資料勿直接寫進 HTML 字串。
-- `render` 輸出請對動態值使用 `escape`（`RenderContext.escape`）。
+- 核心路徑使用 `createElement`／`textContent`・避免 `innerHTML` 拼接
+- shortcode `template` 視為受信任結構・動態資料勿直接寫進 HTML 字串
+- `render` 輸出請對動態值使用 `escape`・見 `RenderContext.escape`
+
+## 框架範例
+
+| 指令 | 說明 |
+|---|---|
+| `pnpm example:html` | 純 HTML 加 TypeScript |
+| `pnpm example:vue` | Vue 3・`onMounted` / `destroy` |
+| `pnpm example:react` | React・`useEffect` cleanup |
+
+Laravel 後端 `ProjectStore`  
+含 migration、controller、Blade／Vite 入口  
+見 [`examples/laravel/`](../examples/laravel/)
 
 ## 下一步
 
 - 跑 `pnpm dev` 看商品卡：顏色 → 尺寸 → 價格、購物車 `store`
 - 用 `createEngine` 做客製工具列
-- 接自己的 `ProjectStore`（HTTP／Laravel 等）
+- 接自己的 `ProjectStore`・HTTP 或 Laravel 等

@@ -11,6 +11,9 @@
   },
   "scripts": {
     "dev": "vite demo",
+    "example:html": "vite examples/html",
+    "example:vue": "vite examples/vue",
+    "example:react": "vite examples/react",
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "pnpm -r --filter \"./packages/*\" run build",
