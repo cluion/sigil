@@ -1,7 +1,7 @@
 {
   "name": "@cluion/sigil-app",
   "version": "0.0.0",
-  "description": "Sigil product shell — design tokens + open-box editor UI",
+  "description": "Sigil product shell — createApp() open-box editor UI with design tokens",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -11,7 +11,11 @@
     },
     "./tokens.css": "./src/tokens.css"
   },
-  "files": ["dist", "src/tokens.css"],
+  "files": [
+    "dist",
+    "src/tokens.css",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run"
@@ -21,5 +25,32 @@
     "@cluion/sigil-ui": "workspace:*",
     "@cluion/sigil-store-json": "workspace:*",
     "@cluion/sigil-shortcode": "workspace:*"
-  }
+  },
+  "author": "Cluion",
+  "keywords": [
+    "sigil",
+    "editor",
+    "wysiwyg",
+    "page-builder",
+    "createApp",
+    "cluion"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.cluion.com/ningyungame/sigil.git",
+    "directory": "packages/app"
+  },
+  "homepage": "https://git.cluion.com/ningyungame/sigil#readme",
+  "bugs": {
+    "url": "https://git.cluion.com/ningyungame/sigil/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ]
 }

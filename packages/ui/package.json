@@ -1,7 +1,7 @@
 {
   "name": "@cluion/sigil-ui",
   "version": "0.0.0",
-  "description": "Sigil default Web Components — canvas(iframe)/layers/props/blocks panels",
+  "description": "Sigil UI panels — canvas, blocks, layers, props, inspector",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -10,12 +10,39 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run"
   },
   "dependencies": {
     "@cluion/sigil-core": "workspace:*"
-  }
+  },
+  "author": "Cluion",
+  "keywords": [
+    "sigil",
+    "editor",
+    "canvas",
+    "dnd",
+    "cluion"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.cluion.com/ningyungame/sigil.git",
+    "directory": "packages/ui"
+  },
+  "homepage": "https://git.cluion.com/ningyungame/sigil#readme",
+  "bugs": {
+    "url": "https://git.cluion.com/ningyungame/sigil/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false
 }

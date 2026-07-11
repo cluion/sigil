@@ -1,7 +1,7 @@
 {
   "name": "@cluion/sigil-core",
   "version": "0.0.0",
-  "description": "Sigil core engine — zero-dependency, CSP-safe",
+  "description": "Sigil core engine — zero-dependency, CSP-safe page model and renderer",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -10,9 +10,37 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run"
-  }
+  },
+  "author": "Cluion",
+  "keywords": [
+    "sigil",
+    "editor",
+    "page-builder",
+    "csp",
+    "trusted-types",
+    "cluion"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.cluion.com/ningyungame/sigil.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://git.cluion.com/ningyungame/sigil#readme",
+  "bugs": {
+    "url": "https://git.cluion.com/ningyungame/sigil/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false
 }

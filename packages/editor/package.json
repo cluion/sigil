@@ -1,7 +1,7 @@
 {
   "name": "@cluion/sigil",
   "version": "0.0.0",
-  "description": "Sigil — createEditor() one-stop composition (user-facing entry)",
+  "description": "Sigil SDK — createEditor() composition for custom shells",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -10,7 +10,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run"
@@ -20,5 +23,29 @@
     "@cluion/sigil-ui": "workspace:*",
     "@cluion/sigil-store-json": "workspace:*",
     "@cluion/sigil-shortcode": "workspace:*"
-  }
+  },
+  "author": "Cluion",
+  "keywords": [
+    "sigil",
+    "editor",
+    "sdk",
+    "createEditor",
+    "cluion"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.cluion.com/ningyungame/sigil.git",
+    "directory": "packages/editor"
+  },
+  "homepage": "https://git.cluion.com/ningyungame/sigil#readme",
+  "bugs": {
+    "url": "https://git.cluion.com/ningyungame/sigil/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false
 }

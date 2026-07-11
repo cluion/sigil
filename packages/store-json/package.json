@@ -1,7 +1,7 @@
 {
   "name": "@cluion/sigil-store-json",
   "version": "0.0.0",
-  "description": "Sigil default ProjectStore — in-memory + JSON import/export adapter",
+  "description": "Sigil ProjectStore — in-memory JSON import/export adapter",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -10,12 +10,39 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run"
   },
   "dependencies": {
     "@cluion/sigil-core": "workspace:*"
-  }
+  },
+  "author": "Cluion",
+  "keywords": [
+    "sigil",
+    "store",
+    "json",
+    "adapter",
+    "cluion"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.cluion.com/ningyungame/sigil.git",
+    "directory": "packages/store-json"
+  },
+  "homepage": "https://git.cluion.com/ningyungame/sigil#readme",
+  "bugs": {
+    "url": "https://git.cluion.com/ningyungame/sigil/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false
 }
