@@ -1,6 +1,6 @@
 {
   "name": "@cluion/sigil-store-json",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Sigil ProjectStore — in-memory JSON import/export adapter",
   "license": "MIT",
   "type": "module",

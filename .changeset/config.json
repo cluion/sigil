@@ -2,7 +2,17 @@
   "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [],
+  "fixed": [
+    [
+      "@cluion/sigil-app",
+      "@cluion/sigil-blocks",
+      "@cluion/sigil-core",
+      "@cluion/sigil",
+      "@cluion/sigil-shortcode",
+      "@cluion/sigil-store-json",
+      "@cluion/sigil-ui"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",

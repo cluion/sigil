@@ -1,6 +1,6 @@
 {
   "name": "@cluion/sigil",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Sigil SDK — createEditor() composition for custom shells",
   "license": "MIT",
   "type": "module",
