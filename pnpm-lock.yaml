@@ -86,9 +86,9 @@ importers:
 
   examples/html:
     dependencies:
-      '@cluion/sigil':
+      '@cluion/sigil-app':
         specifier: workspace:*
-        version: link:../../packages/editor
+        version: link:../../packages/app
       '@cluion/sigil-blocks':
         specifier: workspace:*
         version: link:../../packages/blocks
