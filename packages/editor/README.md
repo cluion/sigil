@@ -44,7 +44,7 @@ editor.destroy()
 | `locale` | `'zh'` \| `'en'` |
 | `sanitize` / `trustedTypesPolicyName` | HtmlPolicy 客製 |
 
-完整上手見 [Getting Started](../../docs/getting-started.md)。
+完整上手見 [Getting Started](../../docs/guide/getting-started.md)
 
 ## 授權
 

@@ -108,5 +108,5 @@ const editor = createEditor({
 
 ## 相關
 
-- [Getting Started · ProjectStore](../../docs/getting-started.md)
+- [Getting Started · ProjectStore](../../docs/guide/getting-started.md)
 - [`@cluion/sigil-store-json`](../../packages/store-json/README.md)

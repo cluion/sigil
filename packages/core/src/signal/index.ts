@@ -1,6 +1,6 @@
 // signal — 極簡 signal primitives（對齊 TC39 Signal.State／Computed）
 
-type Cleanup = () => void
+export type Cleanup = () => void
 
 /**
  * 可訂閱物件（state 與 computed 共用），持有訂閱者 effect 集合

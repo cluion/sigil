@@ -10,6 +10,8 @@ export default tseslint.config(
       '**/*.d.ts',
       // Laravel 參考片段・宿主環境 globals・非 monorepo 建置目標
       'examples/laravel/**',
+      // Node 腳本
+      'scripts/**',
     ],
   },
   js.configs.recommended,

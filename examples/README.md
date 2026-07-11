@@ -16,4 +16,4 @@
 pnpm install
 ```
 
-上手文件見 [docs/getting-started.md](../docs/getting-started.md)
+上手文件見 [docs/guide/getting-started.md](../docs/guide/getting-started.md)

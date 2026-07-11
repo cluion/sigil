@@ -18,7 +18,14 @@ pnpm example:react    # React
 
 完整步驟、最小 embed、自訂 shortcode、`ProjectStore` 與 HTML 輸出：
 
-**→ [docs/getting-started.md](./docs/getting-started.md)**
+**→ [docs/guide/getting-started.md](./docs/guide/getting-started.md)**
+
+文件站：
+
+```bash
+pnpm docs:dev      # VitePress + TypeDoc API
+pnpm docs:build    # 靜態輸出 docs/.vitepress/dist
+```
 
 框架範例與 Laravel 後端參考：**→ [examples/](./examples/)**
 
