@@ -20,18 +20,46 @@ import { cartDef } from './shortcodes/cart'
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
 
+/** mock：/sizes?color= → 規格；/price?id&color&size → 價格；/error → 失敗；其餘 loader 用 */
 const mockFetchJSON = (url: string, signal?: AbortSignal) =>
   new Promise<unknown>((resolve, reject) => {
     const t = setTimeout(() => {
+      if (url.startsWith('/error')) {
+        reject(new Error('mock fail'))
+        return
+      }
+      if (url.startsWith('/sizes')) {
+        const params = new URLSearchParams(url.split('?')[1] ?? '')
+        const color = params.get('color') ?? 'red'
+        const byColor: Record<string, { value: string; label: string }[]> = {
+          red: [
+            { value: 's', label: 'S' },
+            { value: 'm', label: 'M' },
+          ],
+          blue: [
+            { value: 'm', label: 'M' },
+            { value: 'l', label: 'L' },
+          ],
+          green: [
+            { value: 'l', label: 'L' },
+            { value: 'xl', label: 'XL' },
+          ],
+        }
+        resolve({ sizes: byColor[color] ?? byColor.red })
+        return
+      }
       if (url.startsWith('/price')) {
         const params = new URLSearchParams(url.split('?')[1] ?? '')
         const color = params.get('color')
+        const size = params.get('size') ?? 'm'
         const id = Number(params.get('id'))
         const base: Record<string, number> = { red: 100, blue: 150, green: 200 }
-        resolve({ price: (color ? base[color] ?? 100 : 100) + id * 10 })
-      } else {
-        resolve({ url, ts: 123 })
+        const sizeAdd: Record<string, number> = { s: 0, m: 10, l: 20, xl: 30 }
+        const colorBase = color ? (base[color] ?? 100) : 100
+        resolve({ price: colorBase + (sizeAdd[size] ?? 0) + id * 10 })
+        return
       }
+      resolve({ url, ts: 123 })
     }, 300)
     signal?.addEventListener('abort', () => {
       clearTimeout(t)
@@ -89,17 +117,22 @@ loadBtn.addEventListener('click', () => {
     status.textContent = '無資料'
     return
   }
-  editor.destroy()
-  editor = createEditor({
-    mount: root,
-    doc: store.importJSON(json),
-    store,
-    blocks,
-    shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef],
-    fetchJSON: mockFetchJSON,
-    locale,
-  })
-  status.textContent = '已讀'
+  try {
+    const loaded = store.importJSON(json)
+    editor.destroy()
+    editor = createEditor({
+      mount: root,
+      doc: loaded,
+      store,
+      blocks,
+      shortcodes: [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef],
+      fetchJSON: mockFetchJSON,
+      locale,
+    })
+    status.textContent = '已讀'
+  } catch (e) {
+    status.textContent = `讀取失敗：${e instanceof Error ? e.message : String(e)}`
+  }
 })
 
 const exportBtn = document.createElement('button')

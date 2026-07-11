@@ -8,5 +8,6 @@ export * from './serialize/index.js'
 export * from './signal/index.js'
 export * from './hydrate.js'
 export * from './i18n.js'
+export type { ProjectStore } from './adapters.js'
 
 export const SIGIL_CORE_VERSION = '0.0.0' as const

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
 import { createEditor } from '../src/index.js'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
@@ -67,6 +68,52 @@ describe('editor — toHTML', () => {
     expect(num.value).toBe('1')
     // schema 路徑獨有:label「步進」(fallback 只會顯示 key 'step')
     expect(el.textContent).toContain('步進')
+  })
+})
+
+describe('editor — ProjectStore 注入', () => {
+  it('toJSON 呼叫注入的 store.save', () => {
+    const saved: SigilDoc[] = []
+    const store: ProjectStore = {
+      load: () => null,
+      save: (doc) => {
+        saved.push(doc)
+      },
+    }
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 't', type: 'text', content: 'a' }] },
+      },
+      store,
+    })
+    const doc = editor.toJSON()
+    expect(doc.root.children?.[0]?.content).toBe('a')
+    expect(saved).toHaveLength(1)
+    expect(saved[0]!.root.id).toBe('r')
+  })
+
+  it('主路徑：update → toJSON → toHTML', () => {
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 't', type: 'text', content: 'old' }],
+        },
+      },
+    })
+    editor.engine.update('t', { content: 'new' })
+    const json = editor.toJSON()
+    expect(json.root.children?.[0]?.content).toBe('new')
+    expect(editor.toHTML()).toContain('new')
+    expect(editor.toHTML('hydrated')).toContain('new')
+    editor.destroy()
   })
 })
 

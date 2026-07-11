@@ -14,6 +14,7 @@ import {
   type HtmlMode,
   type ComponentNode,
   type Locale,
+  type ProjectStore,
 } from '@cluion/sigil-core'
 import {
   createCanvas,
@@ -37,7 +38,8 @@ const i18nMessages = {
 export interface EditorOptions {
   mount: string | HTMLElement
   doc?: SigilDoc
-  store?: JsonProjectStore
+  /** 頁面存取 adapter；預設 in-memory JsonProjectStore */
+  store?: ProjectStore
   blocks?: Record<string, BlockFactory>
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
@@ -154,7 +156,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     engine,
     toJSON() {
       const doc = engine.toJSON()
-      store.save(doc)
+      void store.save(doc)
       return doc
     },
     toHTML(mode?: HtmlMode) {

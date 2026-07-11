@@ -31,11 +31,15 @@ export interface RenderContext {
 }
 
 /**
- * bind 執行環境
+ * bind 執行環境（resolver 注入）
  *
- * props 為 signal-backed getter（在 effect 內讀取才建立依賴，不可在 effect 外解構）；
- * effect 註冊細粒度副作用；abort 在 destroy 時觸發；
- * store／emit／fetchJSON／slots 留待後續階段
+ * - props：signal-backed getter（在 effect 內讀取才建立依賴，不可在 effect 外解構）
+ * - effect：註冊細粒度副作用；回傳 cleanup，destroy 時一併回收
+ * - abort：instance destroy 時 abort
+ * - emit / on：跨 shortcode 事件（共享 EventBus）
+ * - fetchJSON：非同步資料；可傳 AbortSignal 避 race
+ * - store：共享鍵值狀態（signal-backed；跨 shortcode 響應式）
+ * - 巢狀內容：template 使用原生 `<slot>`，子 ComponentNode 由 renderer 填入
  */
 export interface BindContext<P = Record<string, unknown>> {
   props: P
