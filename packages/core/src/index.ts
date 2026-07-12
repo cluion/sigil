@@ -10,4 +10,4 @@ export * from './hydrate.js'
 export * from './i18n.js'
 export type { ProjectStore, AssetStore, AssetItem } from './adapters.js'
 
-export const SIGIL_CORE_VERSION = '0.2.0' as const
+export const SIGIL_CORE_VERSION = '0.3.0' as const

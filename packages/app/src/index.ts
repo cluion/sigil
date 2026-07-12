@@ -559,4 +559,4 @@ function downloadText(text: string, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
-export const SIGIL_APP_VERSION = '0.2.0' as const
+export const SIGIL_APP_VERSION = '0.3.0' as const

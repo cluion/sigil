@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Empty canvas guide and no-selection tips
+- Save flow: dirty flag, ProjectStore save, Ctrl/Cmd+S, beforeunload
+- Export HTML dialog (copy / download)
+- DnD drop indicator, invalid feedback, edge auto-scroll
+- Canvas selection / hover rings
+- Type badge for all nodes (including image), fixed positioning
+
 ## 0.2.0
 
 - `AssetStore` / `MemoryAssetStore` and media picker

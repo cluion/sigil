@@ -1,6 +1,6 @@
 {
   "name": "@cluion/sigil-blocks",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Sigil default blocks — section, text, image, button, column, shortcode",
   "license": "MIT",
   "type": "module",
