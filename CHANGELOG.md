@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- `defineCommand` / command registry / default editing commands
+- `EditorHooks` (`onSelect`, `beforeSave`, `afterSave`, `afterLoad`, `beforeDestroy`)
+- `createApp` / `createEditor`: `commands`, `hooks`, `runCommand`
+- Package `SIGIL_*_VERSION` injected from `package.json` at build/test
+- Changesets `version-packages` flow
+
 ## 0.3.0
 
 - Empty canvas guide and no-selection tips
