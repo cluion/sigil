@@ -3,6 +3,6 @@ import { SIGIL_CORE_VERSION } from '../src/index.js'
 
 describe('sigil-core skeleton', () => {
   it('exposes a version constant', () => {
-    expect(SIGIL_CORE_VERSION).toBe('0.1.0')
+    expect(SIGIL_CORE_VERSION).toBe('0.2.0')
   })
 })

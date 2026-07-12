@@ -1,6 +1,6 @@
 {
   "name": "@cluion/sigil-shortcode",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Sigil shortcode DSL — defineShortcode, registry, and resolver",
   "license": "MIT",
   "type": "module",

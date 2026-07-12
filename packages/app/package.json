@@ -1,6 +1,6 @@
 {
   "name": "@cluion/sigil-app",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Sigil product shell — createApp() open-box editor UI with design tokens",
   "license": "MIT",
   "type": "module",
