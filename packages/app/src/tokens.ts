@@ -23,7 +23,7 @@ export function ensureTokens(): void {
 .sigil-sidebar{width:var(--sigil-sidebar-w);flex-shrink:0;display:flex;flex-direction:column;gap:var(--sigil-space-2);padding:var(--sigil-space-3);background:var(--sigil-color-surface);border-right:1px solid var(--sigil-color-border);overflow:auto}
 .sigil-sidebar-title{margin:0;font-size:var(--sigil-font-size-sm);font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--sigil-color-muted)}
 .sigil-canvas-wrap{flex:1;min-width:0;display:flex;flex-direction:column;padding:var(--sigil-space-3);background:var(--sigil-color-bg);position:relative}
-.sigil-canvas-host{flex:1;min-height:0;background:var(--sigil-color-surface-2);border-radius:var(--sigil-radius-md);padding:var(--sigil-space-3);box-shadow:inset 0 0 0 1px var(--sigil-color-border)}
+.sigil-canvas-host{flex:1;min-height:0;position:relative;background:var(--sigil-color-surface-2);border-radius:var(--sigil-radius-md);padding:var(--sigil-space-3);box-shadow:inset 0 0 0 1px var(--sigil-color-border)}
 .sigil-inspector-wrap{width:var(--sigil-inspector-w);flex-shrink:0;display:flex;flex-direction:column;background:var(--sigil-color-surface);border-left:1px solid var(--sigil-color-border);overflow:hidden}
 .sigil-layers-box{height:160px;overflow:auto;border-bottom:1px solid var(--sigil-color-border);padding:var(--sigil-space-2)}
 .sigil-inspector{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
@@ -59,7 +59,18 @@ export function ensureTokens(): void {
 .sigil-help-panel{position:absolute;right:var(--sigil-space-4);top:calc(var(--sigil-topbar-h) + var(--sigil-space-2));z-index:var(--sigil-z-overlay);width:260px;padding:var(--sigil-space-3);background:var(--sigil-color-surface);border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-md);box-shadow:var(--sigil-shadow-md);font-size:var(--sigil-font-size-sm);line-height:1.5}
 .sigil-help-panel h4{margin:0 0 var(--sigil-space-2)}
 .sigil-help-panel ul{margin:0;padding-left:1.1em}
-.sigil-export-out{width:100%;min-height:72px;margin-top:var(--sigil-space-2);font-family:ui-monospace,monospace;font-size:11px;border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);padding:var(--sigil-space-2);resize:vertical}
+.sigil-export-out{width:100%;min-height:180px;font-family:ui-monospace,monospace;font-size:11px;border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);padding:var(--sigil-space-2);resize:vertical;background:var(--sigil-color-surface-2);color:var(--sigil-color-text)}
+.sigil-empty-canvas{position:absolute;inset:var(--sigil-space-3);z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:var(--sigil-space-2);padding:var(--sigil-space-5);pointer-events:none;border:2px dashed var(--sigil-color-border-strong);border-radius:var(--sigil-radius-md);background:rgba(248,250,252,.92)}
+.sigil-empty-canvas[hidden]{display:none}
+.sigil-empty-canvas-title{margin:0;font-size:16px;font-weight:600;color:var(--sigil-color-text)}
+.sigil-empty-canvas-body{margin:0;max-width:320px;font-size:var(--sigil-font-size-md);color:var(--sigil-color-muted);line-height:1.5}
+.sigil-empty-canvas-tip{margin:var(--sigil-space-2) 0 0;font-size:var(--sigil-font-size-sm);color:var(--sigil-color-muted);opacity:.85}
+.sigil-dialog-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:var(--sigil-space-4)}
+.sigil-dialog-panel{width:min(480px,96vw);max-height:88vh;overflow:auto;background:var(--sigil-color-surface);border-radius:var(--sigil-radius-md);box-shadow:var(--sigil-shadow-md);padding:var(--sigil-space-4);display:flex;flex-direction:column;gap:var(--sigil-space-3)}
+.sigil-dialog-panel--wide{width:min(640px,96vw)}
+.sigil-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sigil-dialog-head h3{margin:0;font-size:var(--sigil-font-size-lg)}
+.sigil-dialog-actions{display:flex;flex-wrap:wrap;gap:8px}
 .sigil-field-row{display:flex;gap:6px;align-items:center}
 .sigil-field-row .sigil-input{flex:1}
 .sigil-img-preview{max-width:100%;max-height:120px;object-fit:contain;border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);background:var(--sigil-color-surface-2)}

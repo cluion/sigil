@@ -147,6 +147,7 @@
 .sigil-canvas-host {
   flex: 1;
   min-height: 0;
+  position: relative;
   background: var(--sigil-color-surface-2);
   border-radius: var(--sigil-radius-md);
   padding: var(--sigil-space-3);
@@ -433,14 +434,106 @@
 
 .sigil-export-out {
   width: 100%;
-  min-height: 80px;
-  margin-top: var(--sigil-space-2);
+  min-height: 180px;
   font-family: ui-monospace, monospace;
   font-size: 11px;
   border: 1px solid var(--sigil-color-border);
   border-radius: var(--sigil-radius-sm);
   padding: var(--sigil-space-2);
   resize: vertical;
+  background: var(--sigil-color-surface-2);
+  color: var(--sigil-color-text);
+}
+
+/* —— Empty canvas guide —— */
+.sigil-empty-canvas {
+  position: absolute;
+  inset: var(--sigil-space-3);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--sigil-space-2);
+  padding: var(--sigil-space-5);
+  pointer-events: none;
+  border: 2px dashed var(--sigil-color-border-strong);
+  border-radius: var(--sigil-radius-md);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.sigil-empty-canvas[hidden] {
+  display: none;
+}
+
+.sigil-empty-canvas-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--sigil-color-text);
+}
+
+.sigil-empty-canvas-body {
+  margin: 0;
+  max-width: 320px;
+  font-size: var(--sigil-font-size-md);
+  color: var(--sigil-color-muted);
+  line-height: 1.5;
+}
+
+.sigil-empty-canvas-tip {
+  margin: var(--sigil-space-2) 0 0;
+  font-size: var(--sigil-font-size-sm);
+  color: var(--sigil-color-muted);
+  opacity: 0.85;
+}
+
+/* —— Generic dialog —— */
+.sigil-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--sigil-space-4);
+}
+
+.sigil-dialog-panel {
+  width: min(480px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  background: var(--sigil-color-surface);
+  border-radius: var(--sigil-radius-md);
+  box-shadow: var(--sigil-shadow-md);
+  padding: var(--sigil-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sigil-space-3);
+}
+
+.sigil-dialog-panel--wide {
+  width: min(640px, 96vw);
+}
+
+.sigil-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sigil-dialog-head h3 {
+  margin: 0;
+  font-size: var(--sigil-font-size-lg);
+}
+
+.sigil-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .sigil-field-row {

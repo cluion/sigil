@@ -68,8 +68,12 @@ export function createInspector(
       empty.className = 'sigil-empty'
       const t = document.createElement('p')
       t.className = 'sigil-muted'
-      t.textContent = '點選畫布中的元件以編輯屬性'
-      empty.appendChild(t)
+      t.textContent = '尚未選取元件'
+      const tip = document.createElement('p')
+      tip.className = 'sigil-muted'
+      tip.style.marginTop = '8px'
+      tip.textContent = '在畫布點一下區塊，即可編輯內容、樣式與進階屬性。'
+      empty.append(t, tip)
       body.appendChild(empty)
       return
     }

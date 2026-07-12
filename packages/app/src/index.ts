@@ -49,6 +49,17 @@ const i18nMessages = {
     'app.redo': '重做',
     'app.dirty': '未儲存',
     'app.saved': '已儲存',
+    'app.saved_msg': '已寫入 ProjectStore',
+    'app.save_fail': '存檔失敗',
+    'app.export_title': '匯出 HTML',
+    'app.export_hint': '複製或下載正式輸出 HTML（CSP-safe）。',
+    'app.copy': '複製',
+    'app.copied': '已複製',
+    'app.download': '下載 .html',
+    'app.close': '關閉',
+    'app.empty_title': '從左側拖入區塊開始',
+    'app.empty_body': '拖放「區塊」到畫布，或點區塊加入。選取後可在右側改內容與樣式。',
+    'app.empty_tip': '快捷鍵 Ctrl/Cmd+S 存檔 · 匯出可下載 HTML',
     'status.none': '未選取',
   },
   en: {
@@ -65,6 +76,17 @@ const i18nMessages = {
     'app.redo': 'Redo',
     'app.dirty': 'Unsaved',
     'app.saved': 'Saved',
+    'app.saved_msg': 'Saved to ProjectStore',
+    'app.save_fail': 'Save failed',
+    'app.export_title': 'Export HTML',
+    'app.export_hint': 'Copy or download CSP-safe HTML output.',
+    'app.copy': 'Copy',
+    'app.copied': 'Copied',
+    'app.download': 'Download .html',
+    'app.close': 'Close',
+    'app.empty_title': 'Drag a block from the left',
+    'app.empty_body': 'Drop blocks onto the canvas. Select one to edit content and styles on the right.',
+    'app.empty_tip': 'Ctrl/Cmd+S to save · Export downloads HTML',
     'status.none': 'Nothing selected',
   },
 }
@@ -88,6 +110,8 @@ export interface SigilApp {
   engine: Engine
   toJSON(): SigilDoc
   toHTML(mode?: HtmlMode): string
+  /** 是否有未存檔變更 */
+  isDirty(): boolean
   destroy(): void
 }
 
@@ -131,6 +155,7 @@ export function createApp(opts: AppOptions): SigilApp {
   let mode: CanvasMode = 'edit'
   let helpOpen = false
   let clipboard: ComponentNode | null = null
+  let closeExportDialog: (() => void) | null = null
 
   mountEl.replaceChildren()
   const root = document.createElement('div')
@@ -175,15 +200,10 @@ export function createApp(opts: AppOptions): SigilApp {
   const actions = document.createElement('div')
   actions.className = 'sigil-topbar-group'
   const saveBtn = btn(i18n.t('app.save'), () => {
-    void api.toJSON()
-    dirty = false
-    refreshChrome()
+    void doSave()
   })
   saveBtn.classList.add('sigil-btn--primary')
-  const exportBtn = btn(i18n.t('app.export'), () => {
-    exportOut.value = api.toHTML()
-    statusMsg.textContent = `HTML ${exportOut.value.length} chars`
-  })
+  const exportBtn = btn(i18n.t('app.export'), () => openExportDialog())
   const helpBtn = btn(i18n.t('app.help'), () => {
     helpOpen = !helpOpen
     helpPanel.hidden = !helpOpen
@@ -204,15 +224,22 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const canvasWrap = el('div', 'sigil-canvas-wrap')
   const canvasBox = el('div', 'sigil-canvas-host')
-  const exportOut = document.createElement('textarea')
-  exportOut.className = 'sigil-export-out'
-  exportOut.readOnly = true
-  exportOut.placeholder = 'Export HTML…'
-  exportOut.hidden = true
-  exportBtn.addEventListener('click', () => {
-    exportOut.hidden = false
-  })
-  canvasWrap.append(canvasBox, exportOut)
+
+  const emptyGuide = el('div', 'sigil-empty-canvas')
+  emptyGuide.setAttribute('aria-hidden', 'true')
+  const emptyTitle = document.createElement('p')
+  emptyTitle.className = 'sigil-empty-canvas-title'
+  emptyTitle.textContent = i18n.t('app.empty_title')
+  const emptyBody = document.createElement('p')
+  emptyBody.className = 'sigil-empty-canvas-body'
+  emptyBody.textContent = i18n.t('app.empty_body')
+  const emptyTip = document.createElement('p')
+  emptyTip.className = 'sigil-empty-canvas-tip'
+  emptyTip.textContent = i18n.t('app.empty_tip')
+  emptyGuide.append(emptyTitle, emptyBody, emptyTip)
+  canvasBox.appendChild(emptyGuide)
+
+  canvasWrap.append(canvasBox)
 
   const helpPanel = el('div', 'sigil-help-panel')
   helpPanel.hidden = true
@@ -224,6 +251,7 @@ export function createApp(opts: AppOptions): SigilApp {
     'Ctrl/Cmd+Z — 復原',
     'Ctrl/Cmd+Shift+Z / Y — 重做',
     'Ctrl/Cmd+C / V — 複製貼上',
+    'Ctrl/Cmd+S — 存檔',
   ]) {
     const li = document.createElement('li')
     li.textContent = line
@@ -257,6 +285,8 @@ export function createApp(opts: AppOptions): SigilApp {
     i18n,
     chrome: false,
   })
+  // empty guide 在 canvas iframe 之上；不攔截 pointer，讓 DnD／點選仍可作用
+  emptyGuide.style.pointerEvents = 'none'
   const inspector = createInspector(engine, inspectorBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
     assets: opts.assets,
@@ -277,6 +307,17 @@ export function createApp(opts: AppOptions): SigilApp {
     refreshChrome()
   }
 
+  function isCanvasEmpty(): boolean {
+    const tree = engine.getTree()
+    return !tree.children || tree.children.length === 0
+  }
+
+  function refreshEmptyGuide(): void {
+    const empty = isCanvasEmpty()
+    emptyGuide.hidden = !empty
+    emptyGuide.setAttribute('aria-hidden', String(!empty))
+  }
+
   function refreshChrome(): void {
     undoBtn.disabled = !engine.canUndo()
     redoBtn.disabled = !engine.canRedo()
@@ -290,12 +331,100 @@ export function createApp(opts: AppOptions): SigilApp {
     previewBtn.setAttribute('aria-pressed', String(mode === 'preview'))
     statusDirty.textContent = dirty ? i18n.t('app.dirty') : i18n.t('app.saved')
     statusDirty.className = dirty ? 'sigil-status-dirty' : 'sigil-muted'
+    saveBtn.disabled = !dirty
     const id = engine.getSelection()
     if (!id) statusSel.textContent = i18n.t('status.none')
     else {
       const n = findNode(engine.getTree(), id)
       statusSel.textContent = n ? `${n.type} · ${n.id}` : id
     }
+    refreshEmptyGuide()
+  }
+
+  async function doSave(): Promise<SigilDoc> {
+    const doc = engine.toJSON()
+    try {
+      await Promise.resolve(store.save(doc))
+      dirty = false
+      statusMsg.textContent = i18n.t('app.saved_msg')
+      refreshChrome()
+      return doc
+    } catch {
+      statusMsg.textContent = i18n.t('app.save_fail')
+      refreshChrome()
+      return doc
+    }
+  }
+
+  function openExportDialog(): void {
+    closeExportDialog?.()
+    const html = toHTML(engine.toJSON(), { shortcodeResolver })
+
+    const backdrop = document.createElement('div')
+    backdrop.className = 'sigil-dialog-backdrop'
+    backdrop.setAttribute('role', 'dialog')
+    backdrop.setAttribute('aria-modal', 'true')
+    backdrop.setAttribute('aria-label', i18n.t('app.export_title'))
+
+    const panel = document.createElement('div')
+    panel.className = 'sigil-dialog-panel sigil-dialog-panel--wide'
+
+    const head = document.createElement('div')
+    head.className = 'sigil-dialog-head'
+    const title = document.createElement('h3')
+    title.textContent = i18n.t('app.export_title')
+    const closeBtn = btn(i18n.t('app.close'), () => close(), true)
+    head.append(title, closeBtn)
+
+    const hint = document.createElement('p')
+    hint.className = 'sigil-muted'
+    hint.textContent = i18n.t('app.export_hint')
+
+    const ta = document.createElement('textarea')
+    ta.className = 'sigil-export-out'
+    ta.readOnly = true
+    ta.value = html
+    ta.rows = 14
+
+    const actionsRow = document.createElement('div')
+    actionsRow.className = 'sigil-dialog-actions'
+    const copyBtn = btn(i18n.t('app.copy'), () => {
+      void copyText(html).then((ok) => {
+        statusMsg.textContent = ok
+          ? i18n.t('app.copied')
+          : `HTML ${html.length} chars`
+        if (ok) copyBtn.textContent = i18n.t('app.copied')
+      })
+    })
+    copyBtn.classList.add('sigil-btn--primary')
+    const dlBtn = btn(i18n.t('app.download'), () => downloadText(html, 'sigil-page.html'))
+    actionsRow.append(copyBtn, dlBtn, btn(i18n.t('app.close'), () => close()))
+
+    panel.append(head, hint, ta, actionsRow)
+    backdrop.appendChild(panel)
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) close()
+    })
+    document.body.appendChild(backdrop)
+    ta.focus()
+    ta.select()
+
+    function onEsc(e: KeyboardEvent): void {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        close()
+      }
+    }
+    document.addEventListener('keydown', onEsc)
+
+    function close(): void {
+      document.removeEventListener('keydown', onEsc)
+      backdrop.remove()
+      closeExportDialog = null
+    }
+    closeExportDialog = close
+
+    statusMsg.textContent = `HTML ${html.length} chars`
   }
 
   const unsub = engine.subscribe((ev) => {
@@ -305,6 +434,13 @@ export function createApp(opts: AppOptions): SigilApp {
     }
   })
   refreshChrome()
+
+  function onBeforeUnload(e: BeforeUnloadEvent): void {
+    if (!dirty) return
+    e.preventDefault()
+    e.returnValue = ''
+  }
+  window.addEventListener('beforeunload', onBeforeUnload)
 
   function onKeyDown(e: KeyboardEvent): void {
     const t = e.target as HTMLElement | null
@@ -335,9 +471,7 @@ export function createApp(opts: AppOptions): SigilApp {
       engine.insert(pid, cloneWithNewIds(clipboard))
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault()
-      void api.toJSON()
-      dirty = false
-      refreshChrome()
+      void doSave()
     }
   }
   document.addEventListener('keydown', onKeyDown)
@@ -348,13 +482,19 @@ export function createApp(opts: AppOptions): SigilApp {
       const doc = engine.toJSON()
       void store.save(doc)
       dirty = false
+      statusMsg.textContent = i18n.t('app.saved_msg')
       refreshChrome()
       return doc
     },
     toHTML(htmlMode?: HtmlMode) {
       return toHTML(engine.toJSON(), { shortcodeResolver, mode: htmlMode })
     },
+    isDirty() {
+      return dirty
+    },
     destroy() {
+      closeExportDialog?.()
+      window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('keydown', onKeyDown)
       unsub()
       blocksPanel?.destroy()
@@ -381,6 +521,42 @@ function btn(label: string, onClick: () => void, ghost = false): HTMLButtonEleme
   b.textContent = label
   b.addEventListener('click', onClick)
   return b
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    ta.remove()
+    return ok
+  } catch {
+    return false
+  }
+}
+
+function downloadText(text: string, filename: string): void {
+  const blob = new Blob([text], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 export const SIGIL_APP_VERSION = '0.2.0' as const
