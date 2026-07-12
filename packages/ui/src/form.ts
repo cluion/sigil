@@ -1,4 +1,11 @@
-import type { AssetStore, Engine, ComponentNode, PropSchema } from '@cluion/sigil-core'
+import {
+  findNode,
+  isPropVisible,
+  type AssetStore,
+  type Engine,
+  type ComponentNode,
+  type PropSchema,
+} from '@cluion/sigil-core'
 import { openMediaPicker } from './media-picker.js'
 
 export interface FormOptions {
@@ -9,40 +16,95 @@ export interface FormOptions {
 }
 
 /**
- * 依 PropSchema 生成屬性表單控制項;值變動走 engine.update
+ * 依 PropSchema 生成屬性表單；支援 group 分組與 dependsOn 顯示條件
  */
 export function createPropForm(opts: FormOptions): HTMLElement {
-  const { engine, node, schema, assets } = opts
-  const props = node.shortcode?.props ?? {}
+  const { engine, schema, assets } = opts
+  const nodeId = opts.node.id
   const wrap = document.createElement('div')
   wrap.className = 'sigil-prop-form'
 
+  /** prop name → 欄位根元素（用於 dependsOn 顯示切換） */
+  const fieldRoots = new Map<string, HTMLElement>()
+
+  function currentProps(): Record<string, unknown> {
+    const n = findNode(engine.getTree(), nodeId)
+    return n?.shortcode?.props ?? {}
+  }
+
+  function currentNode(): ComponentNode {
+    return findNode(engine.getTree(), nodeId) ?? opts.node
+  }
+
+  function refreshVisibility(): void {
+    const props = currentProps()
+    for (const s of schema) {
+      const el = fieldRoots.get(s.name)
+      if (!el) continue
+      el.hidden = !isPropVisible(s, props)
+    }
+  }
+
+  let lastGroup: string | undefined
   for (const s of schema) {
-    if (s.type === 'media') {
-      wrap.appendChild(createMediaField(engine, node, s, props[s.name], assets))
-      continue
+    if (s.group && s.group !== lastGroup) {
+      lastGroup = s.group
+      const head = document.createElement('div')
+      head.className = 'sigil-section-title'
+      head.textContent = s.group
+      head.dataset.propGroup = s.group
+      wrap.appendChild(head)
     }
 
-    const label = document.createElement('label')
-    label.className = 'sigil-field'
-    const span = document.createElement('span')
-    span.className = 'sigil-field-label'
-    span.textContent = s.label ?? s.name
-    const control = createControl(s, props[s.name])
-    const evt = s.type === 'text' || s.type === 'number' ? 'input' : 'change'
-    control.addEventListener(evt, () => emit(engine, node, s, control))
-    label.append(span, control)
-    wrap.appendChild(label)
+    let field: HTMLElement
+    if (s.type === 'media') {
+      field = createMediaField(engine, nodeId, s, currentProps()[s.name], assets, () => {
+        refreshVisibility()
+      })
+    } else {
+      field = createField(engine, nodeId, s, currentProps()[s.name], () => {
+        refreshVisibility()
+      })
+    }
+    field.dataset.propField = s.name
+    fieldRoots.set(s.name, field)
+    wrap.appendChild(field)
   }
+
+  refreshVisibility()
+  void currentNode
   return wrap
+}
+
+function createField(
+  engine: Engine,
+  nodeId: string,
+  schema: PropSchema,
+  value: unknown,
+  onChanged: () => void,
+): HTMLElement {
+  const label = document.createElement('label')
+  label.className = 'sigil-field'
+  const span = document.createElement('span')
+  span.className = 'sigil-field-label'
+  span.textContent = schema.label ?? schema.name
+  const control = createControl(schema, value)
+  const evt = schema.type === 'text' || schema.type === 'number' ? 'input' : 'change'
+  control.addEventListener(evt, () => {
+    emit(engine, nodeId, schema, control)
+    onChanged()
+  })
+  label.append(span, control)
+  return label
 }
 
 function createMediaField(
   engine: Engine,
-  node: ComponentNode,
+  nodeId: string,
   schema: PropSchema,
   value: unknown,
-  assets?: AssetStore,
+  assets: AssetStore | undefined,
+  onChanged: () => void,
 ): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'sigil-field'
@@ -67,7 +129,7 @@ function createMediaField(
   input.placeholder = 'https://…'
   input.addEventListener('input', () => {
     const next = input.value
-    setProp(engine, node, schema.name, next)
+    setProp(engine, nodeId, schema.name, next)
     if (next) {
       preview.src = next
       preview.style.display = ''
@@ -75,6 +137,7 @@ function createMediaField(
       preview.removeAttribute('src')
       preview.style.display = 'none'
     }
+    onChanged()
   })
   row.appendChild(input)
 
@@ -89,9 +152,10 @@ function createMediaField(
         currentUrl: input.value,
         onPick: (item) => {
           input.value = item.url
-          setProp(engine, node, schema.name, item.url)
+          setProp(engine, nodeId, schema.name, item.url)
           preview.src = item.url
           preview.style.display = ''
+          onChanged()
         },
         onClose: () => {},
       })
@@ -149,17 +213,21 @@ function createControl(schema: PropSchema, value: unknown): HTMLElement {
   }
 }
 
-function setProp(engine: Engine, node: ComponentNode, name: string, v: unknown): void {
-  const ref = node.shortcode
+function setProp(engine: Engine, nodeId: string, name: string, v: unknown): void {
+  const node = findNode(engine.getTree(), nodeId)
+  const ref = node?.shortcode
   if (!ref) return
-  engine.update(node.id, {
+  engine.update(nodeId, {
     shortcode: { name: ref.name, props: { ...ref.props, [name]: v } },
   })
 }
 
-function emit(engine: Engine, node: ComponentNode, schema: PropSchema, control: HTMLElement): void {
-  const ref = node.shortcode
-  if (!ref) return
+function emit(
+  engine: Engine,
+  nodeId: string,
+  schema: PropSchema,
+  control: HTMLElement,
+): void {
   let v: unknown
   if (schema.type === 'boolean') {
     v = (control as HTMLInputElement).checked
@@ -168,5 +236,5 @@ function emit(engine: Engine, node: ComponentNode, schema: PropSchema, control: 
   } else {
     v = (control as HTMLInputElement | HTMLSelectElement).value
   }
-  setProp(engine, node, schema.name, v)
+  setProp(engine, nodeId, schema.name, v)
 }

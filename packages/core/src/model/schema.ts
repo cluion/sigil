@@ -7,6 +7,19 @@ export interface SelectOption {
   label?: string
 }
 
+/**
+ * 欄位可見條件 — 依另一 prop 的值決定是否顯示
+ *
+ * - `eq`：嚴格相等
+ * - `in`：值落在陣列內
+ * - 僅 `prop`：該 prop 為 truthy（非 false／空字串／null／undefined）
+ */
+export interface PropDependsOn {
+  prop: string
+  eq?: string | number | boolean
+  in?: Array<string | number | boolean>
+}
+
 /** 單一 prop 的屬性表單描述 */
 export interface PropSchema {
   name: string
@@ -14,4 +27,25 @@ export interface PropSchema {
   label?: string
   /** 僅 select 用;靜態選項 */
   options?: SelectOption[]
+  /** 表單分組標題；相鄰同 group 歸為一節 */
+  group?: string
+  /** 可見條件 */
+  dependsOn?: PropDependsOn
+}
+
+/**
+ * 依目前 props 判斷欄位是否應顯示
+ */
+export function isPropVisible(
+  schema: PropSchema,
+  props: Record<string, unknown>,
+): boolean {
+  const dep = schema.dependsOn
+  if (!dep) return true
+  const v = props[dep.prop]
+  if (dep.eq !== undefined) return v === dep.eq
+  if (dep.in !== undefined) {
+    return dep.in.some((x) => x === v)
+  }
+  return v !== undefined && v !== null && v !== false && v !== ''
 }

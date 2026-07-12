@@ -23,7 +23,8 @@ defineShortcode({
 })
 ```
 
-PropSchema：`text`｜`number`｜`boolean`｜`select`｜`color`｜`media`
+PropSchema：`text`｜`number`｜`boolean`｜`select`｜`color`｜`media`  
+進階：`group`（分組標題）、`dependsOn`（`{ prop, eq? | in? }` 控制欄位顯示）
 
 ## License
 

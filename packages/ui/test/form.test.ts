@@ -68,6 +68,46 @@ describe('createPropForm', () => {
     expect(form.querySelector('label')?.textContent).toContain('自訂')
   })
 
+  it('group 產生分組標題', () => {
+    const { form } = setup([
+      { name: 'a', type: 'text', group: '基本' },
+      { name: 'b', type: 'text', group: '基本' },
+      { name: 'c', type: 'text', group: '進階' },
+    ])
+    const titles = [...form.querySelectorAll('[data-prop-group]')].map((el) => el.textContent)
+    expect(titles).toEqual(['基本', '進階'])
+  })
+
+  it('dependsOn 隱藏不符條件的欄位', () => {
+    const { engine, form } = setup(
+      [
+        {
+          name: 'kind',
+          type: 'select',
+          options: [
+            { value: 'simple', label: '簡單' },
+            { value: 'full', label: '完整' },
+          ],
+        },
+        {
+          name: 'detail',
+          type: 'text',
+          label: '細節',
+          dependsOn: { prop: 'kind', eq: 'full' },
+        },
+      ],
+      { kind: 'simple' },
+    )
+    const detail = form.querySelector('[data-prop-field="detail"]') as HTMLElement
+    expect(detail.hidden).toBe(true)
+
+    const sel = form.querySelector('select') as HTMLSelectElement
+    sel.value = 'full'
+    sel.dispatchEvent(new Event('change'))
+    expect(engine.getTree().shortcode!.props.kind).toBe('full')
+    expect(detail.hidden).toBe(false)
+  })
+
   it('media 生成 url 輸入與選圖', async () => {
     const engine = createEngine({
       doc: {
