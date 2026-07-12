@@ -1,5 +1,6 @@
 import type { Engine, EngineEvent, RendererOptions, I18n } from '@cluion/sigil-core'
 import { createRenderer, findNode } from '@cluion/sigil-core'
+// findNode：鎖定節點不可拖移
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
 
 export type CanvasMode = 'edit' | 'preview'
@@ -127,6 +128,8 @@ export function createCanvas(
   function onOverlayPointerDown(e: PointerEvent): void {
     const id = hitTest(iframe, e.clientX, e.clientY)
     if (!id || id === engine.getTree().id) return
+    const node = findNode(engine.getTree(), id)
+    if (node?.locked) return
     startMoveDrag({
       engine,
       iframe,
@@ -206,6 +209,9 @@ export function createCanvas(
       '[data-sigil-id][data-sigil-hover="1"]{outline:1.5px solid #818cf8!important;outline-offset:2px;box-shadow:0 0 0 3px rgba(99,102,241,0.12)}',
       /* selected：產品級焦點環（標籤為獨立 fixed 元素） */
       '[data-sigil-id][data-sigil-selected="1"]{outline:2px solid #4f46e5!important;outline-offset:2px;box-shadow:0 0 0 4px rgba(79,70,229,0.18)!important;position:relative;z-index:1}',
+      /* 鎖定／隱藏（編輯畫布） */
+      '[data-sigil-id][data-sigil-locked="1"]{outline:1px dashed #94a3b8!important;outline-offset:1px}',
+      '[data-sigil-id][data-sigil-hidden="1"]{opacity:0.4!important}',
       /* 類型標籤 */
       '[data-sigil-type-badge]{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
     ].join('')
@@ -223,6 +229,8 @@ export function createCanvas(
   function selectionLabelText(id: string): string {
     const node = findNode(engine.getTree(), id)
     if (!node) return id
+    // 圖層重命名優先
+    if (node.name?.trim()) return node.name.trim()
     if (node.type === 'shortcode' && node.shortcode?.name) {
       return `shortcode:${node.shortcode.name}`
     }

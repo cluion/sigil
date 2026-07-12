@@ -76,6 +76,8 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     },
 
     remove(id) {
+      const node = findNode(root, id)
+      if (node?.locked) return
       const prev = root
       root = removeNode(root, id)
       if (selection === id) selection = null
@@ -84,6 +86,13 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     },
 
     update(id, patch) {
+      const node = findNode(root, id)
+      if (node?.locked) {
+        // 鎖定時只允許改 locked／hidden／name（解鎖或重命名／顯隱）
+        const keys = Object.keys(patch) as (keyof ComponentNode)[]
+        const ok = keys.every((k) => k === 'locked' || k === 'hidden' || k === 'name')
+        if (!ok) return
+      }
       const prev = root
       root = updateNode(root, id, patch)
       // 合併連續 content/className 更新(同節點同欄位 + 時間窗)→ 不 push
@@ -107,10 +116,14 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       if (patch.content !== undefined) p.content = patch.content
       if (patch.className !== undefined) p.className = patch.className
       if (patch.shortcode !== undefined) p.shortcode = patch.shortcode
+      if (patch.name !== undefined) p.name = patch.name
+      if (patch.locked !== undefined) p.locked = patch.locked
+      if (patch.hidden !== undefined) p.hidden = patch.hidden
       emit({ type: 'patch', patch: p })
     },
 
     move(id, newParentId, index) {
+      if (findNode(root, id)?.locked) return
       const beforeId = beforeIdOf(newParentId, index)
       const prev = root
       root = moveNode(root, id, newParentId, index)

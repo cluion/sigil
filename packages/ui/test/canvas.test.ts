@@ -98,6 +98,12 @@ describe('createCanvas — selection chrome', () => {
     expect(badge).toBeTruthy()
     expect(badge.style.display).not.toBe('none')
     expect(badge.textContent).toBe('text')
+    engine.update('t1', { name: '標題' })
+    await new Promise((r) => setTimeout(r, 0))
+    await new Promise((r) => requestAnimationFrame(() => r(undefined)))
+    expect((d?.querySelector('[data-sigil-type-badge]') as HTMLElement).textContent).toBe(
+      '標題',
+    )
     destroy()
     container.remove()
   })

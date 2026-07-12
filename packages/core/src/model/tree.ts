@@ -109,6 +109,20 @@ export function updateNode(
       next.style =
         Object.keys(patch.style).length === 0 ? {} : { ...n.style, ...patch.style }
     }
+    // 圖層：空字串清除 name；false 清除 locked／hidden
+    if (patch.name !== undefined) {
+      const nme = patch.name.trim()
+      if (nme) next.name = nme
+      else delete next.name
+    }
+    if (patch.locked !== undefined) {
+      if (patch.locked) next.locked = true
+      else delete next.locked
+    }
+    if (patch.hidden !== undefined) {
+      if (patch.hidden) next.hidden = true
+      else delete next.hidden
+    }
     return next
   })
 }

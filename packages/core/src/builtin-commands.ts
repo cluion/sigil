@@ -1,4 +1,5 @@
 import { findNode, findParent, cloneWithNewIds } from './model/tree.js'
+// findNode used by delete.when (locked)
 import { defineCommand, type CommandDefinition } from './commands.js'
 
 /**
@@ -36,7 +37,9 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
       shortcut: ['Delete', 'Backspace'],
       when: (c) => {
         const id = c.engine.getSelection()
-        return !!id && id !== c.engine.getTree().id
+        if (!id || id === c.engine.getTree().id) return false
+        const n = findNode(c.engine.getTree(), id)
+        return !!n && !n.locked
       },
       run: (c) => {
         const id = c.engine.getSelection()

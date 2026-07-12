@@ -31,6 +31,17 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
   const shortcodeInstances = new Map<string, ShortcodeInstance>()
   let rootEl: HTMLElement | null = null
 
+  function applyLayerFlags(el: HTMLElement, node: ComponentNode): void {
+    if (node.hidden) {
+      el.setAttribute('data-sigil-hidden', '1')
+      el.style.opacity = '0.4'
+    } else {
+      el.removeAttribute('data-sigil-hidden')
+    }
+    if (node.locked) el.setAttribute('data-sigil-locked', '1')
+    else el.removeAttribute('data-sigil-locked')
+  }
+
   /**
    * 把節點遞迴渲染成 DOM，順便填入 id→Element map
    */
@@ -47,6 +58,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
       for (const [k, v] of Object.entries(node.style)) el.style.setProperty(k, v)
     }
     if (node.content !== undefined) el.textContent = node.content
+    applyLayerFlags(el, node)
     if (node.shortcode) {
       el.setAttribute('data-shortcode', node.shortcode.name)
       if (shortcodeResolver) {
@@ -110,6 +122,24 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
           }
           if (patch.content !== undefined) el.textContent = patch.content
           if (patch.className !== undefined) el.className = patch.className
+          if (patch.hidden !== undefined || patch.locked !== undefined) {
+            const node = map.get(patch.id)
+            // 從現有 DOM 旗標推回；完整狀態以 reconcile 為準
+            if (patch.hidden !== undefined) {
+              if (patch.hidden) {
+                el.setAttribute('data-sigil-hidden', '1')
+                el.style.opacity = '0.4'
+              } else {
+                el.removeAttribute('data-sigil-hidden')
+                el.style.opacity = ''
+              }
+            }
+            if (patch.locked !== undefined) {
+              if (patch.locked) el.setAttribute('data-sigil-locked', '1')
+              else el.removeAttribute('data-sigil-locked')
+            }
+            void node
+          }
           break
         }
         case 'replace': {

@@ -69,8 +69,10 @@ function renderNode(
   if (node.className) {
     parts.push(' class="', escapeHtml(node.className), '"')
   }
-  if (node.style) {
-    const css = Object.entries(node.style)
+  {
+    const style: Record<string, string> = { ...node.style }
+    if (node.hidden) style.display = 'none'
+    const css = Object.entries(style)
       .map(([k, v]) => `${k}:${escapeHtml(v)}`)
       .join(';')
     if (css) parts.push(' style="', css, '"')

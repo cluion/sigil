@@ -486,7 +486,9 @@ export function createApp(opts: AppOptions): SigilApp {
     if (!id) statusSel.textContent = i18n.t('status.none')
     else {
       const n = findNode(engine.getTree(), id)
-      statusSel.textContent = n ? `${n.type} · ${n.id}` : id
+      statusSel.textContent = n
+        ? `${n.name?.trim() || n.type} · ${n.id}`
+        : id
     }
     refreshEmptyGuide()
   }

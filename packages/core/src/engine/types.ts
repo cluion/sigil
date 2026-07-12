@@ -15,6 +15,9 @@ export type Patch =
       content?: string
       className?: string
       shortcode?: ShortcodeRef
+      name?: string
+      locked?: boolean
+      hidden?: boolean
     }
   | { type: 'move'; id: string; newParentId: string; beforeId: string | null }
   | { type: 'replace'; id: string; node: ComponentNode }

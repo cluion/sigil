@@ -31,7 +31,7 @@ export function createPropsPanel(
     if (!node) return
 
     const title = document.createElement('h3')
-    title.textContent = `${node.type}（${node.id}）`
+    title.textContent = `${node.name?.trim() || node.type}（${node.id}）`
     container.appendChild(title)
 
     appendContentField(container, engine, node)

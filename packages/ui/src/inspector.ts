@@ -82,7 +82,7 @@ export function createInspector(
 
     const head = document.createElement('div')
     head.className = 'sigil-inspector-head'
-    head.textContent = `${node.type} · ${node.id}`
+    head.textContent = `${node.name?.trim() || node.type} · ${node.id}`
     body.appendChild(head)
 
     if (tab === 'content') renderContent(body, engine, node, opts)

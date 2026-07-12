@@ -13,6 +13,12 @@ export interface ComponentNode {
   content?: string
   children?: ComponentNode[]
   shortcode?: ShortcodeRef
+  /** 圖層顯示名稱（重命名） */
+  name?: string
+  /** 鎖定：不可刪除／移動／改內容（可解鎖） */
+  locked?: boolean
+  /** 隱藏：編輯畫布半透；匯出 HTML 時 display:none */
+  hidden?: boolean
 }
 
 /**
