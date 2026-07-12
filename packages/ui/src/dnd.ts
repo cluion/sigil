@@ -14,12 +14,31 @@ export interface DropTarget {
   mode: DropMode
 }
 
+const EDGE_SCROLL_PX = 48
+const EDGE_SCROLL_STEP = 14
+const ACCENT = '#4f46e5'
+const ACCENT_SOFT = 'rgba(79, 70, 229, 0.14)'
+const DANGER = '#dc2626'
+const DANGER_SOFT = 'rgba(220, 38, 38, 0.12)'
+
+function escapeId(id: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(id) : id
+}
+
 /**
  * node 是否為 id 自身或其後代
  */
-function contains(node: ComponentNode, id: string): boolean {
+export function contains(node: ComponentNode, id: string): boolean {
   if (node.id === id) return true
   return (node.children ?? []).some((c) => contains(c, id))
+}
+
+/**
+ * 移動時 parentId 是否落在 source 子樹內（非法）
+ */
+export function isMoveIntoSelf(root: ComponentNode, sourceId: string, parentId: string): boolean {
+  const source = findNode(root, sourceId)
+  return !!(source && contains(source, parentId))
 }
 
 /**
@@ -73,6 +92,8 @@ export function computeDrop(
   const rect = iframe.getBoundingClientRect()
   const x = clientX - rect.left
   const y = clientY - rect.top
+  // 完全離開 iframe 矩形 → 無目標
+  if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null
   const el = doc.elementFromPoint(x, y)?.closest('[data-sigil-id]') as HTMLElement | null
   if (!el) return null
   const id = el.getAttribute('data-sigil-id')
@@ -80,6 +101,7 @@ export function computeDrop(
   const node = findNode(root, id)
   if (!node) return null
   const r = el.getBoundingClientRect()
+  // getBoundingClientRect 在 iframe 內相對於 iframe viewport
   const relX = r.width > 0 ? (x - r.left) / r.width : 0.5
   const relY = r.height > 0 ? (y - r.top) / r.height : 0.5
   const onEdge = relX < 0.05 || relX > 0.95 || relY < 0.05 || relY > 0.95
@@ -137,70 +159,144 @@ export function computeDropForMove(
 ): DropTarget | null {
   const t = computeDrop(iframe, root, clientX, clientY)
   if (!t) return null
-  const source = findNode(root, sourceId)
-  if (source && contains(source, t.parentId)) return null
+  if (isMoveIntoSelf(root, sourceId, t.parentId)) return null
   return t
 }
 
+export type IndicatorKind = 'valid' | 'invalid' | 'none'
+
+export interface IndicatorShowOpts {
+  target: DropTarget | null
+  /** 拖動中且在畫布上、但目標非法或無法放置 */
+  invalid?: boolean
+  /** 無效時可標示命中節點 */
+  hitId?: string | null
+}
+
 /**
- * 建立 drop 指示 — child 模式畫容器框,sibling 模式畫插入線
+ * 拖動時靠近 iframe 邊緣自動捲動內容
+ */
+export function autoScrollNearEdge(
+  iframe: HTMLIFrameElement,
+  clientX: number,
+  clientY: number,
+): void {
+  const win = iframe.contentWindow
+  if (!win) return
+  const rect = iframe.getBoundingClientRect()
+  const x = clientX - rect.left
+  const y = clientY - rect.top
+  if (x < 0 || y < 0 || x > rect.width || y > rect.height) return
+
+  let dx = 0
+  let dy = 0
+  if (y < EDGE_SCROLL_PX) dy = -EDGE_SCROLL_STEP
+  else if (y > rect.height - EDGE_SCROLL_PX) dy = EDGE_SCROLL_STEP
+  if (x < EDGE_SCROLL_PX) dx = -EDGE_SCROLL_STEP
+  else if (x > rect.width - EDGE_SCROLL_PX) dx = EDGE_SCROLL_STEP
+  if (dx || dy) win.scrollBy(dx, dy)
+}
+
+/**
+ * 建立 drop 指示 — child 模式畫容器框,sibling 模式畫插入線；invalid 紅框
  */
 function makeIndicator(iframe: HTMLIFrameElement): {
-  show: (t: DropTarget | null) => void
+  show: (opts: IndicatorShowOpts) => void
   clear: () => void
 } {
   let line: HTMLElement | null = null
   function ensure(doc: Document): HTMLElement {
     if (!line) {
       line = doc.createElement('div')
+      line.setAttribute('data-sigil-drop-indicator', '1')
       line.style.cssText =
-        'position:fixed;z-index:9999;pointer-events:none;display:none'
+        'position:fixed;z-index:9999;pointer-events:none;display:none;transition:none;border-radius:4px'
       doc.body.appendChild(line)
     }
     return line
   }
+
+  function paintValid(doc: Document, t: DropTarget): void {
+    const el = doc.querySelector(`[data-sigil-id="${escapeId(t.hitId)}"]`) as HTMLElement | null
+    if (!el) return
+    const l = ensure(doc)
+    const r = el.getBoundingClientRect()
+    l.style.display = 'block'
+    l.style.outline = 'none'
+    l.style.boxShadow = `0 0 0 1px ${ACCENT}`
+    if (t.mode === 'child') {
+      l.style.border = `2px solid ${ACCENT}`
+      l.style.background = ACCENT_SOFT
+      l.style.boxSizing = 'border-box'
+      l.style.width = `${r.width}px`
+      l.style.height = `${r.height}px`
+      l.style.left = `${r.left}px`
+      l.style.top = `${r.top}px`
+    } else {
+      l.style.border = 'none'
+      l.style.background = ACCENT
+      l.style.boxSizing = 'content-box'
+      l.style.boxShadow = `0 0 0 1px ${ACCENT}, 0 0 8px ${ACCENT_SOFT}`
+      if (t.orient === 'v') {
+        l.style.width = `${r.width}px`
+        l.style.height = '3px'
+        l.style.left = `${r.left}px`
+        l.style.top = `${(t.side === 'before' ? r.top : r.bottom) - 1}px`
+      } else {
+        l.style.height = `${r.height}px`
+        l.style.width = '3px'
+        l.style.top = `${r.top}px`
+        l.style.left = `${(t.side === 'before' ? r.left : r.right) - 1}px`
+      }
+    }
+  }
+
+  function paintInvalid(doc: Document, hitId: string | null | undefined): void {
+    if (!hitId) {
+      if (line) line.style.display = 'none'
+      return
+    }
+    const el = doc.querySelector(`[data-sigil-id="${escapeId(hitId)}"]`) as HTMLElement | null
+    if (!el) {
+      if (line) line.style.display = 'none'
+      return
+    }
+    const l = ensure(doc)
+    const r = el.getBoundingClientRect()
+    l.style.display = 'block'
+    l.style.border = `2px dashed ${DANGER}`
+    l.style.background = DANGER_SOFT
+    l.style.boxShadow = 'none'
+    l.style.boxSizing = 'border-box'
+    l.style.width = `${r.width}px`
+    l.style.height = `${r.height}px`
+    l.style.left = `${r.left}px`
+    l.style.top = `${r.top}px`
+  }
+
   return {
-    show(t) {
+    show(opts) {
       const doc = iframe.contentDocument
       if (!doc) return
-      if (!t) {
-        if (line) line.style.display = 'none'
+      if (opts.target) {
+        paintValid(doc, opts.target)
         return
       }
-      const el = doc.querySelector(`[data-sigil-id="${t.hitId}"]`) as HTMLElement | null
-      if (!el) return
-      const l = ensure(doc)
-      const r = el.getBoundingClientRect()
-      l.style.display = 'block'
-      if (t.mode === 'child') {
-        l.style.border = '2px solid #3b82f6'
-        l.style.background = 'rgba(59,130,246,0.10)'
-        l.style.boxSizing = 'border-box'
-        l.style.width = `${r.width}px`
-        l.style.height = `${r.height}px`
-        l.style.left = `${r.left}px`
-        l.style.top = `${r.top}px`
-      } else {
-        l.style.border = 'none'
-        l.style.background = '#3b82f6'
-        l.style.boxSizing = 'content-box'
-        if (t.orient === 'v') {
-          l.style.width = `${r.width}px`
-          l.style.height = '2px'
-          l.style.left = `${r.left}px`
-          l.style.top = `${t.side === 'before' ? r.top : r.bottom}px`
-        } else {
-          l.style.height = `${r.height}px`
-          l.style.width = '2px'
-          l.style.top = `${r.top}px`
-          l.style.left = `${t.side === 'before' ? r.left : r.right}px`
-        }
+      if (opts.invalid) {
+        paintInvalid(doc, opts.hitId)
+        return
       }
+      if (line) line.style.display = 'none'
     },
     clear() {
       if (line) line.style.display = 'none'
     },
   }
+}
+
+function setDragCursor(cursor: string | null): void {
+  if (typeof document === 'undefined') return
+  document.body.style.cursor = cursor ?? ''
 }
 
 /**
@@ -215,11 +311,27 @@ export function startInsertDrag(opts: {
   const { engine, iframe, node, pointerId } = opts
   const indicator = makeIndicator(iframe)
   let target: DropTarget | null = null
+  setDragCursor('grabbing')
 
   function onMove(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
+    autoScrollNearEdge(iframe, e.clientX, e.clientY)
     target = computeDrop(iframe, engine.getTree(), e.clientX, e.clientY)
-    indicator.show(target)
+    const overCanvas = isOverIframe(iframe, e.clientX, e.clientY)
+    if (target) {
+      setDragCursor('copy')
+      indicator.show({ target })
+    } else if (overCanvas) {
+      setDragCursor('not-allowed')
+      indicator.show({
+        target: null,
+        invalid: true,
+        hitId: hitTest(iframe, e.clientX, e.clientY),
+      })
+    } else {
+      setDragCursor('grabbing')
+      indicator.show({ target: null })
+    }
   }
   function onUp(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
@@ -230,6 +342,7 @@ export function startInsertDrag(opts: {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     indicator.clear()
+    setDragCursor(null)
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -260,9 +373,32 @@ export function startMoveDrag(opts: {
     if (!started) {
       if (Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY) <= 4) return
       started = true
+      setDragCursor('grabbing')
     }
-    target = computeDropForMove(iframe, engine.getTree(), id, e.clientX, e.clientY)
-    indicator.show(target)
+    autoScrollNearEdge(iframe, e.clientX, e.clientY)
+    const root = engine.getTree()
+    const raw = computeDrop(iframe, root, e.clientX, e.clientY)
+    const forbidden = raw ? isMoveIntoSelf(root, id, raw.parentId) : false
+    target = raw && !forbidden ? raw : null
+    const overCanvas = isOverIframe(iframe, e.clientX, e.clientY)
+
+    if (target) {
+      setDragCursor('grabbing')
+      indicator.show({ target })
+    } else if (overCanvas && (forbidden || !!raw || !!hitTest(iframe, e.clientX, e.clientY))) {
+      setDragCursor('not-allowed')
+      indicator.show({
+        target: null,
+        invalid: true,
+        hitId: raw?.hitId ?? hitTest(iframe, e.clientX, e.clientY),
+      })
+    } else if (overCanvas) {
+      setDragCursor('not-allowed')
+      indicator.show({ target: null, invalid: true, hitId: id })
+    } else {
+      setDragCursor('grabbing')
+      indicator.show({ target: null })
+    }
   }
   function onUp(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
@@ -273,10 +409,16 @@ export function startMoveDrag(opts: {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     indicator.clear()
+    setDragCursor(null)
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
   return { cancel: cleanup }
+}
+
+function isOverIframe(iframe: HTMLIFrameElement, clientX: number, clientY: number): boolean {
+  const r = iframe.getBoundingClientRect()
+  return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom
 }
 
 /**

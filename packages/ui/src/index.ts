@@ -11,5 +11,14 @@ export type { FormOptions } from './form.js'
 export { createBlocksPanel } from './blocks-panel.js'
 export { createLayersPanel } from './layers.js'
 export type { BlockFactory, BlockDef, BlocksInput } from './blocks-panel.js'
-export { startInsertDrag, startMoveDrag, computeDrop, computeDropForMove, hitTest } from './dnd.js'
-export type { DropTarget, Side, Orient, DropMode } from './dnd.js'
+export {
+  startInsertDrag,
+  startMoveDrag,
+  computeDrop,
+  computeDropForMove,
+  hitTest,
+  contains,
+  isMoveIntoSelf,
+  autoScrollNearEdge,
+} from './dnd.js'
+export type { DropTarget, Side, Orient, DropMode, IndicatorShowOpts, IndicatorKind } from './dnd.js'
