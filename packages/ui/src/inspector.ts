@@ -1,11 +1,13 @@
-import type { Engine, PropSchema } from '@cluion/sigil-core'
+import type { AssetStore, Engine, PropSchema } from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
+import { openMediaPicker } from './media-picker.js'
 
 export type InspectorTab = 'content' | 'style' | 'advanced'
 
 export interface InspectorOptions {
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
+  assets?: AssetStore
 }
 
 /**
@@ -79,7 +81,7 @@ export function createInspector(
     head.textContent = `${node.type} · ${node.id}`
     body.appendChild(head)
 
-    if (tab === 'content') renderContent(body, engine, node, opts?.getShortcodeSchema)
+    if (tab === 'content') renderContent(body, engine, node, opts)
     else if (tab === 'style') renderStyle(body, engine, node)
     else renderAdvanced(body, engine, node)
   }
@@ -99,7 +101,7 @@ function renderContent(
   container: HTMLElement,
   engine: Engine,
   node: ComponentNode,
-  getShortcodeSchema?: (name: string) => PropSchema[] | undefined,
+  opts?: InspectorOptions,
 ): void {
   if (node.type === 'text' || node.type === 'button') {
     field(container, '內容', () => {
@@ -111,22 +113,14 @@ function renderContent(
     })
   }
   if (node.type === 'image') {
-    field(container, '圖片 src', () => {
-      const input = document.createElement('input')
-      input.className = 'sigil-input'
-      input.value = node.attributes?.src ?? ''
-      input.addEventListener('input', () =>
-        engine.update(node.id, { attributes: { ...node.attributes, src: input.value } }),
-      )
-      return input
-    })
+    appendImageFields(container, engine, node, opts?.assets)
   }
   if (node.shortcode) {
     const h = document.createElement('h4')
     h.className = 'sigil-section-title'
     h.textContent = `shortcode · ${node.shortcode.name}`
     container.appendChild(h)
-    const schema = getShortcodeSchema?.(node.shortcode.name)
+    const schema = opts?.getShortcodeSchema?.(node.shortcode.name)
     if (schema?.length) {
       container.appendChild(createPropForm({ engine, node, schema }))
     } else {
@@ -161,6 +155,70 @@ function renderContent(
     p.textContent = '此節點無可編輯內容欄位，可切到樣式分頁'
     container.appendChild(p)
   }
+}
+
+function appendImageFields(
+  container: HTMLElement,
+  engine: Engine,
+  node: ComponentNode,
+  assets?: AssetStore,
+): void {
+  const wrap = document.createElement('div')
+  wrap.className = 'sigil-field'
+
+  const label = document.createElement('span')
+  label.className = 'sigil-field-label'
+  label.textContent = '圖片'
+
+  const preview = document.createElement('img')
+  preview.className = 'sigil-img-preview'
+  preview.alt = ''
+  const src = node.attributes?.src ?? ''
+  if (src) preview.src = src
+  else preview.style.display = 'none'
+
+  const input = document.createElement('input')
+  input.className = 'sigil-input'
+  input.value = src
+  input.placeholder = 'https://…'
+  input.addEventListener('input', () => {
+    const next = input.value
+    engine.update(node.id, { attributes: { ...node.attributes, src: next } })
+    if (next) {
+      preview.src = next
+      preview.style.display = ''
+    } else {
+      preview.removeAttribute('src')
+      preview.style.display = 'none'
+    }
+  })
+
+  const row = document.createElement('div')
+  row.className = 'sigil-field-row'
+  row.appendChild(input)
+
+  if (assets) {
+    const pickBtn = document.createElement('button')
+    pickBtn.type = 'button'
+    pickBtn.className = 'sigil-btn'
+    pickBtn.textContent = '選圖'
+    pickBtn.addEventListener('click', () => {
+      openMediaPicker({
+        assets,
+        currentUrl: node.attributes?.src,
+        onPick: (item) => {
+          engine.update(node.id, {
+            attributes: { ...node.attributes, src: item.url },
+          })
+        },
+        onClose: () => {},
+      })
+    })
+    row.appendChild(pickBtn)
+  }
+
+  wrap.append(label, preview, row)
+  container.appendChild(wrap)
 }
 
 function renderStyle(container: HTMLElement, engine: Engine, node: ComponentNode): void {

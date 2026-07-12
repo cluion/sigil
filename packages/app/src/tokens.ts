@@ -57,6 +57,19 @@ export function ensureTokens(): void {
 .sigil-help-panel h4{margin:0 0 var(--sigil-space-2)}
 .sigil-help-panel ul{margin:0;padding-left:1.1em}
 .sigil-export-out{width:100%;min-height:72px;margin-top:var(--sigil-space-2);font-family:ui-monospace,monospace;font-size:11px;border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);padding:var(--sigil-space-2);resize:vertical}
+.sigil-field-row{display:flex;gap:6px;align-items:center}
+.sigil-field-row .sigil-input{flex:1}
+.sigil-img-preview{max-width:100%;max-height:120px;object-fit:contain;border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);background:var(--sigil-color-surface-2)}
+.sigil-media-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000}
+.sigil-media-panel{width:min(520px,92vw);max-height:80vh;overflow:auto;background:var(--sigil-color-surface);border-radius:var(--sigil-radius-md);box-shadow:var(--sigil-shadow-md);padding:var(--sigil-space-3);display:flex;flex-direction:column;gap:var(--sigil-space-3)}
+.sigil-media-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sigil-media-head h3{margin:0;font-size:var(--sigil-font-size-lg)}
+.sigil-media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.sigil-media-card{border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);background:var(--sigil-color-surface-2);padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:4px;font:inherit;color:inherit}
+.sigil-media-card img{width:100%;height:72px;object-fit:cover;border-radius:4px}
+.sigil-media-card span{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sigil-media-card--active,.sigil-media-card:hover{border-color:var(--sigil-color-accent);background:var(--sigil-color-accent-soft)}
+.sigil-media-actions{display:flex;gap:8px}
 `
   document.head.appendChild(style)
   injected = true

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createEditor, type SigilEditor } from '@cluion/sigil'
+import { createApp, type SigilApp } from '@cluion/sigil-app'
 import { basicBlocks, blockSection, blockText, blockShortcode } from '@cluion/sigil-blocks'
-import { JsonProjectStore } from '@cluion/sigil-store-json'
+import { JsonProjectStore, MemoryAssetStore } from '@cluion/sigil-store-json'
 import type { SigilDoc } from '@cluion/sigil-core'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 const store = new JsonProjectStore()
+const assets = new MemoryAssetStore([
+  { id: 'r1', url: 'https://placehold.co/160x100/png?text=React', name: 'React' },
+])
 
 const greet = defineShortcode({
   name: 'greet',
@@ -34,34 +37,35 @@ function initialDoc(): SigilDoc {
 
 export function App() {
   const mountRef = useRef<HTMLDivElement>(null)
-  const editorRef = useRef<SigilEditor | null>(null)
+  const appRef = useRef<SigilApp | null>(null)
   const [status, setStatus] = useState('')
 
-  const mountEditor = useCallback((doc: SigilDoc) => {
+  const mount = useCallback((doc: SigilDoc) => {
     const el = mountRef.current
     if (!el) return
-    editorRef.current?.destroy()
-    editorRef.current = createEditor({
+    appRef.current?.destroy()
+    appRef.current = createApp({
       mount: el,
       doc,
       store,
+      assets,
       blocks,
       shortcodes: [greet],
     })
   }, [])
 
   useEffect(() => {
-    mountEditor(initialDoc())
+    mount(initialDoc())
     return () => {
-      editorRef.current?.destroy()
-      editorRef.current = null
+      appRef.current?.destroy()
+      appRef.current = null
     }
-  }, [mountEditor])
+  }, [mount])
 
   function save() {
-    const ed = editorRef.current
-    if (!ed) return
-    localStorage.setItem('sigil-ex-react', store.exportJSON(ed.toJSON()))
+    const a = appRef.current
+    if (!a) return
+    localStorage.setItem('sigil-ex-react', store.exportJSON(a.toJSON()))
     setStatus('已存')
   }
 
@@ -71,17 +75,23 @@ export function App() {
       setStatus('無資料')
       return
     }
-    mountEditor(store.importJSON(raw))
+    mount(store.importJSON(raw))
     setStatus('已讀')
   }
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', margin: 16 }}>
-      <h1>Sigil · React</h1>
-      <p>
-        用 <code>ref</code> 掛載 DOM；在 <code>useEffect</code> cleanup 呼叫{' '}
-        <code>destroy</code>
-      </p>
+    <div
+      style={{
+        fontFamily: 'system-ui, sans-serif',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        margin: 0,
+        padding: 12,
+        boxSizing: 'border-box',
+      }}
+    >
+      <h1 style={{ margin: '0 0 8px', fontSize: 18 }}>Sigil · React · createApp</h1>
       <div style={{ marginBottom: 8 }}>
         <button type="button" onClick={save}>
           存 JSON
@@ -91,7 +101,7 @@ export function App() {
         </button>{' '}
         <span>{status}</span>
       </div>
-      <div ref={mountRef} />
+      <div ref={mountRef} style={{ flex: 1, minHeight: 0 }} />
     </div>
   )
 }

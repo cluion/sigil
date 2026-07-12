@@ -7,7 +7,7 @@ import {
   blockImage,
   blockShortcode,
 } from '@cluion/sigil-blocks'
-import { JsonProjectStore } from '@cluion/sigil-store-json'
+import { JsonProjectStore, MemoryAssetStore } from '@cluion/sigil-store-json'
 import type { SigilDoc } from '@cluion/sigil-core'
 import { counterDef } from './shortcodes/counter'
 import { cardDef } from './shortcodes/card'
@@ -68,6 +68,11 @@ const mockFetchJSON = (url: string, signal?: AbortSignal) =>
   })
 
 const store = new JsonProjectStore()
+const assets = new MemoryAssetStore([
+  { id: 'a1', url: 'https://placehold.co/200x120/png?text=A', name: '圖 A' },
+  { id: 'a2', url: 'https://placehold.co/200x120/png?text=B', name: '圖 B' },
+  { id: 'a3', url: 'https://placehold.co/200x120/png?text=C', name: '圖 C' },
+])
 
 const section = blockSection()
 section.children = [blockText('點我編輯'), blockButton('按鈕'), blockImage('https://placehold.co/120')]
@@ -87,15 +92,20 @@ const blocks = {
 const shortcodes = [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef]
 
 let locale: 'zh' | 'en' = 'zh'
-let app: SigilApp = createApp({
-  mount: root,
-  doc,
-  store,
-  blocks,
-  shortcodes,
-  fetchJSON: mockFetchJSON,
-  locale,
-})
+function mountApp(d: SigilDoc): SigilApp {
+  return createApp({
+    mount: root,
+    doc: d,
+    store,
+    assets,
+    blocks,
+    shortcodes,
+    fetchJSON: mockFetchJSON,
+    locale,
+  })
+}
+
+let app: SigilApp = mountApp(doc)
 
 const toolbar = document.getElementById('toolbar')!
 const status = document.createElement('span')
@@ -112,15 +122,7 @@ loadBtn.addEventListener('click', () => {
   try {
     const loaded = store.importJSON(json)
     app.destroy()
-    app = createApp({
-      mount: root,
-      doc: loaded,
-      store,
-      blocks,
-      shortcodes,
-      fetchJSON: mockFetchJSON,
-      locale,
-    })
+    app = mountApp(loaded)
     status.textContent = ' 已讀'
   } catch (e) {
     status.textContent = ` 讀取失敗：${e instanceof Error ? e.message : String(e)}`
@@ -140,15 +142,7 @@ localeBtn.addEventListener('click', () => {
   locale = locale === 'zh' ? 'en' : 'zh'
   const d = app.toJSON()
   app.destroy()
-  app = createApp({
-    mount: root,
-    doc: d,
-    store,
-    blocks,
-    shortcodes,
-    fetchJSON: mockFetchJSON,
-    locale,
-  })
+  app = mountApp(d)
   status.textContent = ` 語系 ${locale}`
 })
 
@@ -156,6 +150,6 @@ const note = document.createElement('span')
 note.style.marginLeft = '12px'
 note.style.color = '#64748b'
 note.style.fontSize = '13px'
-note.textContent = '主 UI 已改 createApp 產品殼 · 存檔／匯出／裝置／預覽在編輯器頂欄'
+note.textContent = '選圖片區塊 → 內容 → 選圖；存檔／匯出在頂欄'
 
 toolbar.append(persistBtn, loadBtn, localeBtn, status, note)

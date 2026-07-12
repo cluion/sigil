@@ -15,6 +15,7 @@ import {
   type ComponentNode,
   type Locale,
   type ProjectStore,
+  type AssetStore,
 } from '@cluion/sigil-core'
 import {
   createCanvas,
@@ -72,6 +73,8 @@ export interface AppOptions {
   mount: string | HTMLElement
   doc?: SigilDoc
   store?: ProjectStore
+  /** 媒體庫；有則 Inspector 圖片可「選圖」 */
+  assets?: AssetStore
   blocks?: Record<string, BlockFactory>
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
@@ -255,6 +258,7 @@ export function createApp(opts: AppOptions): SigilApp {
   })
   const inspector = createInspector(engine, inspectorBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
+    assets: opts.assets,
   })
   const layers = createLayersPanel(engine, layersBox)
   const blocksPanel = opts.blocks

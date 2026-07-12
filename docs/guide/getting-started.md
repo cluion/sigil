@@ -94,6 +94,20 @@ const store: ProjectStore = {
 
 `JsonProjectStore`：記憶體與 JSON 字串。Laravel：`examples/laravel/`。
 
+## AssetStore
+
+```ts
+import { MemoryAssetStore } from '@cluion/sigil-store-json'
+
+const assets = new MemoryAssetStore([
+  { id: '1', url: 'https://placehold.co/120', name: 'demo' },
+])
+
+createApp({ mount: '#app', assets })
+```
+
+選中圖片區塊後，內容分頁可「選圖」或上傳。
+
 ## 本倉庫
 
 ```bash

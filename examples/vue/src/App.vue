@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
-import { createEditor, type SigilEditor } from '@cluion/sigil'
+import { createApp, type SigilApp } from '@cluion/sigil-app'
 import { basicBlocks, blockSection, blockText, blockShortcode } from '@cluion/sigil-blocks'
-import { JsonProjectStore } from '@cluion/sigil-store-json'
+import { JsonProjectStore, MemoryAssetStore } from '@cluion/sigil-store-json'
 import type { SigilDoc } from '@cluion/sigil-core'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 const mountEl = ref<HTMLElement | null>(null)
 const status = ref('')
-const editor = shallowRef<SigilEditor | null>(null)
+const app = shallowRef<SigilApp | null>(null)
 const store = new JsonProjectStore()
+const assets = new MemoryAssetStore([
+  { id: 'v1', url: 'https://placehold.co/160x100/png?text=Vue', name: 'Vue' },
+])
 
 const greet = defineShortcode({
   name: 'greet',
@@ -36,21 +39,22 @@ function initialDoc(): SigilDoc {
   return { version: 1, root: section }
 }
 
-function mountEditor(doc: SigilDoc): void {
+function mount(doc: SigilDoc): void {
   if (!mountEl.value) return
-  editor.value?.destroy()
-  editor.value = createEditor({
+  app.value?.destroy()
+  app.value = createApp({
     mount: mountEl.value,
     doc,
     store,
+    assets,
     blocks,
     shortcodes: [greet],
   })
 }
 
 function save(): void {
-  if (!editor.value) return
-  localStorage.setItem('sigil-ex-vue', store.exportJSON(editor.value.toJSON()))
+  if (!app.value) return
+  localStorage.setItem('sigil-ex-vue', store.exportJSON(app.value.toJSON()))
   status.value = '已存'
 }
 
@@ -60,29 +64,25 @@ function load(): void {
     status.value = '無資料'
     return
   }
-  mountEditor(store.importJSON(raw))
+  mount(store.importJSON(raw))
   status.value = '已讀'
 }
 
-onMounted(() => mountEditor(initialDoc()))
+onMounted(() => mount(initialDoc()))
 onBeforeUnmount(() => {
-  editor.value?.destroy()
-  editor.value = null
+  app.value?.destroy()
+  app.value = null
 })
 </script>
 
 <template>
-  <div style="font-family: system-ui, sans-serif; margin: 16px">
-    <h1>Sigil · Vue 3</h1>
-    <p>
-      在 <code>onMounted</code> 掛載；在 <code>onBeforeUnmount</code> 呼叫
-      <code>destroy</code>
-    </p>
+  <div style="font-family: system-ui, sans-serif; height: 100%; display: flex; flex-direction: column; margin: 0; padding: 12px; box-sizing: border-box">
+    <h1 style="margin: 0 0 8px; font-size: 18px">Sigil · Vue 3 · createApp</h1>
     <div style="margin-bottom: 8px">
       <button type="button" @click="save">存 JSON</button>
       <button type="button" @click="load">讀 JSON</button>
       <span>{{ status }}</span>
     </div>
-    <div ref="mountEl" />
+    <div ref="mountEl" style="flex: 1; min-height: 0" />
   </div>
 </template>
