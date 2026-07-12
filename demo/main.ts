@@ -1,6 +1,7 @@
 import { createApp, type SigilApp } from '@cluion/sigil-app'
 import {
-  basicBlocks,
+  basicBlockDefs,
+  defineBlock,
   blockSection,
   blockText,
   blockButton,
@@ -79,21 +80,72 @@ const section = blockSection()
 section.children = [blockText('點我編輯'), blockButton('按鈕'), blockImage('https://placehold.co/120')]
 const doc: SigilDoc = { version: 1, root: section }
 
-const blocks = {
-  ...basicBlocks,
-  計數器: () => blockShortcode('counter', { step: 1 }),
-  卡片: () => blockShortcode('card', {}),
-  發送: () => blockShortcode('ping', {}),
-  接收: () => blockShortcode('pong', {}),
-  載入器: () => blockShortcode('loader', { id: 1 }),
-  商品卡: () => blockShortcode('product', { productId: 1 }),
-  購物車: () => blockShortcode('cart', {}),
-  橫幅: () =>
-    blockShortcode('banner', {
-      src: 'https://placehold.co/320x80/png?text=Banner',
-      title: '橫幅標題',
-    }),
-}
+const blocks = [
+  ...basicBlockDefs,
+  defineBlock({
+    id: 'counter',
+    label: '計數器',
+    category: '互動',
+    icon: '＋',
+    keywords: ['counter'],
+    create: () => blockShortcode('counter', { step: 1 }),
+  }),
+  defineBlock({
+    id: 'card',
+    label: '卡片',
+    category: '版面',
+    icon: '▭',
+    create: () => blockShortcode('card', {}),
+  }),
+  defineBlock({
+    id: 'ping',
+    label: '發送',
+    category: '互動',
+    icon: '↑',
+    create: () => blockShortcode('ping', {}),
+  }),
+  defineBlock({
+    id: 'pong',
+    label: '接收',
+    category: '互動',
+    icon: '↓',
+    create: () => blockShortcode('pong', {}),
+  }),
+  defineBlock({
+    id: 'loader',
+    label: '載入器',
+    category: '互動',
+    icon: '↻',
+    create: () => blockShortcode('loader', { id: 1 }),
+  }),
+  defineBlock({
+    id: 'product',
+    label: '商品卡',
+    category: '電商',
+    icon: '🏷',
+    keywords: ['product', 'shop'],
+    create: () => blockShortcode('product', { productId: 1 }),
+  }),
+  defineBlock({
+    id: 'cart',
+    label: '購物車',
+    category: '電商',
+    icon: '🛒',
+    create: () => blockShortcode('cart', {}),
+  }),
+  defineBlock({
+    id: 'banner',
+    label: '橫幅',
+    category: '媒體',
+    icon: '🖼',
+    keywords: ['banner', 'hero'],
+    create: () =>
+      blockShortcode('banner', {
+        src: 'https://placehold.co/320x80/png?text=Banner',
+        title: '橫幅標題',
+      }),
+  }),
+]
 
 const shortcodes = [
   counterDef,

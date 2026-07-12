@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { blockShortcode, blockSection } from '../src/index.js'
+import {
+  blockShortcode,
+  blockSection,
+  defineBlock,
+  normalizeBlocks,
+  basicBlockDefs,
+  basicBlocks,
+} from '../src/index.js'
 
 describe('blocks', () => {
   it('blockShortcode 產生 shortcode 節點', () => {
@@ -18,5 +25,27 @@ describe('blocks', () => {
     const node = blockSection()
     expect(node.type).toBe('section')
     expect(node.children).toEqual([])
+  })
+
+  it('defineBlock 保留欄位', () => {
+    const def = defineBlock({
+      id: 'x',
+      label: 'X',
+      category: '測試',
+      icon: '★',
+      keywords: ['x'],
+      create: blockSection,
+    })
+    expect(def.category).toBe('測試')
+    expect(def.create().type).toBe('section')
+  })
+
+  it('normalizeBlocks 接受 Record 與陣列', () => {
+    const fromRecord = normalizeBlocks(basicBlocks)
+    expect(fromRecord.length).toBe(5)
+    expect(fromRecord[0]!.category).toBe('一般')
+
+    const fromDefs = normalizeBlocks(basicBlockDefs)
+    expect(fromDefs.some((d) => d.category === '版面')).toBe(true)
   })
 })

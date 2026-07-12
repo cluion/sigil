@@ -22,7 +22,7 @@ import {
   createBlocksPanel,
   createLayersPanel,
   createInspector,
-  type BlockFactory,
+  type BlocksInput,
   type CanvasDevice,
   type CanvasMode,
 } from '@cluion/sigil-ui'
@@ -75,7 +75,8 @@ export interface AppOptions {
   store?: ProjectStore
   /** 媒體庫；有則 Inspector 圖片可「選圖」 */
   assets?: AssetStore
-  blocks?: Record<string, BlockFactory>
+  /** Record 工廠或 defineBlock 列表 */
+  blocks?: BlocksInput
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
   sanitize?: SanitizeFn

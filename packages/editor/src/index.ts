@@ -21,7 +21,7 @@ import {
   createPropsPanel,
   createBlocksPanel,
   createLayersPanel,
-  type BlockFactory,
+  type BlocksInput,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -40,7 +40,7 @@ export interface EditorOptions {
   doc?: SigilDoc
   /** 頁面存取 adapter；預設 in-memory JsonProjectStore */
   store?: ProjectStore
-  blocks?: Record<string, BlockFactory>
+  blocks?: BlocksInput
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
   sanitize?: SanitizeFn
