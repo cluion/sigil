@@ -34,10 +34,30 @@ function renderNode(
   const wrap = document.createElement('div')
 
   const row = document.createElement('div')
-  row.style.cssText = `padding:2px 4px;padding-left:${depth * 12 + 4}px;cursor:pointer;white-space:nowrap;border-radius:3px`
-  if (node.id === sel) row.style.background = '#dbeafe'
-  row.textContent = `${node.type}（${node.id}）`
+  row.className = 'sigil-layer-row'
+  if (node.id === sel) row.classList.add('sigil-layer-row--active')
+  row.style.cssText = [
+    `padding:4px 6px;padding-left:${depth * 12 + 6}px`,
+    'cursor:pointer;white-space:nowrap;border-radius:4px',
+    'font-size:12px;line-height:1.35',
+    node.id === sel
+      ? 'background:rgba(79,70,229,0.12);color:#4f46e5;font-weight:600'
+      : 'background:transparent;color:inherit',
+  ].join(';')
+  const typeLabel =
+    node.type === 'shortcode' && node.shortcode?.name
+      ? `sc:${node.shortcode.name}`
+      : node.type
+  row.textContent = `${typeLabel}`
+  row.title = node.id
   row.addEventListener('click', () => engine.select(node.id))
+  row.addEventListener('mouseenter', () => {
+    if (node.id !== sel) row.style.background = 'rgba(15,23,42,0.04)'
+  })
+  row.addEventListener('mouseleave', () => {
+    row.style.background =
+      node.id === sel ? 'rgba(79,70,229,0.12)' : 'transparent'
+  })
   wrap.appendChild(row)
 
   for (const c of node.children ?? []) {
