@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createApp } from '../src/index.js'
+import { createApp, defineCommand } from '../src/index.js'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
 
@@ -144,4 +144,26 @@ describe('createApp', () => {
     expect(empty?.textContent).toMatch(/選取|畫布/)
     app.destroy()
   })
+
+  it('runCommand 與 hooks onSelect', async () => {
+    const onSelect = vi.fn()
+    const mount = document.createElement('div')
+    const app = createApp({
+      mount,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 't', type: 'text', content: 'x' }] },
+      },
+      hooks: { onSelect },
+      commands: [defineCommand({ id: 'ping', run: () => {} })],
+    })
+    app.engine.select('t')
+    expect(onSelect).toHaveBeenCalledWith('t', expect.objectContaining({ engine: app.engine }))
+    app.engine.remove('t')
+    expect(await app.runCommand('undo')).toBe(true)
+    expect(app.engine.getTree().children).toHaveLength(1)
+    expect(await app.runCommand('ping')).toBe(true)
+    app.destroy()
+  })
 })
+

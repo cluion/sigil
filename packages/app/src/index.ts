@@ -5,9 +5,15 @@ import {
   createEventBus,
   createStore,
   findNode,
-  findParent,
-  cloneWithNewIds,
   createI18n,
+  createCommandRegistry,
+  createDefaultEditingCommands,
+  defineCommand,
+  runBeforeSave,
+  runAfterSave,
+  runOnSelect,
+  runAfterLoad,
+  runBeforeDestroy,
   type Engine,
   type SigilDoc,
   type SanitizeFn,
@@ -16,6 +22,9 @@ import {
   type Locale,
   type ProjectStore,
   type AssetStore,
+  type CommandDefinition,
+  type CommandContext,
+  type EditorHooks,
 } from '@cluion/sigil-core'
 import {
   createCanvas,
@@ -104,6 +113,10 @@ export interface AppOptions {
   sanitize?: SanitizeFn
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
   locale?: Locale
+  /** 額外命令（同 id 覆寫預設） */
+  commands?: CommandDefinition[]
+  /** 生命週期 hooks */
+  hooks?: EditorHooks
 }
 
 export interface SigilApp {
@@ -112,8 +125,13 @@ export interface SigilApp {
   toHTML(mode?: HtmlMode): string
   /** 是否有未存檔變更 */
   isDirty(): boolean
+  /** 執行已註冊命令（undo／save／自訂…） */
+  runCommand(id: string): Promise<boolean>
   destroy(): void
 }
+
+export { defineCommand, createDefaultEditingCommands }
+export type { CommandDefinition, CommandContext, EditorHooks }
 
 /**
  * 開箱即用產品殼 — Design tokens + Topbar + 三欄 + Inspector 分頁
@@ -156,6 +174,45 @@ export function createApp(opts: AppOptions): SigilApp {
   let helpOpen = false
   let clipboard: ComponentNode | null = null
   let closeExportDialog: (() => void) | null = null
+  const hooks = opts.hooks
+
+  async function doSave(): Promise<SigilDoc> {
+    try {
+      let doc = engine.toJSON()
+      doc = await runBeforeSave(hooks, doc, engine)
+      await Promise.resolve(store.save(doc))
+      await runAfterSave(hooks, doc, engine)
+      dirty = false
+      statusMsg.textContent = i18n.t('app.saved_msg')
+      refreshChrome()
+      return doc
+    } catch {
+      statusMsg.textContent = i18n.t('app.save_fail')
+      refreshChrome()
+      return engine.toJSON()
+    }
+  }
+
+  const commandMap = new Map<string, CommandDefinition>()
+  for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
+  for (const c of opts.commands ?? []) commandMap.set(c.id, c)
+  const commands = createCommandRegistry([...commandMap.values()])
+
+  function makeCtx(): CommandContext {
+    return {
+      engine,
+      getDoc: () => engine.toJSON(),
+      save: () => {
+        void doSave()
+      },
+      clipboard: {
+        get: () => clipboard,
+        set: (n) => {
+          clipboard = n
+        },
+      },
+    }
+  }
 
   mountEl.replaceChildren()
   const root = document.createElement('div')
@@ -172,8 +229,12 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const hist = document.createElement('div')
   hist.className = 'sigil-topbar-group'
-  const undoBtn = btn(i18n.t('app.undo'), () => engine.undo())
-  const redoBtn = btn(i18n.t('app.redo'), () => engine.redo())
+  const undoBtn = btn(i18n.t('app.undo'), () => {
+    void commands.run('undo', makeCtx())
+  })
+  const redoBtn = btn(i18n.t('app.redo'), () => {
+    void commands.run('redo', makeCtx())
+  })
   hist.append(undoBtn, redoBtn)
 
   const sep1 = el('div', 'sigil-topbar-sep')
@@ -341,21 +402,6 @@ export function createApp(opts: AppOptions): SigilApp {
     refreshEmptyGuide()
   }
 
-  async function doSave(): Promise<SigilDoc> {
-    const doc = engine.toJSON()
-    try {
-      await Promise.resolve(store.save(doc))
-      dirty = false
-      statusMsg.textContent = i18n.t('app.saved_msg')
-      refreshChrome()
-      return doc
-    } catch {
-      statusMsg.textContent = i18n.t('app.save_fail')
-      refreshChrome()
-      return doc
-    }
-  }
-
   function openExportDialog(): void {
     closeExportDialog?.()
     const html = toHTML(engine.toJSON(), { shortcodeResolver })
@@ -429,11 +475,13 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const unsub = engine.subscribe((ev) => {
     if (ev.type === 'tree' || ev.type === 'patch') dirty = true
+    if (ev.type === 'selection') runOnSelect(hooks, ev.id, engine)
     if (ev.type === 'history' || ev.type === 'selection' || ev.type === 'tree' || ev.type === 'patch') {
       refreshChrome()
     }
   })
   refreshChrome()
+  runAfterLoad(hooks, engine.toJSON(), engine)
 
   function onBeforeUnload(e: BeforeUnloadEvent): void {
     if (!dirty) return
@@ -445,34 +493,10 @@ export function createApp(opts: AppOptions): SigilApp {
   function onKeyDown(e: KeyboardEvent): void {
     const t = e.target as HTMLElement | null
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-    const id = engine.getSelection()
-    if ((e.key === 'Delete' || e.key === 'Backspace') && id && id !== engine.getTree().id) {
-      e.preventDefault()
-      engine.remove(id)
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
-      e.preventDefault()
-      engine.undo()
-    } else if (
-      (e.ctrlKey || e.metaKey) &&
-      (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))
-    ) {
-      e.preventDefault()
-      engine.redo()
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && id) {
-      const node = findNode(engine.getTree(), id)
-      if (node) {
-        e.preventDefault()
-        clipboard = node
-      }
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && clipboard) {
-      e.preventDefault()
-      const parent = id ? findParent(engine.getTree(), id) : null
-      const pid = parent ? parent.id : engine.getTree().id
-      engine.insert(pid, cloneWithNewIds(clipboard))
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-      e.preventDefault()
-      void doSave()
-    }
+    const cmd = commands.match(e, makeCtx())
+    if (!cmd) return
+    e.preventDefault()
+    void commands.run(cmd.id, makeCtx())
   }
   document.addEventListener('keydown', onKeyDown)
 
@@ -480,10 +504,7 @@ export function createApp(opts: AppOptions): SigilApp {
     engine,
     toJSON() {
       const doc = engine.toJSON()
-      void store.save(doc)
-      dirty = false
-      statusMsg.textContent = i18n.t('app.saved_msg')
-      refreshChrome()
+      void doSave()
       return doc
     },
     toHTML(htmlMode?: HtmlMode) {
@@ -492,7 +513,11 @@ export function createApp(opts: AppOptions): SigilApp {
     isDirty() {
       return dirty
     },
+    runCommand(id: string) {
+      return commands.run(id, makeCtx())
+    },
     destroy() {
+      runBeforeDestroy(hooks, engine)
       closeExportDialog?.()
       window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('keydown', onKeyDown)

@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
-import { createEditor } from '../src/index.js'
+import { createEditor, defineCommand } from '../src/index.js'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 describe('editor — toHTML', () => {
@@ -174,3 +174,62 @@ describe('editor — 快捷鍵', () => {
     expect(editor.engine.getTree().children![1]!.content).toBe('hi')
   })
 })
+
+describe('editor — commands / hooks', () => {
+  it('runCommand undo', async () => {
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: 'x' }] },
+      },
+    })
+    editor.engine.remove('c')
+    expect(await editor.runCommand('undo')).toBe(true)
+    expect(editor.engine.getTree().children).toHaveLength(1)
+    editor.destroy()
+  })
+
+  it('自訂 command 可覆寫並觸發', async () => {
+    const run = vi.fn()
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+      commands: [defineCommand({ id: 'ping', run })],
+    })
+    expect(await editor.runCommand('ping')).toBe(true)
+    expect(run).toHaveBeenCalledOnce()
+    editor.destroy()
+  })
+
+  it('hooks onSelect / beforeSave', async () => {
+    const onSelect = vi.fn()
+    const beforeSave = vi.fn((doc: SigilDoc) => doc)
+    const saved: SigilDoc[] = []
+    const store: ProjectStore = {
+      load: () => null,
+      save: (doc) => {
+        saved.push(doc)
+      },
+    }
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      store,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: 'a' }] },
+      },
+      hooks: { onSelect, beforeSave },
+    })
+    editor.engine.select('c')
+    expect(onSelect).toHaveBeenCalledWith('c', expect.objectContaining({ engine: editor.engine }))
+    await editor.runCommand('save')
+    await vi.waitFor(() => expect(beforeSave).toHaveBeenCalled())
+    await vi.waitFor(() => expect(saved.length).toBeGreaterThanOrEqual(1))
+    editor.destroy()
+  })
+})
+

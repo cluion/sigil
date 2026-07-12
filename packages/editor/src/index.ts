@@ -4,10 +4,15 @@ import {
   toHTML,
   createEventBus,
   createStore,
-  findNode,
-  findParent,
-  cloneWithNewIds,
   createI18n,
+  createCommandRegistry,
+  createDefaultEditingCommands,
+  defineCommand,
+  runBeforeSave,
+  runAfterSave,
+  runOnSelect,
+  runAfterLoad,
+  runBeforeDestroy,
   type Engine,
   type SigilDoc,
   type SanitizeFn,
@@ -15,6 +20,9 @@ import {
   type ComponentNode,
   type Locale,
   type ProjectStore,
+  type CommandDefinition,
+  type CommandContext,
+  type EditorHooks,
 } from '@cluion/sigil-core'
 import {
   createCanvas,
@@ -46,14 +54,23 @@ export interface EditorOptions {
   sanitize?: SanitizeFn
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
   locale?: Locale
+  /** 額外命令（接在預設編輯命令之後；同 id 會覆寫預設） */
+  commands?: CommandDefinition[]
+  /** 生命週期 hooks */
+  hooks?: EditorHooks
 }
 
 export interface SigilEditor {
   engine: Engine
   toJSON(): SigilDoc
   toHTML(mode?: HtmlMode): string
+  /** 執行已註冊命令 */
+  runCommand(id: string): Promise<boolean>
   destroy(): void
 }
+
+export { defineCommand, createDefaultEditingCommands }
+export type { CommandDefinition, CommandContext, EditorHooks }
 
 /**
  * 建立 editor — SDK 級組合
@@ -81,7 +98,45 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   const bus = createEventBus()
   const i18n = createI18n(i18nMessages, opts.locale ?? 'zh')
   const sharedStore = createStore()
-  const shortcodeResolver = createShortcodeResolver({ registry: shortcodeRegistry, policy, bus, fetchJSON, store: sharedStore })
+  const shortcodeResolver = createShortcodeResolver({
+    registry: shortcodeRegistry,
+    policy,
+    bus,
+    fetchJSON,
+    store: sharedStore,
+  })
+  const hooks = opts.hooks
+
+  let clipboard: ComponentNode | null = null
+
+  async function persist(): Promise<SigilDoc> {
+    let doc = engine.toJSON()
+    doc = await runBeforeSave(hooks, doc, engine)
+    await Promise.resolve(store.save(doc))
+    await runAfterSave(hooks, doc, engine)
+    return doc
+  }
+
+  const commandMap = new Map<string, CommandDefinition>()
+  for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
+  for (const c of opts.commands ?? []) commandMap.set(c.id, c)
+  const commands = createCommandRegistry([...commandMap.values()])
+
+  function makeCtx(): CommandContext {
+    return {
+      engine,
+      getDoc: () => engine.toJSON(),
+      save: () => {
+        void persist()
+      },
+      clipboard: {
+        get: () => clipboard,
+        set: (n) => {
+          clipboard = n
+        },
+      },
+    }
+  }
 
   mountEl.replaceChildren()
   const layout = document.createElement('div')
@@ -121,41 +176,26 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)
     : null
 
-  let clipboard: ComponentNode | null = null
+  const unsubSel = engine.subscribe((ev) => {
+    if (ev.type === 'selection') runOnSelect(hooks, ev.id, engine)
+  })
+
   function onKeyDown(e: KeyboardEvent): void {
     const t = e.target as HTMLElement | null
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-    const id = engine.getSelection()
-    if ((e.key === 'Delete' || e.key === 'Backspace') && id && id !== engine.getTree().id) {
-      e.preventDefault()
-      engine.remove(id)
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
-      e.preventDefault()
-      engine.undo()
-    } else if (
-      (e.ctrlKey || e.metaKey) &&
-      (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))
-    ) {
-      e.preventDefault()
-      engine.redo()
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && id) {
-      const node = findNode(engine.getTree(), id)
-      if (node) {
-        e.preventDefault()
-        clipboard = node
-      }
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && clipboard) {
-      e.preventDefault()
-      const parent = id ? findParent(engine.getTree(), id) : null
-      const pid = parent ? parent.id : engine.getTree().id
-      engine.insert(pid, cloneWithNewIds(clipboard))
-    }
+    const cmd = commands.match(e, makeCtx())
+    if (!cmd) return
+    e.preventDefault()
+    void commands.run(cmd.id, makeCtx())
   }
   document.addEventListener('keydown', onKeyDown)
+
+  runAfterLoad(hooks, engine.toJSON(), engine)
 
   return {
     engine,
     toJSON() {
+      // 同步匯出＋寫入 store；完整 hooks 請用 runCommand('save')
       const doc = engine.toJSON()
       void store.save(doc)
       return doc
@@ -163,8 +203,13 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     toHTML(mode?: HtmlMode) {
       return toHTML(engine.toJSON(), { shortcodeResolver, mode })
     },
+    runCommand(id: string) {
+      return commands.run(id, makeCtx())
+    },
     destroy() {
+      runBeforeDestroy(hooks, engine)
       document.removeEventListener('keydown', onKeyDown)
+      unsubSel()
       blocksPanel?.destroy()
       layers.destroy()
       props.destroy()
