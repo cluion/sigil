@@ -195,8 +195,23 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const commandMap = new Map<string, CommandDefinition>()
   for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
+  // 殼層匯出（openExportDialog 為 function 宣告，可在此引用）
+  commandMap.set(
+    'export',
+    defineCommand({
+      id: 'export',
+      label: i18n.t('app.export'),
+      toolbar: true,
+      toolbarGroup: 'end',
+      run: () => {
+        openExportDialog()
+      },
+    }),
+  )
   for (const c of opts.commands ?? []) commandMap.set(c.id, c)
   const commands = createCommandRegistry([...commandMap.values()])
+  /** Topbar 上的命令按鈕，refreshChrome 依 when／dirty 更新 disabled */
+  const cmdButtons = new Map<string, HTMLButtonElement>()
 
   function makeCtx(): CommandContext {
     return {
@@ -214,12 +229,51 @@ export function createApp(opts: AppOptions): SigilApp {
     }
   }
 
+  function commandLabel(cmd: CommandDefinition): string {
+    const known: Record<string, string> = {
+      undo: i18n.t('app.undo'),
+      redo: i18n.t('app.redo'),
+      save: i18n.t('app.save'),
+      export: i18n.t('app.export'),
+    }
+    return known[cmd.id] ?? cmd.label ?? cmd.id
+  }
+
+  function shortcutTitle(cmd: CommandDefinition): string | undefined {
+    if (!cmd.shortcut) return undefined
+    const raw = Array.isArray(cmd.shortcut) ? cmd.shortcut[0]! : cmd.shortcut
+    const isMac =
+      typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+    return raw
+      .replace(/mod/gi, isMac ? '⌘' : 'Ctrl')
+      .replace(/shift/gi, isMac ? '⇧' : 'Shift')
+      .replace(/\+/g, isMac ? '' : '+')
+  }
+
+  function mountCommandButton(
+    cmd: CommandDefinition,
+    group: HTMLElement,
+    forcePrimary = false,
+  ): HTMLButtonElement {
+    const primary = forcePrimary || cmd.toolbar === 'primary'
+    const b = btn(commandLabel(cmd), () => {
+      void commands.run(cmd.id, makeCtx())
+    }, !primary)
+    if (primary) b.classList.add('sigil-btn--primary')
+    b.dataset.commandId = cmd.id
+    const tip = shortcutTitle(cmd)
+    if (tip) b.title = tip
+    group.appendChild(b)
+    cmdButtons.set(cmd.id, b)
+    return b
+  }
+
   mountEl.replaceChildren()
   const root = document.createElement('div')
   root.className = 'sigil-app'
   mountEl.appendChild(root)
 
-  // —— Topbar ——
+  // —— Topbar（命令驅動：history / main 自訂 / end）——
   const topbar = document.createElement('header')
   topbar.className = 'sigil-topbar'
 
@@ -229,13 +283,18 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const hist = document.createElement('div')
   hist.className = 'sigil-topbar-group'
-  const undoBtn = btn(i18n.t('app.undo'), () => {
-    void commands.run('undo', makeCtx())
-  })
-  const redoBtn = btn(i18n.t('app.redo'), () => {
-    void commands.run('redo', makeCtx())
-  })
-  hist.append(undoBtn, redoBtn)
+  hist.dataset.toolbarGroup = 'history'
+  for (const id of ['undo', 'redo']) {
+    const cmd = commands.get(id)
+    if (cmd?.toolbar) mountCommandButton(cmd, hist)
+  }
+  // 宿主把命令放到 history 組
+  for (const cmd of commands.list()) {
+    if (!cmd.toolbar) continue
+    if (cmd.toolbarGroup !== 'history') continue
+    if (cmd.id === 'undo' || cmd.id === 'redo') continue
+    mountCommandButton(cmd, hist)
+  }
 
   const sep1 = el('div', 'sigil-topbar-sep')
 
@@ -258,20 +317,44 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const spacer = el('div', 'sigil-topbar-spacer')
 
+  // 自訂命令（main，預設 group）
+  const customBar = document.createElement('div')
+  customBar.className = 'sigil-topbar-group'
+  customBar.dataset.toolbarGroup = 'main'
+  for (const cmd of commands.list()) {
+    if (!cmd.toolbar) continue
+    const group = cmd.toolbarGroup ?? 'main'
+    if (group !== 'main') continue
+    if (cmd.id === 'undo' || cmd.id === 'redo' || cmd.id === 'save' || cmd.id === 'export') continue
+    mountCommandButton(cmd, customBar)
+  }
+
   const actions = document.createElement('div')
   actions.className = 'sigil-topbar-group'
-  const saveBtn = btn(i18n.t('app.save'), () => {
-    void doSave()
-  })
-  saveBtn.classList.add('sigil-btn--primary')
-  const exportBtn = btn(i18n.t('app.export'), () => openExportDialog())
+  actions.dataset.toolbarGroup = 'end'
+  // end 組：內建 save／export + 宿主 toolbarGroup end
+  const endOrder = ['save', 'export']
+  for (const id of endOrder) {
+    const cmd = commands.get(id)
+    if (cmd?.toolbar) mountCommandButton(cmd, actions, cmd.toolbar === 'primary')
+  }
+  for (const cmd of commands.list()) {
+    if (!cmd.toolbar) continue
+    if (cmd.toolbarGroup !== 'end') continue
+    if (endOrder.includes(cmd.id)) continue
+    mountCommandButton(cmd, actions, cmd.toolbar === 'primary')
+  }
   const helpBtn = btn(i18n.t('app.help'), () => {
     helpOpen = !helpOpen
     helpPanel.hidden = !helpOpen
   })
-  actions.append(saveBtn, exportBtn, helpBtn)
+  helpBtn.dataset.commandId = 'help'
+  actions.append(helpBtn)
 
-  topbar.append(brand, hist, sep1, devices, sep2, modes, spacer, actions)
+  const topbarParts: HTMLElement[] = [brand, hist, sep1, devices, sep2, modes, spacer]
+  if (customBar.childNodes.length) topbarParts.push(customBar)
+  topbarParts.push(actions)
+  topbar.append(...topbarParts)
 
   // —— Body ——
   const body = el('div', 'sigil-body')
@@ -380,8 +463,15 @@ export function createApp(opts: AppOptions): SigilApp {
   }
 
   function refreshChrome(): void {
-    undoBtn.disabled = !engine.canUndo()
-    redoBtn.disabled = !engine.canRedo()
+    const ctx = makeCtx()
+    for (const [id, b] of cmdButtons) {
+      const cmd = commands.get(id)
+      if (!cmd) continue
+      let disabled = cmd.when ? !cmd.when(ctx) : false
+      // 存檔：無變更時禁用（產品 UX）
+      if (id === 'save') disabled = disabled || !dirty
+      b.disabled = disabled
+    }
     for (const [k, b] of Object.entries(deviceBtns) as [CanvasDevice, HTMLButtonElement][]) {
       b.classList.toggle('sigil-btn--active', k === device)
       b.setAttribute('aria-pressed', String(k === device))
@@ -392,7 +482,6 @@ export function createApp(opts: AppOptions): SigilApp {
     previewBtn.setAttribute('aria-pressed', String(mode === 'preview'))
     statusDirty.textContent = dirty ? i18n.t('app.dirty') : i18n.t('app.saved')
     statusDirty.className = dirty ? 'sigil-status-dirty' : 'sigil-muted'
-    saveBtn.disabled = !dirty
     const id = engine.getSelection()
     if (!id) statusSel.textContent = i18n.t('status.none')
     else {

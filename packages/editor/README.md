@@ -16,7 +16,9 @@ const editor = createEditor({
   commands: [
     defineCommand({
       id: 'log-tree',
+      label: 'Log tree',
       shortcut: 'mod+shift+l',
+      // createApp 時可 toolbar: true 掛到 Topbar
       run: ({ engine }) => console.log(engine.getTree()),
     }),
   ],

@@ -24,6 +24,19 @@ export interface CommandDefinition {
   id: string
   label?: string
   shortcut?: string | string[]
+  /**
+   * 產品殼 Topbar 是否顯示此命令
+   * - true：一般按鈕
+   * - 'primary'：主色按鈕（如存檔）
+   */
+  toolbar?: boolean | 'primary'
+  /**
+   * Topbar 分組（createApp）
+   * - history：左側復原區（預設 undo／redo）
+   * - main：中右自訂區
+   * - end：最右側操作區（預設 save／export）
+   */
+  toolbarGroup?: 'history' | 'main' | 'end'
   /** 回傳 false 時不執行（預設 true） */
   when?: (ctx: CommandContext) => boolean
   run: (ctx: CommandContext) => void | Promise<void>

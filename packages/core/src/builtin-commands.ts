@@ -12,6 +12,8 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
       id: 'undo',
       label: 'Undo',
       shortcut: 'mod+z',
+      toolbar: true,
+      toolbarGroup: 'history',
       when: (c) => c.engine.canUndo(),
       run: (c) => {
         c.engine.undo()
@@ -21,6 +23,8 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
       id: 'redo',
       label: 'Redo',
       shortcut: ['mod+shift+z', 'mod+y'],
+      toolbar: true,
+      toolbarGroup: 'history',
       when: (c) => c.engine.canRedo(),
       run: (c) => {
         c.engine.redo()
@@ -69,6 +73,8 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
       id: 'save',
       label: 'Save',
       shortcut: 'mod+s',
+      toolbar: 'primary',
+      toolbarGroup: 'end',
       when: (c) => typeof c.save === 'function',
       run: (c) => {
         void c.save?.()

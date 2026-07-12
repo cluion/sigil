@@ -89,9 +89,10 @@ describe('createApp', () => {
       store,
     })
     expect(app.isDirty()).toBe(false)
-    const saveBtn = [...mount.querySelectorAll('button')].find((b) =>
-      /存檔|Save/.test(b.textContent ?? ''),
+    const saveBtn = mount.querySelector(
+      'button[data-command-id="save"]',
     ) as HTMLButtonElement
+    expect(saveBtn).toBeTruthy()
     expect(saveBtn.disabled).toBe(true)
 
     app.engine.update('t', { content: 'b' })
@@ -115,8 +116,8 @@ describe('createApp', () => {
         root: { id: 'r', type: 'section', children: [{ id: 't', type: 'text', content: 'hi' }] },
       },
     })
-    const exportBtn = [...mount.querySelectorAll('button')].find((b) =>
-      /匯出|Export/.test(b.textContent ?? ''),
+    const exportBtn = mount.querySelector(
+      'button[data-command-id="export"]',
     ) as HTMLButtonElement
     exportBtn.click()
     const dialog = document.querySelector('.sigil-dialog-backdrop')
@@ -165,5 +166,48 @@ describe('createApp', () => {
     expect(await app.runCommand('ping')).toBe(true)
     app.destroy()
   })
+
+  it('Topbar 綁定 undo／save／export 與自訂 toolbar 命令', async () => {
+    const ping = vi.fn()
+    const mount = document.createElement('div')
+    const app = createApp({
+      mount,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 't', type: 'text', content: 'x' }] },
+      },
+      commands: [
+        defineCommand({
+          id: 'ping',
+          label: 'Ping',
+          toolbar: true,
+          toolbarGroup: 'main',
+          run: () => {
+            ping()
+          },
+        }),
+      ],
+    })
+    const topbar = mount.querySelector('.sigil-topbar')!
+    expect(topbar.querySelector('[data-command-id="undo"]')).toBeTruthy()
+    expect(topbar.querySelector('[data-command-id="redo"]')).toBeTruthy()
+    expect(topbar.querySelector('[data-command-id="save"]')).toBeTruthy()
+    expect(topbar.querySelector('[data-command-id="export"]')).toBeTruthy()
+    expect(topbar.querySelector('[data-command-id="ping"]')).toBeTruthy()
+    expect(topbar.querySelector('[data-toolbar-group="main"]')).toBeTruthy()
+
+    const undoBtn = topbar.querySelector('[data-command-id="undo"]') as HTMLButtonElement
+    expect(undoBtn.disabled).toBe(true)
+    app.engine.remove('t')
+    expect(undoBtn.disabled).toBe(false)
+    undoBtn.click()
+    await vi.waitFor(() => expect(app.engine.getTree().children).toHaveLength(1))
+
+    const pingBtn = topbar.querySelector('[data-command-id="ping"]') as HTMLButtonElement
+    pingBtn.click()
+    expect(ping).toHaveBeenCalledOnce()
+    app.destroy()
+  })
 })
+
 
