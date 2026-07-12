@@ -1,10 +1,12 @@
 import { defineConfig } from 'vite'
 import { fileURLToPath } from 'node:url'
+import { sigilVersionDefines } from '../scripts/sigil-version-defines.mjs'
 
 const src = (p: string): string => fileURLToPath(new URL(p, import.meta.url))
 
 // dev 直接指向各套件 src，改碼即時生效
 export default defineConfig({
+  define: sigilVersionDefines(),
   resolve: {
     alias: {
       '@cluion/sigil-core': src('../packages/core/src/index.ts'),
@@ -17,4 +19,3 @@ export default defineConfig({
     },
   },
 })
-

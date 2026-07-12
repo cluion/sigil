@@ -1,16 +1,9 @@
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
+import { sigilVersionDefines } from './scripts/sigil-version-defines.mjs'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
-
-function pkgVersion(rel: string): string {
-  const j = JSON.parse(readFileSync(path.resolve(root, rel, 'package.json'), 'utf8')) as {
-    version: string
-  }
-  return j.version
-}
 
 // dev-only:未 build 時讓測試直接吃各套件 src,繞過 package.json exports(僅指向 dist)。
 // build(tsdown)不讀此處,仍走 node_modules → dist,core 不會被打進下游套件
@@ -26,12 +19,8 @@ const alias: Record<string, string> = {
 
 export default defineConfig({
   resolve: { alias },
-  // 與 tsdown define 對齊：測試走 src 時注入 package.json version
-  define: {
-    __SIGIL_CORE_VERSION__: JSON.stringify(pkgVersion('packages/core')),
-    __SIGIL_SHORTCODE_VERSION__: JSON.stringify(pkgVersion('packages/shortcode')),
-    __SIGIL_APP_VERSION__: JSON.stringify(pkgVersion('packages/app')),
-  },
+  // 與 tsdown／vite define 對齊：測試走 src 時注入 package.json version
+  define: sigilVersionDefines(),
   test: {
     environment: 'happy-dom',
     include: ['packages/**/test/**/*.test.ts', 'packages/**/src/**/*.test.ts'],
