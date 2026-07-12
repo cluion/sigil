@@ -29,6 +29,7 @@
     "attw": "pnpm -r --filter \"./packages/*\" exec attw --pack",
     "size": "size-limit",
     "changeset": "changeset",
+    "version-packages": "changeset version",
     "release": "changeset publish"
   },
   "devDependencies": {
