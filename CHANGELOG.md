@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Topbar bound to commands (`toolbar` / `toolbarGroup`)
+- Layer lock, hide, rename (`name` / `locked` / `hidden`)
+- PropSchema `group` and `dependsOn` for property forms
+- Selection badge and status show layer `name`
+- Fix: Vite dev injects `SIGIL_*_VERSION` (no ReferenceError)
+
 ## 0.4.0
 
 - `defineCommand` / command registry / default editing commands
