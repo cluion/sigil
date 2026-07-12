@@ -104,7 +104,11 @@ export function updateNode(
     if (patch.children !== undefined) next.children = patch.children
     if (patch.shortcode !== undefined) next.shortcode = patch.shortcode
     if (patch.attributes) next.attributes = { ...n.attributes, ...patch.attributes }
-    if (patch.style) next.style = { ...n.style, ...patch.style }
+    // style：一般合併；傳 {} 表示整段清除
+    if (patch.style !== undefined) {
+      next.style =
+        Object.keys(patch.style).length === 0 ? {} : { ...n.style, ...patch.style }
+    }
     return next
   })
 }

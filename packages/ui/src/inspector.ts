@@ -122,7 +122,9 @@ function renderContent(
     container.appendChild(h)
     const schema = opts?.getShortcodeSchema?.(node.shortcode.name)
     if (schema?.length) {
-      container.appendChild(createPropForm({ engine, node, schema }))
+      container.appendChild(
+        createPropForm({ engine, node, schema, assets: opts?.assets }),
+      )
     } else {
       for (const [k, v] of Object.entries(node.shortcode.props)) {
         field(container, k, () => {
@@ -222,45 +224,95 @@ function appendImageFields(
 }
 
 function renderStyle(container: HTMLElement, engine: Engine, node: ComponentNode): void {
-  for (const prop of ['margin', 'padding', 'font-size'] as const) {
-    field(container, prop, () => {
-      const input = document.createElement('input')
-      input.className = 'sigil-input'
-      input.value = node.style?.[prop] ?? ''
-      input.addEventListener('input', () => engine.update(node.id, { style: { [prop]: input.value } }))
-      return input
-    })
+  section(container, '版面')
+  for (const prop of ['margin', 'padding', 'width', 'height', 'display'] as const) {
+    styleText(container, engine, node, prop)
   }
-  field(container, 'color', () => {
+
+  section(container, '文字')
+  styleText(container, engine, node, 'font-size')
+  styleSelect(container, engine, node, 'font-weight', ['normal', 'bold', '600'])
+  styleSelect(container, engine, node, 'text-align', ['left', 'center', 'right', 'justify'])
+  styleColor(container, engine, node, 'color')
+
+  section(container, '外觀')
+  styleColor(container, engine, node, 'background-color')
+  styleText(container, engine, node, 'border')
+  styleText(container, engine, node, 'border-radius')
+  styleText(container, engine, node, 'box-shadow')
+
+  const reset = document.createElement('button')
+  reset.type = 'button'
+  reset.className = 'sigil-btn'
+  reset.textContent = '清除樣式'
+  reset.addEventListener('click', () => engine.update(node.id, { style: {} }))
+  container.appendChild(reset)
+}
+
+function section(container: HTMLElement, title: string): void {
+  const h = document.createElement('h4')
+  h.className = 'sigil-section-title'
+  h.textContent = title
+  container.appendChild(h)
+}
+
+function styleText(
+  container: HTMLElement,
+  engine: Engine,
+  node: ComponentNode,
+  prop: string,
+): void {
+  field(container, prop, () => {
+    const input = document.createElement('input')
+    input.className = 'sigil-input'
+    input.value = node.style?.[prop] ?? ''
+    input.placeholder = prop === 'display' ? 'block / flex / none' : ''
+    input.addEventListener('input', () => engine.update(node.id, { style: { [prop]: input.value } }))
+    return input
+  })
+}
+
+function styleColor(
+  container: HTMLElement,
+  engine: Engine,
+  node: ComponentNode,
+  prop: string,
+): void {
+  field(container, prop, () => {
     const input = document.createElement('input')
     input.className = 'sigil-input'
     input.type = 'color'
-    input.value = node.style?.color ?? '#000000'
-    input.addEventListener('input', () => engine.update(node.id, { style: { color: input.value } }))
+    const cur = node.style?.[prop]
+    input.value = cur && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cur) ? cur : '#000000'
+    input.addEventListener('input', () => engine.update(node.id, { style: { [prop]: input.value } }))
     return input
   })
-  for (const [prop, options] of Object.entries({
-    'font-weight': ['normal', 'bold'],
-    'text-align': ['left', 'center', 'right'],
-  })) {
-    field(container, prop, () => {
-      const sel = document.createElement('select')
-      sel.className = 'sigil-input'
-      const empty = document.createElement('option')
-      empty.value = ''
-      empty.textContent = '未設'
-      sel.appendChild(empty)
-      for (const opt of options) {
-        const o = document.createElement('option')
-        o.value = opt
-        o.textContent = opt
-        sel.appendChild(o)
-      }
-      sel.value = node.style?.[prop] ?? ''
-      sel.addEventListener('change', () => engine.update(node.id, { style: { [prop]: sel.value } }))
-      return sel
-    })
-  }
+}
+
+function styleSelect(
+  container: HTMLElement,
+  engine: Engine,
+  node: ComponentNode,
+  prop: string,
+  options: string[],
+): void {
+  field(container, prop, () => {
+    const sel = document.createElement('select')
+    sel.className = 'sigil-input'
+    const empty = document.createElement('option')
+    empty.value = ''
+    empty.textContent = '未設'
+    sel.appendChild(empty)
+    for (const opt of options) {
+      const o = document.createElement('option')
+      o.value = opt
+      o.textContent = opt
+      sel.appendChild(o)
+    }
+    sel.value = node.style?.[prop] ?? ''
+    sel.addEventListener('change', () => engine.update(node.id, { style: { [prop]: sel.value } }))
+    return sel
+  })
 }
 
 function renderAdvanced(container: HTMLElement, engine: Engine, node: ComponentNode): void {

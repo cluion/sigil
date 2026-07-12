@@ -1,5 +1,5 @@
 /** shortcode prop 的控制項型別(屬性表單用) */
-export type PropType = 'text' | 'number' | 'boolean' | 'select' | 'color'
+export type PropType = 'text' | 'number' | 'boolean' | 'select' | 'color' | 'media'
 
 /** select 型別的選項 */
 export interface SelectOption {

@@ -106,7 +106,8 @@ const assets = new MemoryAssetStore([
 createApp({ mount: '#app', assets })
 ```
 
-選中圖片區塊後，內容分頁可「選圖」或上傳。
+選中圖片區塊後，內容分頁可「選圖」或上傳。  
+shortcode 的 PropSchema 可設 `type: 'media'`，表單同樣接 AssetStore。
 
 ## 本倉庫
 

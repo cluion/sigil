@@ -16,6 +16,7 @@ import { pongDef } from './shortcodes/pong'
 import { loaderDef } from './shortcodes/loader'
 import { productDef } from './shortcodes/product'
 import { cartDef } from './shortcodes/cart'
+import { bannerDef } from './shortcodes/banner'
 
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
@@ -87,9 +88,23 @@ const blocks = {
   載入器: () => blockShortcode('loader', { id: 1 }),
   商品卡: () => blockShortcode('product', { productId: 1 }),
   購物車: () => blockShortcode('cart', {}),
+  橫幅: () =>
+    blockShortcode('banner', {
+      src: 'https://placehold.co/320x80/png?text=Banner',
+      title: '橫幅標題',
+    }),
 }
 
-const shortcodes = [counterDef, cardDef, pingDef, pongDef, loaderDef, productDef, cartDef]
+const shortcodes = [
+  counterDef,
+  cardDef,
+  pingDef,
+  pongDef,
+  loaderDef,
+  productDef,
+  cartDef,
+  bannerDef,
+]
 
 let locale: 'zh' | 'en' = 'zh'
 function mountApp(d: SigilDoc): SigilApp {

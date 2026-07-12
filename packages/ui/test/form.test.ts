@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createEngine, type PropSchema } from '@cluion/sigil-core'
 import { createPropForm } from '../src/form.js'
 
@@ -67,4 +67,36 @@ describe('createPropForm', () => {
     const { form } = setup([{ name: 'k', type: 'text', label: '自訂' }])
     expect(form.querySelector('label')?.textContent).toContain('自訂')
   })
+
+  it('media 生成 url 輸入與選圖', async () => {
+    const engine = createEngine({
+      doc: {
+        version: 1 as const,
+        root: {
+          id: 'n',
+          type: 'shortcode',
+          shortcode: { name: 'x', props: { src: 'https://a.test/x.png' } },
+        },
+      },
+    })
+    const form = createPropForm({
+      engine,
+      node: engine.getTree(),
+      schema: [{ name: 'src', type: 'media', label: '圖' }],
+      assets: {
+        list: () => [{ id: '1', url: 'https://b.test/y.png', name: 'Y' }],
+      },
+    })
+    const input = form.querySelector('input.sigil-input') as HTMLInputElement
+    expect(input.value).toBe('https://a.test/x.png')
+    const pick = form.querySelector('button') as HTMLButtonElement
+    expect(pick.textContent).toBe('選圖')
+    pick.click()
+    await vi.waitFor(() => {
+      expect(document.querySelector('.sigil-media-card')).toBeTruthy()
+    })
+    ;(document.querySelector('.sigil-media-card') as HTMLButtonElement).click()
+    expect(engine.getTree().shortcode!.props.src).toBe('https://b.test/y.png')
+  })
 })
+

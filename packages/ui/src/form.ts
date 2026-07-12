@@ -1,23 +1,28 @@
-import type { Engine, ComponentNode, PropSchema } from '@cluion/sigil-core'
+import type { AssetStore, Engine, ComponentNode, PropSchema } from '@cluion/sigil-core'
+import { openMediaPicker } from './media-picker.js'
 
 export interface FormOptions {
   engine: Engine
   node: ComponentNode
   schema: PropSchema[]
+  assets?: AssetStore
 }
 
 /**
  * 依 PropSchema 生成屬性表單控制項;值變動走 engine.update
- *
- * text/number 用 input 事件(即時);select/color/boolean 用 change(定稿)
  */
 export function createPropForm(opts: FormOptions): HTMLElement {
-  const { engine, node, schema } = opts
+  const { engine, node, schema, assets } = opts
   const props = node.shortcode?.props ?? {}
   const wrap = document.createElement('div')
   wrap.className = 'sigil-prop-form'
 
   for (const s of schema) {
+    if (s.type === 'media') {
+      wrap.appendChild(createMediaField(engine, node, s, props[s.name], assets))
+      continue
+    }
+
     const label = document.createElement('label')
     label.className = 'sigil-field'
     const span = document.createElement('span')
@@ -29,6 +34,72 @@ export function createPropForm(opts: FormOptions): HTMLElement {
     label.append(span, control)
     wrap.appendChild(label)
   }
+  return wrap
+}
+
+function createMediaField(
+  engine: Engine,
+  node: ComponentNode,
+  schema: PropSchema,
+  value: unknown,
+  assets?: AssetStore,
+): HTMLElement {
+  const wrap = document.createElement('div')
+  wrap.className = 'sigil-field'
+  const span = document.createElement('span')
+  span.className = 'sigil-field-label'
+  span.textContent = schema.label ?? schema.name
+
+  const url = String(value ?? '')
+  const preview = document.createElement('img')
+  preview.className = 'sigil-img-preview'
+  preview.alt = ''
+  if (url) preview.src = url
+  else preview.style.display = 'none'
+
+  const row = document.createElement('div')
+  row.className = 'sigil-field-row'
+  const input = document.createElement('input')
+  input.className = 'sigil-input'
+  input.type = 'text'
+  input.dataset.prop = schema.name
+  input.value = url
+  input.placeholder = 'https://…'
+  input.addEventListener('input', () => {
+    const next = input.value
+    setProp(engine, node, schema.name, next)
+    if (next) {
+      preview.src = next
+      preview.style.display = ''
+    } else {
+      preview.removeAttribute('src')
+      preview.style.display = 'none'
+    }
+  })
+  row.appendChild(input)
+
+  if (assets) {
+    const pickBtn = document.createElement('button')
+    pickBtn.type = 'button'
+    pickBtn.className = 'sigil-btn'
+    pickBtn.textContent = '選圖'
+    pickBtn.addEventListener('click', () => {
+      openMediaPicker({
+        assets,
+        currentUrl: input.value,
+        onPick: (item) => {
+          input.value = item.url
+          setProp(engine, node, schema.name, item.url)
+          preview.src = item.url
+          preview.style.display = ''
+        },
+        onClose: () => {},
+      })
+    })
+    row.appendChild(pickBtn)
+  }
+
+  wrap.append(span, preview, row)
   return wrap
 }
 
@@ -67,6 +138,7 @@ function createControl(schema: PropSchema, value: unknown): HTMLElement {
       return el
     }
     case 'text':
+    case 'media':
     default: {
       const el = document.createElement('input')
       el.className = 'sigil-input'
@@ -75,6 +147,14 @@ function createControl(schema: PropSchema, value: unknown): HTMLElement {
       return el
     }
   }
+}
+
+function setProp(engine: Engine, node: ComponentNode, name: string, v: unknown): void {
+  const ref = node.shortcode
+  if (!ref) return
+  engine.update(node.id, {
+    shortcode: { name: ref.name, props: { ...ref.props, [name]: v } },
+  })
 }
 
 function emit(engine: Engine, node: ComponentNode, schema: PropSchema, control: HTMLElement): void {
@@ -86,9 +166,7 @@ function emit(engine: Engine, node: ComponentNode, schema: PropSchema, control: 
   } else if (schema.type === 'number') {
     v = Number((control as HTMLInputElement).value)
   } else {
-    v = (control as HTMLInputElement).value
+    v = (control as HTMLInputElement | HTMLSelectElement).value
   }
-  engine.update(node.id, {
-    shortcode: { name: ref.name, props: { ...ref.props, [schema.name]: v } },
-  })
+  setProp(engine, node, schema.name, v)
 }
