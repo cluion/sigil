@@ -1,4 +1,4 @@
-import { createApp, type SigilApp } from '@cluion/sigil-app'
+import { createApp, defineCommand, type SigilApp } from '@cluion/sigil-app'
 import {
   basicBlockDefs,
   defineBlock,
@@ -18,6 +18,7 @@ import { loaderDef } from './shortcodes/loader'
 import { productDef } from './shortcodes/product'
 import { cartDef } from './shortcodes/cart'
 import { bannerDef } from './shortcodes/banner'
+import { calloutDef } from './shortcodes/callout'
 
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
@@ -76,8 +77,24 @@ const assets = new MemoryAssetStore([
   { id: 'a3', url: 'https://placehold.co/200x120/png?text=C', name: '圖 C' },
 ])
 
+// 初始文件：圖層已命名，方便試重命名／鎖／隱；含 callout 試 dependsOn
+const title = blockText('點我編輯')
+title.name = '標題文字'
+const cta = blockButton('按鈕')
+cta.name = '主按鈕'
+const hero = blockImage('https://placehold.co/120')
+hero.name = '主圖'
+const tip = blockShortcode('callout', {
+  kind: 'info',
+  title: '提示框',
+  body: '選我 → 右側屬性：改「類型」為行動呼籲，會出現按鈕文字欄位',
+  ctaLabel: '開始',
+})
+tip.name = '提示 callout'
+
 const section = blockSection()
-section.children = [blockText('點我編輯'), blockButton('按鈕'), blockImage('https://placehold.co/120')]
+section.name = '首區'
+section.children = [title, cta, hero, tip]
 const doc: SigilDoc = { version: 1, root: section }
 
 const blocks = [
@@ -145,6 +162,20 @@ const blocks = [
         title: '橫幅標題',
       }),
   }),
+  defineBlock({
+    id: 'callout',
+    label: '提示框',
+    category: '版面',
+    icon: '💬',
+    keywords: ['callout', 'dependsOn', 'group'],
+    create: () =>
+      blockShortcode('callout', {
+        kind: 'info',
+        title: '提示',
+        body: '試 group／dependsOn',
+        ctaLabel: '了解更多',
+      }),
+  }),
 ]
 
 const shortcodes = [
@@ -156,7 +187,19 @@ const shortcodes = [
   productDef,
   cartDef,
   bannerDef,
+  calloutDef,
 ]
+
+const hookLog = document.createElement('span')
+hookLog.style.marginLeft = '8px'
+hookLog.style.color = '#4f46e5'
+hookLog.style.fontSize = '12px'
+hookLog.style.fontFamily = 'ui-monospace, monospace'
+
+function setHookLog(msg: string): void {
+  hookLog.textContent = msg
+  console.log('[sigil-demo]', msg)
+}
 
 let locale: 'zh' | 'en' = 'zh'
 function mountApp(d: SigilDoc): SigilApp {
@@ -169,10 +212,39 @@ function mountApp(d: SigilDoc): SigilApp {
     shortcodes,
     fetchJSON: mockFetchJSON,
     locale,
+    commands: [
+      defineCommand({
+        id: 'demo-ping',
+        label: 'Ping',
+        toolbar: true,
+        toolbarGroup: 'main',
+        shortcut: 'mod+shift+p',
+        run: () => {
+          setHookLog('command: demo-ping')
+        },
+      }),
+    ],
+    hooks: {
+      onSelect: (id) => {
+        setHookLog(id ? `hook:onSelect ${id}` : 'hook:onSelect (none)')
+      },
+      beforeSave: (doc) => {
+        setHookLog(`hook:beforeSave root=${doc.root.id}`)
+        return doc
+      },
+      afterSave: () => {
+        setHookLog('hook:afterSave ok')
+      },
+      afterLoad: () => {
+        setHookLog('hook:afterLoad')
+      },
+    },
   })
 }
 
 let app: SigilApp = mountApp(doc)
+// 方便 DevTools：await __sigil.runCommand('undo')
+;(window as unknown as { __sigil: SigilApp }).__sigil = app
 
 const toolbar = document.getElementById('toolbar')!
 const status = document.createElement('span')
@@ -190,6 +262,7 @@ loadBtn.addEventListener('click', () => {
     const loaded = store.importJSON(json)
     app.destroy()
     app = mountApp(loaded)
+    ;(window as unknown as { __sigil: SigilApp }).__sigil = app
     status.textContent = ' 已讀'
   } catch (e) {
     status.textContent = ` 讀取失敗：${e instanceof Error ? e.message : String(e)}`
@@ -210,6 +283,7 @@ localeBtn.addEventListener('click', () => {
   const d = app.toJSON()
   app.destroy()
   app = mountApp(d)
+  ;(window as unknown as { __sigil: SigilApp }).__sigil = app
   status.textContent = ` 語系 ${locale}`
 })
 
@@ -217,6 +291,7 @@ const note = document.createElement('span')
 note.style.marginLeft = '12px'
 note.style.color = '#64748b'
 note.style.fontSize = '13px'
-note.textContent = '選圖片區塊 → 內容 → 選圖；存檔／匯出在頂欄'
+note.textContent =
+  '試：頂欄 Ping · 圖層雙擊改名／鎖／隱 · 選提示框改類型 · 存檔看 hook'
 
-toolbar.append(persistBtn, loadBtn, localeBtn, status, note)
+toolbar.append(persistBtn, loadBtn, localeBtn, status, hookLog, note)

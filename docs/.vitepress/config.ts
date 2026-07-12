@@ -58,6 +58,7 @@ export default defineConfig({
           text: '指南',
           items: [
             { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: '擴充（Commands／Hooks）', link: '/guide/extensibility' },
             { text: '範例', link: '/guide/examples' },
             { text: '套件總覽', link: '/guide/packages' },
             { text: '文件站說明', link: '/guide/docs-site' },

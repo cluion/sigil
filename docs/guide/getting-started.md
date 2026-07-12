@@ -48,6 +48,8 @@ app.toHTML()
 
 - `createEditor`：`@cluion/sigil`
 - `createEngine`：`@cluion/sigil-core`
+- 擴充（commands／hooks／圖層／dependsOn）：見 [擴充指南](/guide/extensibility)
+- 本機完整 demo：`pnpm dev`
 
 ## shortcode
 
