@@ -59,7 +59,7 @@ function iconBtn(
 }
 
 /**
- * 渲染單一節點列(含縮排)與其子樹
+ * 渲染節點列與子樹
  */
 function renderNode(
   node: ComponentNode,

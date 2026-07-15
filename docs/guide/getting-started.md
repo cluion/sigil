@@ -48,6 +48,7 @@ app.toHTML()
 
 - `createEditor`：`@cluion/sigil`
 - `createEngine`：`@cluion/sigil-core`
+- 響應式樣式：見 [Desktop／Tablet／Mobile 覆寫](/guide/responsive-styles)
 - 擴充（commands／hooks／圖層／dependsOn）：見 [擴充指南](/guide/extensibility)
 - 本機完整 demo：`pnpm dev`
 
@@ -101,9 +102,7 @@ const store: ProjectStore = {
 ```ts
 import { MemoryAssetStore } from '@cluion/sigil-store-json'
 
-const assets = new MemoryAssetStore([
-  { id: '1', url: 'https://placehold.co/120', name: 'demo' },
-])
+const assets = new MemoryAssetStore([{ id: '1', url: 'https://placehold.co/120', name: 'demo' }])
 
 createApp({ mount: '#app', assets })
 ```

@@ -1,27 +1,37 @@
-import type { ComponentNode } from '../model/types.js'
+import type { ComponentNode, ResponsiveDevice, ResponsiveStyles, Style } from '../model/types.js'
 import type { TypeRegistry } from '../model/registry.js'
 import { createTypeRegistry } from '../model/registry.js'
+import { getEffectiveStyle, mergeResponsiveStyles, mergeStyle } from '../model/responsive-style.js'
 import type { Patch } from '../engine/types.js'
 import type { ShortcodeResolver, ShortcodeInstance } from './shortcode-resolver.js'
 
 export interface RendererOptions {
   registry?: TypeRegistry
   shortcodeResolver?: ShortcodeResolver
+  device?: ResponsiveDevice
 }
 
 export interface Renderer {
   mount(root: ComponentNode, container: Element): void
   applyPatch(patch: Patch): void
   reconcile(tree: ComponentNode): void
+  setDevice(device: ResponsiveDevice): void
   destroy(): void
+}
+
+interface PresentationState {
+  style?: Style
+  responsiveStyles?: ResponsiveStyles
+  hidden?: boolean
+  locked?: boolean
 }
 
 /**
  * 建立 Renderer
  *
- * patch 為快速路徑（command 即時更新，保留 DOM 狀態）；
- * reconcile 為全量重建（undo／redo／load）；
- * shortcode 節點交由注入的 shortcodeResolver 產出 instance，
+ * patch 增量更新
+ * reconcile 全量重建
+ * shortcodeResolver 管理 shortcode instance
  * 後續 props 變動只 setProps 觸發細粒度更新，host 元素不重建
  */
 export function createRenderer(opts: RendererOptions = {}): Renderer {
@@ -29,16 +39,53 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
   const shortcodeResolver = opts.shortcodeResolver
   const map = new Map<string, HTMLElement>()
   const shortcodeInstances = new Map<string, ShortcodeInstance>()
+  const presentation = new Map<string, PresentationState>()
+  const appliedStyleKeys = new Map<string, Set<string>>()
+  let device: ResponsiveDevice = opts.device ?? 'desktop'
   let rootEl: HTMLElement | null = null
 
-  function applyLayerFlags(el: HTMLElement, node: ComponentNode): void {
-    if (node.hidden) {
+  function forgetElement(id: string, el: HTMLElement | undefined): void {
+    const ids = el
+      ? [
+          id,
+          ...Array.from(el.querySelectorAll<HTMLElement>('[data-sigil-id]'))
+            .map((child) => child.dataset.sigilId)
+            .filter((childId): childId is string => Boolean(childId)),
+        ]
+      : [id]
+    for (const childId of ids) {
+      map.delete(childId)
+      presentation.delete(childId)
+      appliedStyleKeys.delete(childId)
+      shortcodeInstances.get(childId)?.destroy()
+      shortcodeInstances.delete(childId)
+    }
+  }
+
+  function applyPresentation(id: string): void {
+    const el = map.get(id)
+    const state = presentation.get(id)
+    if (!el || !state) return
+
+    for (const property of appliedStyleKeys.get(id) ?? []) {
+      el.style.removeProperty(property)
+    }
+    const effective = getEffectiveStyle(state, device)
+    const nextKeys = new Set<string>()
+    for (const [property, value] of Object.entries(effective)) {
+      el.style.setProperty(property, value)
+      nextKeys.add(property)
+    }
+    appliedStyleKeys.set(id, nextKeys)
+
+    if (state.hidden) {
       el.setAttribute('data-sigil-hidden', '1')
       el.style.opacity = '0.4'
     } else {
       el.removeAttribute('data-sigil-hidden')
+      if (!nextKeys.has('opacity')) el.style.removeProperty('opacity')
     }
-    if (node.locked) el.setAttribute('data-sigil-locked', '1')
+    if (state.locked) el.setAttribute('data-sigil-locked', '1')
     else el.removeAttribute('data-sigil-locked')
   }
 
@@ -49,16 +96,19 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
     const tag = node.tagName ?? registry.get(node.type)?.tagName ?? 'div'
     const el = document.createElement(tag)
     map.set(node.id, el)
+    presentation.set(node.id, {
+      style: node.style,
+      responsiveStyles: node.responsiveStyles,
+      hidden: node.hidden,
+      locked: node.locked,
+    })
     el.setAttribute('data-sigil-id', node.id)
     if (node.attributes) {
       for (const [k, v] of Object.entries(node.attributes)) el.setAttribute(k, v)
     }
     if (node.className) el.className = node.className
-    if (node.style) {
-      for (const [k, v] of Object.entries(node.style)) el.style.setProperty(k, v)
-    }
     if (node.content !== undefined) el.textContent = node.content
-    applyLayerFlags(el, node)
+    applyPresentation(node.id)
     if (node.shortcode) {
       el.setAttribute('data-shortcode', node.shortcode.name)
       if (shortcodeResolver) {
@@ -70,7 +120,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
       if (node.shortcode) {
         const slot = el.querySelector('slot')
         if (slot) slot.replaceWith(...node.children.map((c) => renderNode(c)))
-        // 無 <slot> → 忽略 children(不 append 末尾)
+        // 無 slot 時忽略 children
       } else {
         for (const c of node.children) el.append(renderNode(c))
       }
@@ -81,6 +131,8 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
   return {
     mount(root, container) {
       map.clear()
+      presentation.clear()
+      appliedStyleKeys.clear()
       rootEl = renderNode(root)
       container.replaceChildren(rootEl)
     },
@@ -96,9 +148,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
         case 'remove': {
           const el = map.get(patch.id)
           el?.remove()
-          map.delete(patch.id)
-          shortcodeInstances.get(patch.id)?.destroy()
-          shortcodeInstances.delete(patch.id)
+          forgetElement(patch.id, el)
           break
         }
         case 'move': {
@@ -117,54 +167,60 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
           if (patch.attrs) {
             for (const [k, v] of Object.entries(patch.attrs)) el.setAttribute(k, v)
           }
-          if (patch.style) {
-            for (const [k, v] of Object.entries(patch.style)) el.style.setProperty(k, v)
+          const state = presentation.get(patch.id)
+          if (state && patch.style !== undefined) {
+            const merged = mergeStyle(state.style, patch.style)
+            state.style = Object.keys(merged).length ? merged : undefined
+          }
+          if (state && patch.responsiveStyles !== undefined) {
+            const merged = mergeResponsiveStyles(state.responsiveStyles, patch.responsiveStyles)
+            state.responsiveStyles = Object.keys(merged).length ? merged : undefined
+          }
+          if (state && patch.hidden !== undefined) state.hidden = patch.hidden
+          if (state && patch.locked !== undefined) state.locked = patch.locked
+          if (
+            patch.style !== undefined ||
+            patch.responsiveStyles !== undefined ||
+            patch.hidden !== undefined ||
+            patch.locked !== undefined
+          ) {
+            applyPresentation(patch.id)
           }
           if (patch.content !== undefined) el.textContent = patch.content
           if (patch.className !== undefined) el.className = patch.className
-          if (patch.hidden !== undefined || patch.locked !== undefined) {
-            const node = map.get(patch.id)
-            // 從現有 DOM 旗標推回；完整狀態以 reconcile 為準
-            if (patch.hidden !== undefined) {
-              if (patch.hidden) {
-                el.setAttribute('data-sigil-hidden', '1')
-                el.style.opacity = '0.4'
-              } else {
-                el.removeAttribute('data-sigil-hidden')
-                el.style.opacity = ''
-              }
-            }
-            if (patch.locked !== undefined) {
-              if (patch.locked) el.setAttribute('data-sigil-locked', '1')
-              else el.removeAttribute('data-sigil-locked')
-            }
-            void node
-          }
           break
         }
         case 'replace': {
           const old = map.get(patch.id)
-          shortcodeInstances.get(patch.id)?.destroy()
-          shortcodeInstances.delete(patch.id)
+          forgetElement(patch.id, old)
           const el = renderNode(patch.node)
           old?.replaceWith(el)
           break
         }
       }
     },
-    // 全量重建；shortcode instance 全數回收後由 renderNode 重新 resolve
+    // 回收 shortcode instance 後全量重建
     reconcile(tree) {
       const container = rootEl?.parentElement
       for (const inst of shortcodeInstances.values()) inst.destroy()
       shortcodeInstances.clear()
       map.clear()
+      presentation.clear()
+      appliedStyleKeys.clear()
       rootEl = renderNode(tree)
       if (container) container.replaceChildren(rootEl)
+    },
+    setDevice(next) {
+      if (device === next) return
+      device = next
+      for (const id of presentation.keys()) applyPresentation(id)
     },
     destroy() {
       for (const inst of shortcodeInstances.values()) inst.destroy()
       shortcodeInstances.clear()
       map.clear()
+      presentation.clear()
+      appliedStyleKeys.clear()
       rootEl = null
     },
   }

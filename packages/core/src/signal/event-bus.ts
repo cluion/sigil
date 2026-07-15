@@ -1,7 +1,7 @@
 /**
  * 事件匯流排 — 零依賴純 pub/sub
  *
- * emit 同步通知(快照迭代,handler 內 on/off 不錯位);
+ * emit 以快照同步通知
  * on 回傳 dispose 移除該 handler
  */
 export interface EventBus {

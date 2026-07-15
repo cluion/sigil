@@ -1,6 +1,6 @@
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
-/** ping — 點按鈕 emit 'ping' 事件(示範跨 shortcode 通訊) */
+/** emit ping 事件 */
 export const pingDef = defineShortcode({
   name: 'ping',
   label: '發送(ping)',

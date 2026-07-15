@@ -1,4 +1,4 @@
-/** shortcode prop 的控制項型別(屬性表單用) */
+/** shortcode prop 控制項型別 */
 export type PropType = 'text' | 'number' | 'boolean' | 'select' | 'color' | 'media'
 
 /** select 型別的選項 */
@@ -12,7 +12,7 @@ export interface SelectOption {
  *
  * - `eq`：嚴格相等
  * - `in`：值落在陣列內
- * - 僅 `prop`：該 prop 為 truthy（非 false／空字串／null／undefined）
+ * - 僅 `prop`：該 prop 為 truthy
  */
 export interface PropDependsOn {
   prop: string
@@ -27,7 +27,7 @@ export interface PropSchema {
   label?: string
   /** 僅 select 用;靜態選項 */
   options?: SelectOption[]
-  /** 表單分組標題；相鄰同 group 歸為一節 */
+  /** 表單分組 */
   group?: string
   /** 可見條件 */
   dependsOn?: PropDependsOn

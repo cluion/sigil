@@ -1,9 +1,9 @@
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 /**
- * 購物車 — 讀共享 store 鍵 `cart`（product 加購寫入）
+ * 讀取共享購物車 store
  *
- * 主路徑為 store 響應式；亦可 on('cart:add') 做附加邏輯（此處不依賴事件計數）。
+ * 以 store 驅動畫面
  */
 export const cartDef = defineShortcode({
   name: 'cart',

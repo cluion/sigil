@@ -1,6 +1,6 @@
 /**
  * Vite / vitest define：把各包 package.json version 注入 __SIGIL_*_VERSION__
- * 供 dev 走 src 時與 tsdown build 一致。
+ * 統一 dev 與 build 版本注入
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

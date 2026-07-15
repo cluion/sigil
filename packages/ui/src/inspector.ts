@@ -1,13 +1,27 @@
-import type { AssetStore, Engine, PropSchema } from '@cluion/sigil-core'
+import type { AssetStore, Engine, PropSchema, ResponsiveDevice } from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
 import { openMediaPicker } from './media-picker.js'
+import {
+  clearDeviceStyles,
+  decorateStyleControl,
+  deviceLabel,
+  getDeviceStyleValue,
+  inheritanceLabel,
+  updateDeviceStyle,
+} from './style-device.js'
 
 export type InspectorTab = 'content' | 'style' | 'advanced'
 
 export interface InspectorOptions {
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
   assets?: AssetStore
+  device?: ResponsiveDevice
+}
+
+export interface InspectorHandle {
+  setDevice(device: ResponsiveDevice): void
+  destroy(): void
 }
 
 /**
@@ -17,7 +31,7 @@ export function createInspector(
   engine: Engine,
   container: HTMLElement,
   opts?: InspectorOptions,
-): { destroy: () => void } {
+): InspectorHandle {
   container.classList.add('sigil-inspector')
   container.replaceChildren()
 
@@ -29,6 +43,7 @@ export function createInspector(
   body.className = 'sigil-inspector-body'
 
   let tab: InspectorTab = 'content'
+  let device: ResponsiveDevice = opts?.device ?? 'desktop'
   const tabBtns: Record<InspectorTab, HTMLButtonElement> = {
     content: makeTab('content', '內容'),
     style: makeTab('style', '樣式'),
@@ -86,7 +101,7 @@ export function createInspector(
     body.appendChild(head)
 
     if (tab === 'content') renderContent(body, engine, node, opts)
-    else if (tab === 'style') renderStyle(body, engine, node)
+    else if (tab === 'style') renderStyle(body, engine, node, device, render)
     else renderAdvanced(body, engine, node)
   }
 
@@ -95,6 +110,11 @@ export function createInspector(
   })
   render()
   return {
+    setDevice(next) {
+      if (device === next) return
+      device = next
+      if (tab === 'style') render()
+    },
     destroy() {
       unsub()
     },
@@ -126,9 +146,7 @@ function renderContent(
     container.appendChild(h)
     const schema = opts?.getShortcodeSchema?.(node.shortcode.name)
     if (schema?.length) {
-      container.appendChild(
-        createPropForm({ engine, node, schema, assets: opts?.assets }),
-      )
+      container.appendChild(createPropForm({ engine, node, schema, assets: opts?.assets }))
     } else {
       for (const [k, v] of Object.entries(node.shortcode.props)) {
         field(container, k, () => {
@@ -150,12 +168,7 @@ function renderContent(
       }
     }
   }
-  if (
-    node.type !== 'text' &&
-    node.type !== 'button' &&
-    node.type !== 'image' &&
-    !node.shortcode
-  ) {
+  if (node.type !== 'text' && node.type !== 'button' && node.type !== 'image' && !node.shortcode) {
     const p = document.createElement('p')
     p.className = 'sigil-muted'
     p.textContent = '此節點無可編輯內容欄位，可切到樣式分頁'
@@ -227,29 +240,49 @@ function appendImageFields(
   container.appendChild(wrap)
 }
 
-function renderStyle(container: HTMLElement, engine: Engine, node: ComponentNode): void {
+function renderStyle(
+  container: HTMLElement,
+  engine: Engine,
+  node: ComponentNode,
+  device: ResponsiveDevice,
+  rerender: () => void,
+): void {
+  const context = document.createElement('div')
+  context.className = 'sigil-responsive-style-context'
+  context.dataset.styleDevice = device
+  const contextTitle = document.createElement('strong')
+  contextTitle.textContent = deviceLabel(device)
+  const contextHint = document.createElement('span')
+  contextHint.textContent = inheritanceLabel(device)
+  context.append(contextTitle, contextHint)
+  container.appendChild(context)
+
   section(container, '版面')
   for (const prop of ['margin', 'padding', 'width', 'height', 'display'] as const) {
-    styleText(container, engine, node, prop)
+    styleText(container, engine, node, device, prop)
   }
 
   section(container, '文字')
-  styleText(container, engine, node, 'font-size')
-  styleSelect(container, engine, node, 'font-weight', ['normal', 'bold', '600'])
-  styleSelect(container, engine, node, 'text-align', ['left', 'center', 'right', 'justify'])
-  styleColor(container, engine, node, 'color')
+  styleText(container, engine, node, device, 'font-size')
+  styleSelect(container, engine, node, device, 'font-weight', ['normal', 'bold', '600'])
+  styleSelect(container, engine, node, device, 'text-align', ['left', 'center', 'right', 'justify'])
+  styleColor(container, engine, node, device, 'color')
 
   section(container, '外觀')
-  styleColor(container, engine, node, 'background-color')
-  styleText(container, engine, node, 'border')
-  styleText(container, engine, node, 'border-radius')
-  styleText(container, engine, node, 'box-shadow')
+  styleColor(container, engine, node, device, 'background-color')
+  styleText(container, engine, node, device, 'border')
+  styleText(container, engine, node, device, 'border-radius')
+  styleText(container, engine, node, device, 'box-shadow')
 
   const reset = document.createElement('button')
   reset.type = 'button'
   reset.className = 'sigil-btn'
-  reset.textContent = '清除樣式'
-  reset.addEventListener('click', () => engine.update(node.id, { style: {} }))
+  reset.textContent =
+    device === 'desktop' ? '清除 Desktop 樣式' : `清除 ${deviceLabel(device)} 覆寫`
+  reset.addEventListener('click', () => {
+    clearDeviceStyles(engine, node.id, device)
+    rerender()
+  })
   container.appendChild(reset)
 }
 
@@ -264,15 +297,19 @@ function styleText(
   container: HTMLElement,
   engine: Engine,
   node: ComponentNode,
+  device: ResponsiveDevice,
   prop: string,
 ): void {
   field(container, prop, () => {
     const input = document.createElement('input')
     input.className = 'sigil-input'
-    input.value = node.style?.[prop] ?? ''
+    const value = getDeviceStyleValue(node, device, prop)
+    input.value = value.override ?? ''
     input.placeholder = prop === 'display' ? 'block / flex / none' : ''
-    input.addEventListener('input', () => engine.update(node.id, { style: { [prop]: input.value } }))
-    return input
+    input.addEventListener('input', () => {
+      updateDeviceStyle(engine, node.id, device, prop, input.value)
+    })
+    return decorateStyleControl(input, engine, node, device, prop, value)
   })
 }
 
@@ -280,16 +317,20 @@ function styleColor(
   container: HTMLElement,
   engine: Engine,
   node: ComponentNode,
+  device: ResponsiveDevice,
   prop: string,
 ): void {
   field(container, prop, () => {
     const input = document.createElement('input')
     input.className = 'sigil-input'
     input.type = 'color'
-    const cur = node.style?.[prop]
+    const value = getDeviceStyleValue(node, device, prop)
+    const cur = value.override ?? value.effective
     input.value = cur && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cur) ? cur : '#000000'
-    input.addEventListener('input', () => engine.update(node.id, { style: { [prop]: input.value } }))
-    return input
+    input.addEventListener('input', () => {
+      updateDeviceStyle(engine, node.id, device, prop, input.value)
+    })
+    return decorateStyleControl(input, engine, node, device, prop, value)
   })
 }
 
@@ -297,6 +338,7 @@ function styleSelect(
   container: HTMLElement,
   engine: Engine,
   node: ComponentNode,
+  device: ResponsiveDevice,
   prop: string,
   options: string[],
 ): void {
@@ -305,7 +347,8 @@ function styleSelect(
     sel.className = 'sigil-input'
     const empty = document.createElement('option')
     empty.value = ''
-    empty.textContent = '未設'
+    const value = getDeviceStyleValue(node, device, prop)
+    empty.textContent = value.inherited && value.effective ? `繼承 ${value.effective}` : '未設'
     sel.appendChild(empty)
     for (const opt of options) {
       const o = document.createElement('option')
@@ -313,9 +356,11 @@ function styleSelect(
       o.textContent = opt
       sel.appendChild(o)
     }
-    sel.value = node.style?.[prop] ?? ''
-    sel.addEventListener('change', () => engine.update(node.id, { style: { [prop]: sel.value } }))
-    return sel
+    sel.value = value.override ?? ''
+    sel.addEventListener('change', () => {
+      updateDeviceStyle(engine, node.id, device, prop, sel.value)
+    })
+    return decorateStyleControl(sel, engine, node, device, prop, value)
   })
 }
 

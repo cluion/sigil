@@ -45,9 +45,29 @@ describe('toHTML — escape 動態值', () => {
   it('style 與 className 序列化', () => {
     const doc: SigilDoc = {
       version: 1,
-      root: { id: 'r', type: 'section', className: 'box', style: { color: 'red', 'padding-top': '4px' } },
+      root: {
+        id: 'r',
+        type: 'section',
+        className: 'box',
+        style: { color: 'red', 'padding-top': '4px' },
+      },
     }
     expect(toHTML(doc)).toBe('<section class="box" style="color:red;padding-top:4px"></section>')
+  })
+
+  it('style property name 不可跳出 attribute', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: {
+        id: 'r',
+        type: 'section',
+        style: {
+          color: 'red',
+          'color" onmouseover="alert(1)': 'blue',
+        },
+      },
+    }
+    expect(toHTML(doc)).toBe('<section style="color:red"></section>')
   })
 })
 
@@ -56,7 +76,9 @@ describe('toHTML — void elements', () => {
     const doc: SigilDoc = {
       version: 1,
       root: {
-        id: 'r', type: 'image', attributes: { src: 'x' },
+        id: 'r',
+        type: 'image',
+        attributes: { src: 'x' },
         children: [{ id: 'c', type: 'text', content: 'nope' }],
       },
     }
@@ -85,7 +107,9 @@ describe('toHTML — shortcode', () => {
     const doc: SigilDoc = {
       version: 1,
       root: {
-        id: 'r', type: 'shortcode', shortcode: { name: 'counter', props: { step: 2 } },
+        id: 'r',
+        type: 'shortcode',
+        shortcode: { name: 'counter', props: { step: 2 } },
         children: [{ id: 'c', type: 'text', content: 'ignored' }],
       },
     }
@@ -120,7 +144,9 @@ describe('toHTML — shortcode slot', () => {
     const doc: SigilDoc = {
       version: 1,
       root: {
-        id: 'r', type: 'shortcode', shortcode: { name: 'card', props: {} },
+        id: 'r',
+        type: 'shortcode',
+        shortcode: { name: 'card', props: {} },
         children: [{ id: 'c', type: 'text', content: 'Hi' }],
       },
     }
@@ -143,11 +169,15 @@ describe('toHTML — shortcode slot', () => {
     const doc: SigilDoc = {
       version: 1,
       root: {
-        id: 'r', type: 'shortcode', shortcode: { name: 'x', props: {} },
+        id: 'r',
+        type: 'shortcode',
+        shortcode: { name: 'x', props: {} },
         children: [{ id: 'c', type: 'text', content: 'Hi' }],
       },
     }
-    expect(toHTML(doc, { shortcodeResolver: mkResolver(() => '<div>noslot</div>') })).toBe('<div>noslot</div>')
+    expect(toHTML(doc, { shortcodeResolver: mkResolver(() => '<div>noslot</div>') })).toBe(
+      '<div>noslot</div>',
+    )
   })
 })
 
@@ -173,5 +203,97 @@ describe('toHTML — hydrated', () => {
       root: { id: 's', type: 'shortcode', shortcode: { name: 'card', props: { a: 1 } } },
     }
     expect(toHTML(doc, { shortcodeResolver: resolver })).toBe('<b>hi</b>')
+  })
+})
+
+describe('toHTML — responsive styles', () => {
+  it('輸出 scoped tablet／mobile media queries，且 mobile 規則排在後面', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: {
+        id: 'r',
+        type: 'section',
+        style: { color: 'red' },
+        responsiveStyles: {
+          tablet: { color: 'blue', padding: '8px' },
+          mobile: { color: 'green' },
+        },
+      },
+    }
+    expect(toHTML(doc)).toBe(
+      '<style data-sigil-responsive>' +
+        '@media (max-width:768px){[data-sigil-r="r0"]{color:blue;padding:8px}}' +
+        '@media (max-width:480px){[data-sigil-r="r0"]{color:green}}' +
+        '</style><section data-sigil-r="r0" style="color:red"></section>',
+    )
+  })
+
+  it('只標記有 responsive 規則的節點，key 依樹順序穩定', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: {
+        id: 'r',
+        type: 'section',
+        children: [
+          { id: 'plain', type: 'text', content: 'plain' },
+          {
+            id: 'responsive',
+            type: 'text',
+            content: 'small',
+            responsiveStyles: { mobile: { 'font-size': '12px' } },
+          },
+        ],
+      },
+    }
+    const html = toHTML(doc)
+    expect(html).toContain('@media (max-width:480px){[data-sigil-r="r0"]{font-size:12px}}')
+    expect(html).toContain('<span>plain</span>')
+    expect(html).toContain('<span data-sigil-r="r0">small</span>')
+  })
+
+  it('static shortcode 有樣式時建立 host，hydrated host 保留 presentation', () => {
+    const resolver: ShortcodeResolver = {
+      resolve: () => null,
+      renderStatic: () => '<b>card</b>',
+    }
+    const doc: SigilDoc = {
+      version: 1,
+      root: {
+        id: 's',
+        type: 'shortcode',
+        className: 'card-host',
+        style: { color: 'red' },
+        responsiveStyles: { tablet: { color: 'blue' } },
+        shortcode: { name: 'card', props: {} },
+      },
+    }
+    const staticHtml = toHTML(doc, { shortcodeResolver: resolver })
+    expect(staticHtml).toContain(
+      '<div data-sigil-r="r0" class="card-host" style="color:red"><b>card</b></div>',
+    )
+    const hydratedHtml = toHTML(doc, { shortcodeResolver: resolver, mode: 'hydrated' })
+    expect(hydratedHtml).toContain(
+      'data-props="{}" data-sigil-r="r0" class="card-host" style="color:red"',
+    )
+  })
+
+  it('responsive CSS value 不可跳出 style/rule', () => {
+    const doc: SigilDoc = {
+      version: 1,
+      root: {
+        id: 'r',
+        type: 'section',
+        responsiveStyles: {
+          tablet: {
+            color: 'red}</style><script>alert(1)</script>',
+            'bad;property': 'ignored',
+          },
+        },
+      },
+    }
+    const html = toHTML(doc)
+    expect(html).not.toContain('</style><script>')
+    expect(html).not.toContain('bad;property')
+    expect(html).toContain('color:red\\7d \\3c /style\\3e ')
   })
 })

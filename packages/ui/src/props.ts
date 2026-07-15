@@ -1,23 +1,37 @@
-import type { Engine, PropSchema } from '@cluion/sigil-core'
+import type { Engine, PropSchema, ResponsiveDevice } from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
+import {
+  clearDeviceStyles,
+  decorateStyleControl,
+  deviceLabel,
+  getDeviceStyleValue,
+  inheritanceLabel,
+  updateDeviceStyle,
+} from './style-device.js'
 
 /**
  * 建立 props 面板 — 顯示並編輯選取節點的屬性
  *
- * 僅在 selection／tree 重建（不在 patch 重建，避免 input 打字失焦）
+ * selection 或 tree 事件才重建 避免輸入失焦
  */
 export interface PropsPanelOptions {
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
+  device?: ResponsiveDevice
+}
+
+export interface PropsPanelHandle {
+  setDevice(device: ResponsiveDevice): void
+  destroy(): void
 }
 
 export function createPropsPanel(
   engine: Engine,
   container: HTMLElement,
   opts?: PropsPanelOptions,
-): {
-  destroy: () => void
-} {
+): PropsPanelHandle {
+  let device: ResponsiveDevice = opts?.device ?? 'desktop'
+
   function render(): void {
     const id = engine.getSelection()
     container.replaceChildren()
@@ -37,18 +51,27 @@ export function createPropsPanel(
     appendContentField(container, engine, node)
     appendClassField(container, engine, node)
     appendShortcodePropsField(container, engine, node, opts?.getShortcodeSchema)
-    appendStyleField(container, engine, node)
+    appendStyleField(container, engine, node, device, render)
   }
 
   const unsub = engine.subscribe((ev) => {
     if (ev.type === 'selection' || ev.type === 'tree') render()
   })
   render()
-  return { destroy() { unsub() } }
+  return {
+    setDevice(next) {
+      if (device === next) return
+      device = next
+      render()
+    },
+    destroy() {
+      unsub()
+    },
+  }
 }
 
 /**
- * content 編輯欄位（text／button 等有內容的節點）
+ * content 編輯欄位
  */
 function appendContentField(container: HTMLElement, engine: Engine, node: ComponentNode): void {
   if (node.type !== 'text' && node.type !== 'button') return
@@ -102,7 +125,7 @@ function appendShortcodePropsField(
     return
   }
 
-  // fallback:通用 key/value(無 schema)
+  // 無 schema 時使用 key value 欄位
   for (const [k, v] of Object.entries(node.shortcode.props)) {
     const label = document.createElement('label')
     label.textContent = `${k}：`
@@ -125,18 +148,24 @@ function appendShortcodePropsField(
 }
 
 /**
- * 樣式編輯欄位(核心 CSS):margin/padding/font-size(文字)、color(color);font-weight/text-align(select)
- *
- * 值取 node.style[prop];改 → engine.update(id, { style: { [prop]: value } })(updateNode style 合併)
+ * 裝置感知樣式欄位
  */
 function appendStyleField(
   container: HTMLElement,
   engine: Engine,
   node: ComponentNode,
+  device: ResponsiveDevice,
+  rerender: () => void,
 ): void {
   const heading = document.createElement('h4')
-  heading.textContent = '樣式'
+  heading.textContent = `樣式 · ${deviceLabel(device)}`
   container.appendChild(heading)
+
+  const context = document.createElement('p')
+  context.className = 'sigil-responsive-style-context'
+  context.dataset.styleDevice = device
+  context.textContent = inheritanceLabel(device)
+  container.appendChild(context)
 
   const textFields = ['margin', 'padding', 'font-size']
   for (const prop of textFields) {
@@ -144,11 +173,12 @@ function appendStyleField(
     label.textContent = `${prop}：`
     const input = document.createElement('input')
     input.type = 'text'
-    input.value = node.style?.[prop] ?? ''
+    const value = getDeviceStyleValue(node, device, prop)
+    input.value = value.override ?? ''
     input.addEventListener('input', () => {
-      engine.update(node.id, { style: { [prop]: input.value } })
+      updateDeviceStyle(engine, node.id, device, prop, input.value)
     })
-    label.appendChild(input)
+    label.appendChild(decorateStyleControl(input, engine, node, device, prop, value))
     container.appendChild(label)
     container.appendChild(document.createElement('br'))
   }
@@ -157,11 +187,15 @@ function appendStyleField(
   colorLabel.textContent = 'color：'
   const colorInput = document.createElement('input')
   colorInput.type = 'color'
-  colorInput.value = node.style?.color ?? '#000000'
+  const colorValue = getDeviceStyleValue(node, device, 'color')
+  const color = colorValue.override ?? colorValue.effective
+  colorInput.value = color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color) ? color : '#000000'
   colorInput.addEventListener('input', () => {
-    engine.update(node.id, { style: { color: colorInput.value } })
+    updateDeviceStyle(engine, node.id, device, 'color', colorInput.value)
   })
-  colorLabel.appendChild(colorInput)
+  colorLabel.appendChild(
+    decorateStyleControl(colorInput, engine, node, device, 'color', colorValue),
+  )
   container.appendChild(colorLabel)
   container.appendChild(document.createElement('br'))
 
@@ -175,7 +209,8 @@ function appendStyleField(
     const sel = document.createElement('select')
     const empty = document.createElement('option')
     empty.value = ''
-    empty.textContent = '(未設)'
+    const value = getDeviceStyleValue(node, device, prop)
+    empty.textContent = value.inherited && value.effective ? `(繼承 ${value.effective})` : '(未設)'
     sel.appendChild(empty)
     for (const opt of options) {
       const o = document.createElement('option')
@@ -183,12 +218,22 @@ function appendStyleField(
       o.textContent = opt
       sel.appendChild(o)
     }
-    sel.value = node.style?.[prop] ?? ''
+    sel.value = value.override ?? ''
     sel.addEventListener('change', () => {
-      engine.update(node.id, { style: { [prop]: sel.value } })
+      updateDeviceStyle(engine, node.id, device, prop, sel.value)
     })
-    label.appendChild(sel)
+    label.appendChild(decorateStyleControl(sel, engine, node, device, prop, value))
     container.appendChild(label)
     container.appendChild(document.createElement('br'))
   }
+
+  const reset = document.createElement('button')
+  reset.type = 'button'
+  reset.textContent =
+    device === 'desktop' ? '清除 Desktop 樣式' : `清除 ${deviceLabel(device)} 覆寫`
+  reset.addEventListener('click', () => {
+    clearDeviceStyles(engine, node.id, device)
+    rerender()
+  })
+  container.appendChild(reset)
 }

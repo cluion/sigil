@@ -34,7 +34,8 @@ describe('editor — toHTML', () => {
       doc: {
         version: 1,
         root: {
-          id: 'r', type: 'section',
+          id: 'r',
+          type: 'section',
           children: [
             { id: 't', type: 'text', content: 'Hi' },
             { id: 's', type: 'shortcode', shortcode: { name: 'badge', props: {} } },
@@ -66,8 +67,25 @@ describe('editor — toHTML', () => {
     const num = el.querySelector('input[type=number]') as HTMLInputElement
     expect(num).toBeTruthy()
     expect(num.value).toBe('1')
-    // schema 路徑獨有:label「步進」(fallback 只會顯示 key 'step')
+    // schema 顯示自訂 label
     expect(el.textContent).toContain('步進')
+  })
+
+  it('Canvas 裝置切換同步 props 樣式裝置', () => {
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', style: { padding: '16px' } },
+      },
+    })
+    editor.engine.select('r')
+    const mobile = el.querySelector('button[data-device="mobile"]') as HTMLButtonElement
+    mobile.click()
+    expect(el.querySelector('[data-style-device="mobile"]')).toBeTruthy()
+    expect(el.textContent).toContain('未覆寫時繼承 Tablet')
+    editor.destroy()
   })
 })
 
@@ -232,4 +250,3 @@ describe('editor — commands / hooks', () => {
     editor.destroy()
   })
 })
-

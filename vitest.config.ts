@@ -5,8 +5,8 @@ import { sigilVersionDefines } from './scripts/sigil-version-defines.mjs'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
 
-// dev-only:未 build 時讓測試直接吃各套件 src,繞過 package.json exports(僅指向 dist)。
-// build(tsdown)不讀此處,仍走 node_modules → dist,core 不會被打進下游套件
+// 測試直接引用套件 src
+// build 仍透過 package exports 引用 dist
 const alias: Record<string, string> = {
   '@cluion/sigil-core': path.resolve(root, 'packages/core/src/index.ts'),
   '@cluion/sigil-shortcode': path.resolve(root, 'packages/shortcode/src/index.ts'),

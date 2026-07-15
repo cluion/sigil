@@ -4,7 +4,7 @@ import { defineShortcode } from '@cluion/sigil-shortcode'
  * 提示框 — 示範 PropSchema group + dependsOn
  *
  * kind=info → 只顯示標題／內文
- * kind=cta  → 額外顯示按鈕文字（dependsOn）
+ * cta 類型顯示按鈕文字
  */
 export const calloutDef = defineShortcode({
   name: 'callout',

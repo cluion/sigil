@@ -94,7 +94,8 @@ const i18nMessages = {
     'app.download': 'Download .html',
     'app.close': 'Close',
     'app.empty_title': 'Drag a block from the left',
-    'app.empty_body': 'Drop blocks onto the canvas. Select one to edit content and styles on the right.',
+    'app.empty_body':
+      'Drop blocks onto the canvas. Select one to edit content and styles on the right.',
     'app.empty_tip': 'Ctrl/Cmd+S to save · Export downloads HTML',
     'status.none': 'Nothing selected',
   },
@@ -104,7 +105,7 @@ export interface AppOptions {
   mount: string | HTMLElement
   doc?: SigilDoc
   store?: ProjectStore
-  /** 媒體庫；有則 Inspector 圖片可「選圖」 */
+  /** 媒體庫 */
   assets?: AssetStore
   /** Record 工廠或 defineBlock 列表 */
   blocks?: BlocksInput
@@ -113,7 +114,7 @@ export interface AppOptions {
   sanitize?: SanitizeFn
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
   locale?: Locale
-  /** 額外命令（同 id 覆寫預設） */
+  /** 額外命令可覆寫同 id 預設 */
   commands?: CommandDefinition[]
   /** 生命週期 hooks */
   hooks?: EditorHooks
@@ -125,7 +126,7 @@ export interface SigilApp {
   toHTML(mode?: HtmlMode): string
   /** 是否有未存檔變更 */
   isDirty(): boolean
-  /** 執行已註冊命令（undo／save／自訂…） */
+  /** 執行已註冊命令 */
   runCommand(id: string): Promise<boolean>
   destroy(): void
 }
@@ -139,9 +140,7 @@ export type { CommandDefinition, CommandContext, EditorHooks }
 export function createApp(opts: AppOptions): SigilApp {
   ensureTokens()
   const mountEl =
-    typeof opts.mount === 'string'
-      ? document.querySelector<HTMLElement>(opts.mount)
-      : opts.mount
+    typeof opts.mount === 'string' ? document.querySelector<HTMLElement>(opts.mount) : opts.mount
   if (!mountEl) throw new Error('createApp：mount 目標不存在')
 
   const engine = createEngine({ doc: opts.doc })
@@ -195,7 +194,7 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const commandMap = new Map<string, CommandDefinition>()
   for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
-  // 殼層匯出（openExportDialog 為 function 宣告，可在此引用）
+  // 註冊殼層匯出命令
   commandMap.set(
     'export',
     defineCommand({
@@ -242,8 +241,7 @@ export function createApp(opts: AppOptions): SigilApp {
   function shortcutTitle(cmd: CommandDefinition): string | undefined {
     if (!cmd.shortcut) return undefined
     const raw = Array.isArray(cmd.shortcut) ? cmd.shortcut[0]! : cmd.shortcut
-    const isMac =
-      typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+    const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
     return raw
       .replace(/mod/gi, isMac ? '⌘' : 'Ctrl')
       .replace(/shift/gi, isMac ? '⇧' : 'Shift')
@@ -256,9 +254,13 @@ export function createApp(opts: AppOptions): SigilApp {
     forcePrimary = false,
   ): HTMLButtonElement {
     const primary = forcePrimary || cmd.toolbar === 'primary'
-    const b = btn(commandLabel(cmd), () => {
-      void commands.run(cmd.id, makeCtx())
-    }, !primary)
+    const b = btn(
+      commandLabel(cmd),
+      () => {
+        void commands.run(cmd.id, makeCtx())
+      },
+      !primary,
+    )
     if (primary) b.classList.add('sigil-btn--primary')
     b.dataset.commandId = cmd.id
     const tip = shortcutTitle(cmd)
@@ -273,7 +275,7 @@ export function createApp(opts: AppOptions): SigilApp {
   root.className = 'sigil-app'
   mountEl.appendChild(root)
 
-  // —— Topbar（命令驅動：history / main 自訂 / end）——
+  // —— Topbar 命令分組 ——
   const topbar = document.createElement('header')
   topbar.className = 'sigil-topbar'
 
@@ -305,6 +307,7 @@ export function createApp(opts: AppOptions): SigilApp {
     tablet: btn('Tablet', () => setDevice('tablet'), true),
     mobile: btn('Mobile', () => setDevice('mobile'), true),
   }
+  for (const [key, button] of Object.entries(deviceBtns)) button.dataset.device = key
   devices.append(deviceBtns.desktop, deviceBtns.tablet, deviceBtns.mobile)
 
   const sep2 = el('div', 'sigil-topbar-sep')
@@ -317,7 +320,7 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const spacer = el('div', 'sigil-topbar-spacer')
 
-  // 自訂命令（main，預設 group）
+  // main 自訂命令
   const customBar = document.createElement('div')
   customBar.className = 'sigil-topbar-group'
   customBar.dataset.toolbarGroup = 'main'
@@ -429,12 +432,13 @@ export function createApp(opts: AppOptions): SigilApp {
     i18n,
     chrome: false,
   })
-  // empty guide 在 canvas iframe 之上；不攔截 pointer，讓 DnD／點選仍可作用
+  // empty guide 不攔截 pointer
   emptyGuide.style.pointerEvents = 'none'
   const inspector = createInspector(engine, inspectorBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
     assets: opts.assets,
   })
+  const unsubDevice = canvas.subscribeDevice((next) => inspector.setDevice(next))
   const layers = createLayersPanel(engine, layersBox)
   const blocksPanel = opts.blocks
     ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)
@@ -468,7 +472,7 @@ export function createApp(opts: AppOptions): SigilApp {
       const cmd = commands.get(id)
       if (!cmd) continue
       let disabled = cmd.when ? !cmd.when(ctx) : false
-      // 存檔：無變更時禁用（產品 UX）
+      // 無變更時禁用存檔
       if (id === 'save') disabled = disabled || !dirty
       b.disabled = disabled
     }
@@ -486,9 +490,7 @@ export function createApp(opts: AppOptions): SigilApp {
     if (!id) statusSel.textContent = i18n.t('status.none')
     else {
       const n = findNode(engine.getTree(), id)
-      statusSel.textContent = n
-        ? `${n.name?.trim() || n.type} · ${n.id}`
-        : id
+      statusSel.textContent = n ? `${n.name?.trim() || n.type} · ${n.id}` : id
     }
     refreshEmptyGuide()
   }
@@ -527,15 +529,17 @@ export function createApp(opts: AppOptions): SigilApp {
     actionsRow.className = 'sigil-dialog-actions'
     const copyBtn = btn(i18n.t('app.copy'), () => {
       void copyText(html).then((ok) => {
-        statusMsg.textContent = ok
-          ? i18n.t('app.copied')
-          : `HTML ${html.length} chars`
+        statusMsg.textContent = ok ? i18n.t('app.copied') : `HTML ${html.length} chars`
         if (ok) copyBtn.textContent = i18n.t('app.copied')
       })
     })
     copyBtn.classList.add('sigil-btn--primary')
     const dlBtn = btn(i18n.t('app.download'), () => downloadText(html, 'sigil-page.html'))
-    actionsRow.append(copyBtn, dlBtn, btn(i18n.t('app.close'), () => close()))
+    actionsRow.append(
+      copyBtn,
+      dlBtn,
+      btn(i18n.t('app.close'), () => close()),
+    )
 
     panel.append(head, hint, ta, actionsRow)
     backdrop.appendChild(panel)
@@ -567,7 +571,12 @@ export function createApp(opts: AppOptions): SigilApp {
   const unsub = engine.subscribe((ev) => {
     if (ev.type === 'tree' || ev.type === 'patch') dirty = true
     if (ev.type === 'selection') runOnSelect(hooks, ev.id, engine)
-    if (ev.type === 'history' || ev.type === 'selection' || ev.type === 'tree' || ev.type === 'patch') {
+    if (
+      ev.type === 'history' ||
+      ev.type === 'selection' ||
+      ev.type === 'tree' ||
+      ev.type === 'patch'
+    ) {
       refreshChrome()
     }
   })
@@ -613,6 +622,7 @@ export function createApp(opts: AppOptions): SigilApp {
       window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('keydown', onKeyDown)
       unsub()
+      unsubDevice()
       blocksPanel?.destroy()
       layers.destroy()
       inspector.destroy()

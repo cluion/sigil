@@ -4,7 +4,7 @@ import { defineShortcode } from '@cluion/sigil-shortcode'
 /**
  * 計數器 shortcode — 示範 signal 細粒度
  *
- * 點按鈕／打字只更新數字（元素不重建、input 不失焦）；
+ * 更新數字時保留元素
  * step 為來自 engine 樹的 prop，從 props 面板改動走 patch → setProps → effect 重跑
  */
 export const counterDef = defineShortcode({
@@ -30,7 +30,7 @@ export const counterDef = defineShortcode({
     ctx.effect(() => {
       qty.value = String(count.get())
     })
-    // count 或 step 變 → 更新顯示（step 來自 props，改動只重跑此 effect）
+    // count 或 step 變更時更新顯示
     ctx.effect(() => {
       disp.textContent = String(count.get() * Number(ctx.props.step))
     })

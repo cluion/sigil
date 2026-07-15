@@ -22,10 +22,10 @@ export interface ShortcodeDefinition<P = Record<string, unknown>> {
 }
 
 /**
- * render 執行環境(static 輸出)
+ * static render 執行環境
  *
  * escape 為 escapeHtml,供作者 escape 動態 props 後再進 HTML 字串;
- * 作者對靜態結構自行負責(同 template 信任模型)
+ * 靜態結構沿用 template 信任模型
  */
 export interface RenderContext {
   escape: (input: string) => string

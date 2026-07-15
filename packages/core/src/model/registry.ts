@@ -19,7 +19,7 @@ const NATIVE: Record<string, TypeEntry> = {
 /**
  * 建立 type registry
  *
- * 內建原生 type 的 tagName 推導；未知 type fallback 到節點 tagName
+ * 推導內建 type 的 tagName
  */
 export function createTypeRegistry(entries?: Record<string, TypeEntry>): TypeRegistry {
   const map: Record<string, TypeEntry> = { ...NATIVE, ...entries }

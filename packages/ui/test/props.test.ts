@@ -4,7 +4,10 @@ import { createPropsPanel } from '../src/props.js'
 
 function panel(schema: PropSchema[] | undefined, props: Record<string, unknown> = {}) {
   const engine = createEngine({
-    doc: { version: 1 as const, root: { id: 'n', type: 'shortcode', shortcode: { name: 'sc', props } } },
+    doc: {
+      version: 1 as const,
+      root: { id: 'n', type: 'shortcode', shortcode: { name: 'sc', props } },
+    },
   }) as Engine
   engine.select('n')
   const box = document.createElement('div')
@@ -63,5 +66,43 @@ describe('createPropsPanel — shortcode props', () => {
     align.value = 'center'
     align.dispatchEvent(new Event('change'))
     expect(engine.getTree().style?.['text-align']).toBe('center')
+  })
+
+  it('tablet 編輯只寫 responsiveStyles，並可回到 Desktop 繼承', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1 as const,
+        root: { id: 'n', type: 'section', style: { margin: '16px' } },
+      },
+    }) as Engine
+    engine.select('n')
+    const box = document.createElement('div')
+    const panel = createPropsPanel(engine, box)
+    panel.setDevice('tablet')
+
+    const reset = box.querySelector('button[data-style-reset="margin"]') as HTMLButtonElement
+    const input = reset.parentElement?.querySelector('input') as HTMLInputElement
+    expect(input.value).toBe('')
+    expect(input.placeholder).toBe('繼承：16px')
+    expect(input.dataset.styleInherited).toBe('true')
+
+    input.value = '8px'
+    input.dispatchEvent(new Event('input'))
+    expect(engine.getTree().style?.margin).toBe('16px')
+    expect(engine.getTree().responsiveStyles?.tablet?.margin).toBe('8px')
+
+    input.value = ''
+    input.dispatchEvent(new Event('input'))
+    expect(engine.getTree().responsiveStyles?.tablet).toBeUndefined()
+    expect(input.dataset.styleInherited).toBe('true')
+    expect(reset.disabled).toBe(true)
+
+    input.value = '8px'
+    input.dispatchEvent(new Event('input'))
+    reset.click()
+    expect(engine.getTree().responsiveStyles?.tablet).toBeUndefined()
+    expect(input.placeholder).toBe('繼承：16px')
+    expect(input.dataset.styleInherited).toBe('true')
+    panel.destroy()
   })
 })

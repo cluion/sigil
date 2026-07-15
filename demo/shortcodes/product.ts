@@ -3,9 +3,7 @@ import { defineShortcode } from '@cluion/sigil-shortcode'
 /**
  * 商品卡 — Phase 4.5 showcase
  *
- * 能力：PropSchema(productId)、color→size→price 雙層連動 + fetchJSON race、
- * store 加購物、template &lt;slot&gt; 巢狀評論。
- * color/size 為實例內 UI（非面板 dependsOn）；跨 shortcode 狀態以 store 為主。
+ * 展示商品選項 fetchJSON store 與 slot
  */
 export const productDef = defineShortcode({
   name: 'product',

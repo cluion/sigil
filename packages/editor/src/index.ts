@@ -46,7 +46,7 @@ const i18nMessages = {
 export interface EditorOptions {
   mount: string | HTMLElement
   doc?: SigilDoc
-  /** 頁面存取 adapter；預設 in-memory JsonProjectStore */
+  /** 頁面存取 adapter */
   store?: ProjectStore
   blocks?: BlocksInput
   shortcodes?: ShortcodeDefinition[]
@@ -54,7 +54,7 @@ export interface EditorOptions {
   sanitize?: SanitizeFn
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
   locale?: Locale
-  /** 額外命令（接在預設編輯命令之後；同 id 會覆寫預設） */
+  /** 額外命令可覆寫同 id 預設 */
   commands?: CommandDefinition[]
   /** 生命週期 hooks */
   hooks?: EditorHooks
@@ -78,9 +78,7 @@ export type { CommandDefinition, CommandContext, EditorHooks }
  */
 export function createEditor(opts: EditorOptions): SigilEditor {
   const mountEl =
-    typeof opts.mount === 'string'
-      ? document.querySelector<HTMLElement>(opts.mount)
-      : opts.mount
+    typeof opts.mount === 'string' ? document.querySelector<HTMLElement>(opts.mount) : opts.mount
   if (!mountEl) throw new Error('createEditor：mount 目標不存在')
 
   const engine = createEngine({ doc: opts.doc })
@@ -171,6 +169,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   const props = createPropsPanel(engine, propsBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
   })
+  const unsubDevice = canvas.subscribeDevice((device) => props.setDevice(device))
   const layers = createLayersPanel(engine, layersBox)
   const blocksPanel = opts.blocks
     ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)
@@ -195,7 +194,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   return {
     engine,
     toJSON() {
-      // 同步匯出＋寫入 store；完整 hooks 請用 runCommand('save')
+      // 同步匯出並寫入 store
       const doc = engine.toJSON()
       void store.save(doc)
       return doc
@@ -210,6 +209,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       runBeforeDestroy(hooks, engine)
       document.removeEventListener('keydown', onKeyDown)
       unsubSel()
+      unsubDevice()
       blocksPanel?.destroy()
       layers.destroy()
       props.destroy()

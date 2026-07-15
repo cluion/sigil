@@ -2,7 +2,7 @@ import type { SigilDoc } from './types.js'
 
 export const SCHEMA_VERSION = 1
 
-// 每步只升一版；未來新增版號時填入
+// 每次 migration 升一版
 const migrations: Record<number, (doc: Record<string, unknown>) => Record<string, unknown>> = {}
 
 /**

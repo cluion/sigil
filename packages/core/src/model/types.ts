@@ -8,16 +8,19 @@ export interface ComponentNode {
   type: string
   tagName?: string
   attributes?: Record<string, string>
+  /** Desktop 基礎樣式 舊文件相容 */
   style?: Record<string, string>
+  /** Tablet 與 mobile 差異覆寫 */
+  responsiveStyles?: ResponsiveStyles
   className?: string
   content?: string
   children?: ComponentNode[]
   shortcode?: ShortcodeRef
-  /** 圖層顯示名稱（重命名） */
+  /** 圖層名稱 */
   name?: string
-  /** 鎖定：不可刪除／移動／改內容（可解鎖） */
+  /** 鎖定節點操作 */
   locked?: boolean
-  /** 隱藏：編輯畫布半透；匯出 HTML 時 display:none */
+  /** 隱藏畫布與輸出 */
   hidden?: boolean
 }
 
@@ -30,7 +33,7 @@ export interface ShortcodeRef {
 }
 
 /**
- * StyleSheet — doc 級樣式表（class、偽類、媒體查詢），機位先留
+ * Doc 級樣式表
  */
 export interface StyleSheet {
   id: string
@@ -49,9 +52,12 @@ export interface SigilDoc {
 
 export interface SigilDocMeta {
   title?: string
-  device?: 'desktop' | 'tablet' | 'mobile'
+  device?: ResponsiveDevice
   updatedAt?: string
 }
 
 export type Attrs = Record<string, string>
 export type Style = Record<string, string>
+export type ResponsiveDevice = 'desktop' | 'tablet' | 'mobile'
+export type ResponsiveBreakpoint = Exclude<ResponsiveDevice, 'desktop'>
+export type ResponsiveStyles = Partial<Record<ResponsiveBreakpoint, Style>>

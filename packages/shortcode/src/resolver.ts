@@ -16,9 +16,9 @@ export interface CreateResolverOptions {
 /**
  * 建立 shortcode resolver — 實作 core 的 ShortcodeResolver 契約
  *
- * template 首次以 policy.setTemplate 解析進快取（受控 sink），之後 cloneNode；
- * 每個 prop 對應一個 signal，ctx.props 為 getter（effect 內讀取自動建立依賴）；
- * bind 只在 resolve 跑一次；setProps 只 signal.set 觸發細粒度 effect 重跑，host 元素不重建
+ * template 經 policy 解析後快取
+ * prop 以 signal 驅動 effect
+ * resolve 執行 bind setProps 更新 signal
  */
 export function createShortcodeResolver(opts: CreateResolverOptions): ShortcodeResolver {
   const templateCache = new Map<string, HTMLTemplateElement>()

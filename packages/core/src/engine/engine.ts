@@ -1,19 +1,11 @@
 import type { ComponentNode } from '../model/types.js'
-import {
-  insertNode,
-  removeNode,
-  updateNode,
-  moveNode,
-  findNode,
-  createId,
-} from '../model/index.js'
+import { insertNode, removeNode, updateNode, moveNode, findNode, createId } from '../model/index.js'
 import type { Engine, EngineEvent, EngineOptions, Patch } from './types.js'
 
 /**
  * 建立 Engine
  *
- * 持有不可變樹 + undo／redo stack + 選取狀態；command 產新樹並發 patch 事件，
- * undo／redo 發 tree 事件（全量）。batch 把多 command 包成一個 undo 單位
+ * 管理不可變樹 歷史與選取
  */
 export function createEngine(opts: EngineOptions = {}): Engine {
   const idFactory = opts.idFactory ?? createId
@@ -36,7 +28,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     emit({ type: 'history', canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 })
   }
 
-  // 記錄 snapshot；batch 中只記第一次
+  // batch 只記第一個 snapshot
   function pushHistory(prev: ComponentNode): void {
     if (batching) {
       if (batchSnapshot === null) batchSnapshot = prev
@@ -88,14 +80,14 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     update(id, patch) {
       const node = findNode(root, id)
       if (node?.locked) {
-        // 鎖定時只允許改 locked／hidden／name（解鎖或重命名／顯隱）
+        // 鎖定時只允許圖層狀態
         const keys = Object.keys(patch) as (keyof ComponentNode)[]
         const ok = keys.every((k) => k === 'locked' || k === 'hidden' || k === 'name')
         if (!ok) return
       }
       const prev = root
       root = updateNode(root, id, patch)
-      // 合併連續 content/className 更新(同節點同欄位 + 時間窗)→ 不 push
+      // 合併同欄位的連續輸入
       const key =
         patch.content !== undefined
           ? `${id}:content`
@@ -104,7 +96,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
             : null
       const now = Date.now()
       if (key !== null && key === lastMergeKey && now - lastMergeTime < MERGE_MS) {
-        // 合併:沿用上次 undo step
+        // 沿用上一個 undo step
       } else {
         pushHistory(prev)
       }
@@ -113,6 +105,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       const p: Extract<Patch, { type: 'update' }> = { type: 'update', id }
       if (patch.attributes) p.attrs = patch.attributes
       if (patch.style) p.style = patch.style
+      if (patch.responsiveStyles !== undefined) p.responsiveStyles = patch.responsiveStyles
       if (patch.content !== undefined) p.content = patch.content
       if (patch.className !== undefined) p.className = patch.className
       if (patch.shortcode !== undefined) p.shortcode = patch.shortcode

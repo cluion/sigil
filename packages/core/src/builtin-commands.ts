@@ -1,5 +1,5 @@
 import { findNode, findParent, cloneWithNewIds } from './model/tree.js'
-// findNode used by delete.when (locked)
+// findNode 用於鎖定檢查
 import { defineCommand, type CommandDefinition } from './commands.js'
 
 /**

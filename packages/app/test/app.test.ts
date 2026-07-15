@@ -55,6 +55,41 @@ describe('createApp', () => {
     app.destroy()
   })
 
+  it('Topbar 裝置切換同步 Inspector，樣式寫入該 breakpoint', () => {
+    const mount = document.createElement('div')
+    const app = createApp({
+      mount,
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 't', type: 'text', content: 'hi', style: { margin: '16px' } }],
+        },
+      },
+    })
+    app.engine.select('t')
+    const styleTab = [...mount.querySelectorAll<HTMLButtonElement>('.sigil-tab')].find(
+      (button) => button.textContent === '樣式',
+    )!
+    styleTab.click()
+    const tablet = mount.querySelector(
+      '.sigil-topbar button[data-device="tablet"]',
+    ) as HTMLButtonElement
+    tablet.click()
+    expect(
+      mount.querySelector('.sigil-responsive-style-context')?.getAttribute('data-style-device'),
+    ).toBe('tablet')
+
+    const reset = mount.querySelector('button[data-style-reset="margin"]') as HTMLButtonElement
+    const input = reset.parentElement?.querySelector('input') as HTMLInputElement
+    input.value = '8px'
+    input.dispatchEvent(new Event('input'))
+    expect(app.engine.getTree().children?.[0]?.style?.margin).toBe('16px')
+    expect(app.engine.getTree().children?.[0]?.responsiveStyles?.tablet?.margin).toBe('8px')
+    app.destroy()
+  })
+
   it('空畫布顯示引導，插入後隱藏', () => {
     const mount = document.createElement('div')
     const app = createApp({ mount, doc: emptyDoc() })
@@ -89,9 +124,7 @@ describe('createApp', () => {
       store,
     })
     expect(app.isDirty()).toBe(false)
-    const saveBtn = mount.querySelector(
-      'button[data-command-id="save"]',
-    ) as HTMLButtonElement
+    const saveBtn = mount.querySelector('button[data-command-id="save"]') as HTMLButtonElement
     expect(saveBtn).toBeTruthy()
     expect(saveBtn.disabled).toBe(true)
 
@@ -116,9 +149,7 @@ describe('createApp', () => {
         root: { id: 'r', type: 'section', children: [{ id: 't', type: 'text', content: 'hi' }] },
       },
     })
-    const exportBtn = mount.querySelector(
-      'button[data-command-id="export"]',
-    ) as HTMLButtonElement
+    const exportBtn = mount.querySelector('button[data-command-id="export"]') as HTMLButtonElement
     exportBtn.click()
     const dialog = document.querySelector('.sigil-dialog-backdrop')
     expect(dialog).toBeTruthy()
@@ -209,5 +240,3 @@ describe('createApp', () => {
     app.destroy()
   })
 })
-
-

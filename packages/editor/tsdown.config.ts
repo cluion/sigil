@@ -5,6 +5,6 @@ export default defineConfig({
   format: 'esm',
   dts: true,
   clean: true,
-  // 產出 .js／.d.ts（配合 type: module，非 .mjs／.d.mts）
+  // 產出 ESM 與型別
   outExtensions: () => ({ js: '.js', dts: '.d.ts' }),
 })

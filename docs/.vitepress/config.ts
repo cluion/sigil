@@ -58,6 +58,7 @@ export default defineConfig({
           text: '指南',
           items: [
             { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: '響應式樣式', link: '/guide/responsive-styles' },
             { text: '擴充（Commands／Hooks）', link: '/guide/extensibility' },
             { text: '範例', link: '/guide/examples' },
             { text: '套件總覽', link: '/guide/packages' },

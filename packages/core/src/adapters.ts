@@ -9,7 +9,7 @@ export interface ProjectStore {
 }
 
 /**
- * 媒體資產（圖庫項目）
+ * 媒體資產
  */
 export interface AssetItem {
   id: string
@@ -22,7 +22,7 @@ export interface AssetItem {
 /**
  * AssetStore — 媒體列表／上傳
  *
- * UI 用 list 展示選圖；upload 可選（本地 file 或宿主上傳）。
+ * UI 以 list 選圖 upload 由宿主選配
  */
 export interface AssetStore {
   list(): AssetItem[] | Promise<AssetItem[]>

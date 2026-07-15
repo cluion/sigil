@@ -3,6 +3,15 @@ export { createId } from './id.js'
 export type { IdFactory } from './id.js'
 export { createTypeRegistry } from './registry.js'
 export type { TypeRegistry, TypeEntry } from './registry.js'
-export { findNode, findParent, insertNode, removeNode, updateNode, moveNode, cloneWithNewIds } from './tree.js'
+export {
+  findNode,
+  findParent,
+  insertNode,
+  removeNode,
+  updateNode,
+  moveNode,
+  cloneWithNewIds,
+} from './tree.js'
 export { migrate, SCHEMA_VERSION } from './migrations.js'
 export * from './schema.js'
+export * from './responsive-style.js'

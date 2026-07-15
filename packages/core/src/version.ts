@@ -1,5 +1,5 @@
 /**
- * Build／test／vite define 注入；未注入時用 typeof 後備（避免 dev ReferenceError）
+ * Build 等環境注入 未注入時以 typeof 避免 dev ReferenceError
  * 見 tsdown.config、vitest.config、scripts/sigil-version-defines.mjs
  */
 declare const __SIGIL_CORE_VERSION__: string | undefined

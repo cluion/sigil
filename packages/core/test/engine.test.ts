@@ -58,6 +58,21 @@ describe('undo / redo', () => {
     e.insert(root.id, { id: 'b', type: 'text', content: 'B' })
     expect(e.canRedo()).toBe(false)
   })
+
+  it('responsive style update 可 undo／redo 並保留 JSON', () => {
+    const e = createEngine({
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', style: { padding: '16px' } },
+      },
+    })
+    e.update('r', { responsiveStyles: { tablet: { padding: '8px' } } })
+    expect(e.toJSON().root.responsiveStyles?.tablet?.padding).toBe('8px')
+    e.undo()
+    expect(e.toJSON().root.responsiveStyles).toBeUndefined()
+    e.redo()
+    expect(e.toJSON().root.responsiveStyles?.tablet?.padding).toBe('8px')
+  })
 })
 
 describe('batch — 多 command 一個 undo', () => {
@@ -103,7 +118,10 @@ describe('subscribe / select', () => {
 describe('engine — undo 合併', () => {
   it('連續 content update 合併一 undo step', () => {
     const e = createEngine({
-      doc: { version: 1 as const, root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: '' }] } },
+      doc: {
+        version: 1 as const,
+        root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: '' }] },
+      },
     })
     e.update('c', { content: 'a' })
     e.update('c', { content: 'ab' })
@@ -114,7 +132,17 @@ describe('engine — undo 合併', () => {
 
   it('不同節點不合併', () => {
     const e = createEngine({
-      doc: { version: 1 as const, root: { id: 'r', type: 'section', children: [{ id: 'a', type: 'text', content: '' }, { id: 'b', type: 'text', content: '' }] } },
+      doc: {
+        version: 1 as const,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            { id: 'a', type: 'text', content: '' },
+            { id: 'b', type: 'text', content: '' },
+          ],
+        },
+      },
     })
     e.update('a', { content: 'x' })
     e.update('b', { content: 'y' })
@@ -125,7 +153,10 @@ describe('engine — undo 合併', () => {
 
   it('insert 中斷合併', () => {
     const e = createEngine({
-      doc: { version: 1 as const, root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: '' }] } },
+      doc: {
+        version: 1 as const,
+        root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: '' }] },
+      },
     })
     e.update('c', { content: 'a' })
     e.insert('r', { id: 'n', type: 'text', content: 'N' })

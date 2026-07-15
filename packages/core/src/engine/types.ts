@@ -1,4 +1,11 @@
-import type { ComponentNode, SigilDoc, Attrs, Style, ShortcodeRef } from '../model/types.js'
+import type {
+  ComponentNode,
+  SigilDoc,
+  Attrs,
+  Style,
+  ShortcodeRef,
+  ResponsiveStyles,
+} from '../model/types.js'
 import type { IdFactory } from '../model/id.js'
 
 /**
@@ -12,6 +19,7 @@ export type Patch =
       id: string
       attrs?: Attrs
       style?: Style
+      responsiveStyles?: ResponsiveStyles
       content?: string
       className?: string
       shortcode?: ShortcodeRef
@@ -25,7 +33,7 @@ export type Patch =
 /**
  * EngineEvent — subscribe 收到的事件
  *
- * patch 為增量（command），tree 為全量（undo／redo／load）
+ * patch 增量更新 tree 全量更新
  */
 export type EngineEvent =
   | { type: 'tree'; tree: ComponentNode }

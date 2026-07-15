@@ -64,7 +64,7 @@ describe('resolver', () => {
     inst.setProps({ step: 2 })
     const disp = host.querySelector('[data-ref="disp"]') as HTMLElement
     expect(disp.textContent).toBe('6') // 3 * 2
-    // input 元素 reference 不變（未重建）
+    // input 元素不重建
     expect(host.querySelector('[data-ref="qty"]')).toBe(qty)
   })
 

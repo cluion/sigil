@@ -36,7 +36,7 @@ function matches(def: BlockDef, q: string): boolean {
 }
 
 /**
- * 建立區塊面板 — 支援 Record 工廠或 BlockDef 列表（分類／圖示／搜尋）
+ * 建立支援分類與搜尋的區塊面板
  */
 export function createBlocksPanel(
   engine: Engine,

@@ -43,6 +43,12 @@ export function ensureTokens(): void {
 .sigil-input:focus{outline:2px solid var(--sigil-color-focus);outline-offset:1px}
 .sigil-field{display:flex;flex-direction:column;gap:4px;margin-bottom:var(--sigil-space-3)}
 .sigil-field-label{font-size:var(--sigil-font-size-sm);color:var(--sigil-color-muted)}
+.sigil-responsive-style-context{display:flex;flex-direction:column;gap:2px;margin:0 0 var(--sigil-space-3);padding:8px 10px;border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);background:var(--sigil-color-surface-2);color:var(--sigil-color-muted);font-size:var(--sigil-font-size-sm)}
+.sigil-responsive-style-context strong{color:var(--sigil-color-text)}
+.sigil-style-control-row{display:flex;align-items:center;gap:6px}
+.sigil-style-control-row>.sigil-input,.sigil-style-control-row>input,.sigil-style-control-row>select{flex:1;min-width:0}
+.sigil-style-source{color:var(--sigil-color-muted);font-size:10px;white-space:nowrap}
+.sigil-style-inherit{padding:4px 6px;font-size:10px;white-space:nowrap}
 .sigil-section-title{margin:var(--sigil-space-2) 0;font-size:var(--sigil-font-size-sm);font-weight:600}
 .sigil-muted{color:var(--sigil-color-muted);font-size:var(--sigil-font-size-sm);margin:0}
 .sigil-empty{padding:var(--sigil-space-4) var(--sigil-space-2);text-align:center}

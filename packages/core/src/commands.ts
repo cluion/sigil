@@ -7,7 +7,7 @@ import type { Engine } from './engine/types.js'
 export interface CommandContext {
   engine: Engine
   getDoc: () => SigilDoc
-  /** 寫入 ProjectStore（若殼層有提供） */
+  /** 寫入 ProjectStore */
   save?: () => void | Promise<void>
   clipboard: {
     get: () => ComponentNode | null
@@ -18,7 +18,7 @@ export interface CommandContext {
 /**
  * 命令定義 — 快捷鍵與可執行動作
  *
- * shortcut 例：`mod+s`、`mod+shift+z`、`Delete`（`mod` = Ctrl 或 Cmd）
+ * shortcut 支援 mod shift 與按鍵
  */
 export interface CommandDefinition {
   id: string
@@ -27,17 +27,17 @@ export interface CommandDefinition {
   /**
    * 產品殼 Topbar 是否顯示此命令
    * - true：一般按鈕
-   * - 'primary'：主色按鈕（如存檔）
+   * - 'primary'：主色按鈕
    */
   toolbar?: boolean | 'primary'
   /**
-   * Topbar 分組（createApp）
-   * - history：左側復原區（預設 undo／redo）
+   * Topbar 分組
+   * - history：左側復原區
    * - main：中右自訂區
-   * - end：最右側操作區（預設 save／export）
+   * - end：最右側操作區
    */
   toolbarGroup?: 'history' | 'main' | 'end'
-  /** 回傳 false 時不執行（預設 true） */
+  /** 回傳 false 時不執行 */
   when?: (ctx: CommandContext) => boolean
   run: (ctx: CommandContext) => void | Promise<void>
 }
@@ -90,9 +90,9 @@ export function createCommandRegistry(
 /**
  * 解析快捷鍵字串是否匹配事件
  *
- * - `mod`／`cmd`／`meta`／`ctrl`：Ctrl 或 Meta（Cmd）
+ * - `mod`／`cmd`／`meta`／`ctrl`：Ctrl 或 Meta
  * - `shift`、`alt`
- * - 最後一段為 key（大小寫不敏感；`delete` 另含 Backspace 需分開宣告）
+ * - 最後一段為 key 且大小寫不敏感
  */
 export function matchShortcut(shortcut: string, e: KeyboardEvent): boolean {
   const parts = shortcut

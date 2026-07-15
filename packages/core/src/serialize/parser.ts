@@ -23,7 +23,7 @@ export function stringify(node: ComponentNode): string {
   return parts.join('')
 }
 
-/** escape 值:\ → \\、" → \\"(stringify 用;parse 用 unescapeString 反向) */
+/** escape shortcode 字串 */
 function escapeString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
@@ -35,7 +35,7 @@ const PROP_RE = /([A-Za-z0-9_-]+)="((?:[^"\\]|\\.)*)"/g
  * 掃描字串中所有 shortcode,產 ComponentNode[];非 shortcode 文字忽略
  *
  * 格式不合法的 token 視為文字忽略,不中斷;
- * prop 值依 getSchema 的 PropType 還原(number/boolean),其餘字串
+ * 依 schema 還原 prop 型別
  */
 export function parse(text: string, opts?: ParserOptions): ComponentNode[] {
   const idFactory = opts?.idFactory ?? createId
@@ -54,7 +54,7 @@ export function parse(text: string, opts?: ParserOptions): ComponentNode[] {
   return nodes
 }
 
-/** unescape 值:\x → x(處理 \\ → \ 與 \" → ") */
+/** unescape shortcode 字串 */
 function unescapeString(s: string): string {
   return s.replace(/\\(.)/g, '$1')
 }

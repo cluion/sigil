@@ -1,23 +1,30 @@
-import type { Engine, EngineEvent, RendererOptions, I18n } from '@cluion/sigil-core'
+import type {
+  Engine,
+  EngineEvent,
+  RendererOptions,
+  I18n,
+  ResponsiveDevice,
+} from '@cluion/sigil-core'
 import { createRenderer, findNode } from '@cluion/sigil-core'
-// findNode：鎖定節點不可拖移
+// findNode 用於鎖定檢查
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
 
 export type CanvasMode = 'edit' | 'preview'
-export type CanvasDevice = 'desktop' | 'tablet' | 'mobile'
+export type CanvasDevice = ResponsiveDevice
 
 export interface CanvasHandle {
   iframe: HTMLIFrameElement
   setMode: (mode: CanvasMode) => void
   setDevice: (device: CanvasDevice) => void
+  getDevice: () => CanvasDevice
+  subscribeDevice: (listener: (device: CanvasDevice) => void) => () => void
   destroy: () => void
 }
 
 /**
  * 建立 canvas — 把 engine 樹渲染到 same-origin iframe
  *
- * iframe 設 pointer-events:none,由主文檔透明 overlay 接收所有 pointer,
- * 再用 elementFromPoint 反查命中節點（pointer 不跨 iframe,避免事件斷在邊界）
+ * overlay 接收 pointer 並回查 iframe 節點
  */
 export interface CanvasOptions {
   rendererOptions?: RendererOptions
@@ -42,13 +49,13 @@ export function createCanvas(
   iframe.title = i18n?.t('canvas.title') ?? '編輯畫布'
   container.appendChild(iframe)
 
-  // 主文檔 overlay 蓋 iframe,接收所有 pointer
+  // overlay 接收 pointer
   const overlay = document.createElement('div')
   overlay.className = 'sigil-canvas-overlay'
   overlay.style.cssText = 'position:absolute;inset:0;cursor:default'
   container.appendChild(overlay)
 
-  // 編輯/預覽切換:預覽時 iframe 可互動(shortcode 按鈕可點)、overlay 隱藏
+  // 預覽時開放 iframe 互動
   const toggle = document.createElement('button')
   toggle.type = 'button'
   toggle.className = 'sigil-btn sigil-btn--ghost sigil-canvas-mode-btn'
@@ -57,8 +64,10 @@ export function createCanvas(
   if (showChrome) container.appendChild(toggle)
 
   let mode: CanvasMode = 'edit'
+  let device: CanvasDevice = 'desktop'
   let hoverId: string | null = null
-  /** iframe 內的類型標籤（fixed，與選取元素同一座標空間） */
+  const deviceListeners = new Set<(device: CanvasDevice) => void>()
+  /** iframe 類型標籤 */
   let typeBadge: HTMLElement | null = null
 
   function setMode(next: CanvasMode): void {
@@ -80,7 +89,9 @@ export function createCanvas(
   }
   toggle.addEventListener('click', () => setMode(mode === 'edit' ? 'preview' : 'edit'))
 
-  // 裝置預覽切換(desktop/tablet/mobile 寬度)
+  const renderer = createRenderer({ ...opts?.rendererOptions, device })
+
+  // 裝置寬度與響應式樣式切換
   const deviceWidths: Record<CanvasDevice, string> = {
     desktop: '100%',
     tablet: '768px',
@@ -95,6 +106,7 @@ export function createCanvas(
     btn.type = 'button'
     btn.className = 'sigil-btn sigil-btn--ghost'
     btn.textContent = d
+    btn.dataset.device = d
     btn.addEventListener('click', () => setDevice(d))
     deviceBar.appendChild(btn)
     deviceBtns.push(btn)
@@ -102,22 +114,23 @@ export function createCanvas(
   if (showChrome) container.appendChild(deviceBar)
 
   function setDevice(next: CanvasDevice): void {
+    device = next
     iframe.style.width = deviceWidths[next]
     iframe.style.margin = next === 'desktop' ? '' : '0 auto'
+    renderer.setDevice(next)
     for (const btn of deviceBtns) {
       btn.style.fontWeight = btn.textContent === next ? 'bold' : 'normal'
       btn.setAttribute('aria-pressed', String(btn.textContent === next))
     }
+    for (const listener of deviceListeners) listener(next)
     // 寬度變化後重錨標籤
     requestAnimationFrame(() => paintTypeBadge())
   }
   setDevice('desktop')
 
-  const renderer = createRenderer(opts?.rendererOptions)
-
   function onOverlayClick(e: MouseEvent): void {
     const id = hitTest(iframe, e.clientX, e.clientY)
-    // 點空白（或只命中 body）→ 取消選取
+    // 點空白時取消選取
     if (!id) {
       engine.select(null)
       return
@@ -144,7 +157,7 @@ export function createCanvas(
     if (mode !== 'edit') return
     const id = hitTest(iframe, e.clientX, e.clientY)
     const next = id && id !== engine.getSelection() ? id : null
-    // 游標：可點元件 → pointer；空白 → default
+    // 更新命中游標
     overlay.style.cursor = id ? 'pointer' : 'default'
     if (next === hoverId) return
     hoverId = next
@@ -198,7 +211,7 @@ export function createCanvas(
     const style = doc.createElement('style')
     style.textContent = [
       'body{margin:12px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#0f172a;line-height:1.5}',
-      /* 容器結構提示（低調） */
+      /* 容器提示 */
       'section[data-sigil-id]{padding:8px;min-height:28px;outline:1px dashed #e2e8f0;outline-offset:-1px;border-radius:6px;transition:outline-color .12s,box-shadow .12s}',
       'div[data-sigil-id]{padding:8px;min-height:28px;outline:1px dashed #d1fae5;outline-offset:-1px;background:rgba(167,243,208,0.08);border-radius:6px;transition:outline-color .12s,box-shadow .12s}',
       'section[data-sigil-id]>*,div[data-sigil-id]>*{margin:4px;vertical-align:middle}',
@@ -207,9 +220,9 @@ export function createCanvas(
       'section[data-sigil-id]:empty::before,div[data-sigil-id]:empty::before{content:"拖入元件";color:#94a3b8;font-size:12px;pointer-events:none}',
       /* hover：非選取時的輕描邊 */
       '[data-sigil-id][data-sigil-hover="1"]{outline:1.5px solid #818cf8!important;outline-offset:2px;box-shadow:0 0 0 3px rgba(99,102,241,0.12)}',
-      /* selected：產品級焦點環（標籤為獨立 fixed 元素） */
+      /* 選取焦點 */
       '[data-sigil-id][data-sigil-selected="1"]{outline:2px solid #4f46e5!important;outline-offset:2px;box-shadow:0 0 0 4px rgba(79,70,229,0.18)!important;position:relative;z-index:1}',
-      /* 鎖定／隱藏（編輯畫布） */
+      /* 編輯狀態 */
       '[data-sigil-id][data-sigil-locked="1"]{outline:1px dashed #94a3b8!important;outline-offset:1px}',
       '[data-sigil-id][data-sigil-hidden="1"]{opacity:0.4!important}',
       /* 類型標籤 */
@@ -243,7 +256,7 @@ export function createCanvas(
     b.setAttribute('data-sigil-type-badge', '1')
     b.setAttribute('aria-hidden', 'true')
     b.style.cssText = BADGE_STYLE
-    // 掛在 <html> 上，避免 body.replaceChildren(reconcile) 清掉
+    // 掛在 html 避免全量重建移除
     doc.documentElement.appendChild(b)
     typeBadge = b
     return b
@@ -261,8 +274,7 @@ export function createCanvas(
     const bh = badge.offsetHeight || 16
     const bw = badge.offsetWidth || 40
 
-    // CSSOM：iframe 內元素的 getBoundingClientRect 相對 iframe 視口，
-    // 與 iframe 內 position:fixed 同一座標系。不要再加減 iframe 在頁面上的偏移。
+    // iframe 元素與 fixed 標籤共用視口座標
     const r = el.getBoundingClientRect()
     const win = iframe.contentWindow
     const vw = win?.innerWidth ?? iframe.clientWidth
@@ -307,7 +319,7 @@ export function createCanvas(
     badge.textContent = selectionLabelText(id)
     positionTypeBadge(el, badge)
 
-    // 新插入節點 layout 可能尚未穩定（shortcode／圖片），下一幀再錨一次
+    // 下一幀重錨動態節點
     requestAnimationFrame(() => {
       if (engine.getSelection() !== id) return
       const still = queryById(d, id)
@@ -382,6 +394,16 @@ export function createCanvas(
     iframe,
     setMode,
     setDevice,
+    getDevice() {
+      return device
+    },
+    subscribeDevice(listener) {
+      deviceListeners.add(listener)
+      listener(device)
+      return () => {
+        deviceListeners.delete(listener)
+      }
+    },
     destroy() {
       overlay.removeEventListener('click', onOverlayClick)
       overlay.removeEventListener('pointerdown', onOverlayPointerDown)
@@ -389,6 +411,7 @@ export function createCanvas(
       overlay.removeEventListener('pointerleave', onOverlayPointerLeave)
       overlay.removeEventListener('wheel', onOverlayWheel)
       unsub()
+      deviceListeners.clear()
       renderer.destroy()
       typeBadge?.remove()
       typeBadge = null

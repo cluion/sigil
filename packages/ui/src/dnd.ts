@@ -34,7 +34,7 @@ export function contains(node: ComponentNode, id: string): boolean {
 }
 
 /**
- * 移動時 parentId 是否落在 source 子樹內（非法）
+ * 檢查移動目標是否落在來源子樹
  */
 export function isMoveIntoSelf(root: ComponentNode, sourceId: string, parentId: string): boolean {
   const source = findNode(root, sourceId)
@@ -42,7 +42,7 @@ export function isMoveIntoSelf(root: ComponentNode, sourceId: string, parentId: 
 }
 
 /**
- * 判斷節點是否為容器（可接子元件）
+ * 判斷節點是否為容器
  */
 function isContainer(node: ComponentNode, rootId: string): boolean {
   return (
@@ -76,8 +76,8 @@ export function hitTest(
 /**
  * 計算 drop 目標
  *
- * 命中容器（section／column／root）且游標在「中間區」（15~85%）→ 進入容器（append child）
- * 命中容器的最外邊緣,或命中葉節點 → 在該層排序（sibling）
+ * 命中容器中間區時進入容器
+ * 命中邊緣或葉節點時同層排序
  *
  * 也就是「拖到容器上 → 預設進去」,只有刻意貼最邊邊才是排序該容器
  */
@@ -106,7 +106,7 @@ export function computeDrop(
   const relY = r.height > 0 ? (y - r.top) / r.height : 0.5
   const onEdge = relX < 0.05 || relX > 0.95 || relY < 0.05 || relY > 0.95
 
-  // 容器且非邊緣 → 進入（append）
+  // 容器非邊緣時進入
   if (isContainer(node, root.id) && !onEdge) {
     return {
       parentId: id,
@@ -130,7 +130,7 @@ export function computeDrop(
     }
   }
 
-  // 葉節點 或 容器邊緣 → sibling（在命中節點的父層內排序）
+  // 葉節點或容器邊緣時同層排序
   const orient: Orient = Math.abs(relX - 0.5) > Math.abs(relY - 0.5) ? 'h' : 'v'
   const before = orient === 'h' ? relX < 0.5 : relY < 0.5
   const parent = findParent(root, id)
@@ -198,7 +198,7 @@ export function autoScrollNearEdge(
 }
 
 /**
- * 建立 drop 指示 — child 模式畫容器框,sibling 模式畫插入線；invalid 紅框
+ * 建立 drop 指示
  */
 function makeIndicator(iframe: HTMLIFrameElement): {
   show: (opts: IndicatorShowOpts) => void
@@ -352,8 +352,8 @@ export function startInsertDrag(opts: {
 /**
  * 啟動移動 — 拖 canvas 內現有節點排序／換層
  *
- * pointer 由 overlay（主文檔）接收,window 監聽有效；
- * 移動超過門檻才開始(未移動則視為點擊,交由 click 處理選取)
+ * overlay 接收 pointer 並由 window 追蹤
+ * 超過移動門檻才開始拖曳
  */
 export function startMoveDrag(opts: {
   engine: Engine
@@ -422,9 +422,9 @@ function isOverIframe(iframe: HTMLIFrameElement, clientX: number, clientY: numbe
 }
 
 /**
- * patch 是否影響 shortcode 的 slot(children)→ canvas 據此走全量 reconcile
+ * 判斷 patch 是否影響 shortcode slot
  *
- * shortcode 的 children 變動(insert/remove/move)無法用細粒度 patch 維護 slot 位置,
+ * children 變動無法以 patch 維護 slot 位置
  * 故全量 reconcile 重填
  */
 export function affectsShortcodeSlot(patch: Patch, tree: ComponentNode): boolean {

@@ -78,6 +78,51 @@ describe('createCanvas — device', () => {
     setDevice('mobile')
     expect(iframe.style.width).toBe('375px')
   })
+
+  it('getDevice／subscribeDevice 回報目前裝置', () => {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    const canvas = createCanvas(engine, container)
+    const values: string[] = []
+    const unsubscribe = canvas.subscribeDevice((device) => values.push(device))
+    canvas.setDevice('tablet')
+    canvas.setDevice('mobile')
+    unsubscribe()
+    canvas.setDevice('desktop')
+    expect(canvas.getDevice()).toBe('desktop')
+    expect(values).toEqual(['desktop', 'tablet', 'mobile'])
+    canvas.destroy()
+  })
+
+  it('切換裝置會套用對應 responsive style', async () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          style: { color: 'red' },
+          responsiveStyles: {
+            tablet: { color: 'blue' },
+            mobile: { color: 'green' },
+          },
+        },
+      },
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const canvas = createCanvas(engine, container)
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const root = canvas.iframe.contentDocument?.querySelector('[data-sigil-id="r"]') as HTMLElement
+    expect(root.style.color).toBe('red')
+    canvas.setDevice('tablet')
+    expect(root.style.color).toBe('blue')
+    canvas.setDevice('mobile')
+    expect(root.style.color).toBe('green')
+    canvas.destroy()
+    container.remove()
+  })
 })
 
 describe('createCanvas — selection chrome', () => {
@@ -101,9 +146,7 @@ describe('createCanvas — selection chrome', () => {
     engine.update('t1', { name: '標題' })
     await new Promise((r) => setTimeout(r, 0))
     await new Promise((r) => requestAnimationFrame(() => r(undefined)))
-    expect((d?.querySelector('[data-sigil-type-badge]') as HTMLElement).textContent).toBe(
-      '標題',
-    )
+    expect((d?.querySelector('[data-sigil-type-badge]') as HTMLElement).textContent).toBe('標題')
     destroy()
     container.remove()
   })
@@ -178,4 +221,3 @@ describe('createCanvas — selection chrome', () => {
     container.remove()
   })
 })
-

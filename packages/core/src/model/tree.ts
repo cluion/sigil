@@ -1,5 +1,6 @@
 import type { ComponentNode } from './types.js'
 import { createId } from './id.js'
+import { mergeResponsiveStyles, mergeStyle } from './responsive-style.js'
 
 /**
  * 深找節點 by id
@@ -80,7 +81,7 @@ export function insertNode(
 }
 
 /**
- * 不可變移除，回傳新 root（root 本身不移除）
+ * 不可變移除並保留 root
  */
 export function removeNode(root: ComponentNode, id: string): ComponentNode {
   if (root.id === id) return root
@@ -88,7 +89,7 @@ export function removeNode(root: ComponentNode, id: string): ComponentNode {
 }
 
 /**
- * 不可變更新，attributes／style 合併，其餘欄位取代
+ * 不可變更新，attributes／style／responsiveStyles 合併，其餘欄位取代
  */
 export function updateNode(
   root: ComponentNode,
@@ -104,12 +105,19 @@ export function updateNode(
     if (patch.children !== undefined) next.children = patch.children
     if (patch.shortcode !== undefined) next.shortcode = patch.shortcode
     if (patch.attributes) next.attributes = { ...n.attributes, ...patch.attributes }
-    // style：一般合併；傳 {} 表示整段清除
+    // 合併 style patch
     if (patch.style !== undefined) {
-      next.style =
-        Object.keys(patch.style).length === 0 ? {} : { ...n.style, ...patch.style }
+      const merged = mergeStyle(n.style, patch.style)
+      if (Object.keys(merged).length) next.style = merged
+      else delete next.style
     }
-    // 圖層：空字串清除 name；false 清除 locked／hidden
+    // 合併 breakpoint patch
+    if (patch.responsiveStyles !== undefined) {
+      const merged = mergeResponsiveStyles(n.responsiveStyles, patch.responsiveStyles)
+      if (Object.keys(merged).length) next.responsiveStyles = merged
+      else delete next.responsiveStyles
+    }
+    // 正規化圖層欄位
     if (patch.name !== undefined) {
       const nme = patch.name.trim()
       if (nme) next.name = nme
@@ -143,7 +151,7 @@ export function moveNode(
 }
 
 /**
- * 深拷貝節點並遞迴產生新 id(copy/paste 用)
+ * 複製節點並重建 id
  */
 export function cloneWithNewIds(
   node: ComponentNode,

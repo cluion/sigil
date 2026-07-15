@@ -16,7 +16,7 @@ export interface FormOptions {
 }
 
 /**
- * 依 PropSchema 生成屬性表單；支援 group 分組與 dependsOn 顯示條件
+ * 依 schema 建立分組表單
  */
 export function createPropForm(opts: FormOptions): HTMLElement {
   const { engine, schema, assets } = opts
@@ -24,7 +24,7 @@ export function createPropForm(opts: FormOptions): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'sigil-prop-form'
 
-  /** prop name → 欄位根元素（用於 dependsOn 顯示切換） */
+  /** dependsOn 欄位索引 */
   const fieldRoots = new Map<string, HTMLElement>()
 
   function currentProps(): Record<string, unknown> {

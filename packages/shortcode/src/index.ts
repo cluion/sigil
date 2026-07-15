@@ -1,4 +1,4 @@
-// @cluion/sigil-shortcode — shortcode DSL（defineShortcode／registry／resolver）
+// shortcode DSL
 export { SIGIL_SHORTCODE_VERSION } from './version.js'
 export * from './types.js'
 export * from './registry.js'

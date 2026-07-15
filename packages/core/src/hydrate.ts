@@ -8,8 +8,8 @@ export interface HydrateOptions {
 /**
  * 正式站 hydration — 找 [data-shortcode] host,re-resolve 跑 bind 恢復互動
  *
- * 從 data-shortcode/data-props 重建 node,清 host 後 resolve('live');
- * 須在瀏覽器/DOM 環境呼叫(querySelectorAll)
+ * 從 data 屬性重建 live shortcode
+ * 僅支援 DOM 環境
  */
 export function hydrate(root: ParentNode, opts: HydrateOptions): void {
   const hosts = root.querySelectorAll('[data-shortcode]')

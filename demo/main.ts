@@ -23,7 +23,7 @@ import { calloutDef } from './shortcodes/callout'
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
 
-/** mock：/sizes?color= → 規格；/price?id&color&size → 價格；/error → 失敗；其餘 loader 用 */
+/** mock API */
 const mockFetchJSON = (url: string, signal?: AbortSignal) =>
   new Promise<unknown>((resolve, reject) => {
     const t = setTimeout(() => {
@@ -77,7 +77,7 @@ const assets = new MemoryAssetStore([
   { id: 'a3', url: 'https://placehold.co/200x120/png?text=C', name: '圖 C' },
 ])
 
-// 初始文件：圖層已命名，方便試重命名／鎖／隱；含 callout 試 dependsOn
+// 建立含圖層與 callout 的初始文件
 const title = blockText('點我編輯')
 title.name = '標題文字'
 const cta = blockButton('按鈕')
@@ -243,7 +243,7 @@ function mountApp(d: SigilDoc): SigilApp {
 }
 
 let app: SigilApp = mountApp(doc)
-// 方便 DevTools：await __sigil.runCommand('undo')
+// 暴露 DevTools 操作入口
 ;(window as unknown as { __sigil: SigilApp }).__sigil = app
 
 const toolbar = document.getElementById('toolbar')!

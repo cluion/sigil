@@ -29,11 +29,36 @@ describe('renderer — mount', () => {
   it('style 走 setProperty', () => {
     const r = createRenderer()
     const container = document.createElement('div')
+    r.mount({ id: 'root', type: 'section', style: { 'padding-top': '10px' } }, container)
+    expect((container.firstElementChild as HTMLElement).style.paddingTop).toBe('10px')
+  })
+
+  it('依裝置套用 desktop／tablet／mobile 樣式繼承', () => {
+    const r = createRenderer()
+    const container = document.createElement('div')
     r.mount(
-      { id: 'root', type: 'section', style: { 'padding-top': '10px' } },
+      {
+        id: 'root',
+        type: 'section',
+        style: { color: 'red', padding: '16px' },
+        responsiveStyles: {
+          tablet: { color: 'blue', padding: '12px' },
+          mobile: { padding: '8px' },
+        },
+      },
       container,
     )
-    expect((container.firstElementChild as HTMLElement).style.paddingTop).toBe('10px')
+    const el = container.firstElementChild as HTMLElement
+    expect(el.style.color).toBe('red')
+    expect(el.style.padding).toBe('16px')
+
+    r.setDevice('tablet')
+    expect(el.style.color).toBe('blue')
+    expect(el.style.padding).toBe('12px')
+
+    r.setDevice('mobile')
+    expect(el.style.color).toBe('blue')
+    expect(el.style.padding).toBe('8px')
   })
 })
 
@@ -53,6 +78,36 @@ describe('renderer — applyPatch', () => {
     expect(container.textContent).toBe('B')
     r.applyPatch({ type: 'remove', id: 'a' })
     expect(container.textContent).toBe('')
+  })
+
+  it('responsiveStyles patch 更新目前裝置並可回到繼承', () => {
+    const r = createRenderer({ device: 'mobile' })
+    const container = document.createElement('div')
+    r.mount(
+      {
+        id: 'root',
+        type: 'section',
+        style: { color: 'red' },
+        responsiveStyles: { tablet: { color: 'blue' } },
+      },
+      container,
+    )
+    const el = container.firstElementChild as HTMLElement
+    expect(el.style.color).toBe('blue')
+
+    r.applyPatch({
+      type: 'update',
+      id: 'root',
+      responsiveStyles: { mobile: { color: 'green' } },
+    })
+    expect(el.style.color).toBe('green')
+
+    r.applyPatch({
+      type: 'update',
+      id: 'root',
+      responsiveStyles: { mobile: { color: '' } },
+    })
+    expect(el.style.color).toBe('blue')
   })
 
   it('move 保留元素（跨 parent）', () => {
@@ -113,7 +168,9 @@ describe('renderer — shortcode slot', () => {
     const container = document.createElement('div')
     r.mount(
       {
-        id: 'root', type: 'shortcode', shortcode: { name: 'card', props: {} },
+        id: 'root',
+        type: 'shortcode',
+        shortcode: { name: 'card', props: {} },
         children: [{ id: 'c', type: 'text', content: 'Hi' }],
       },
       container,
@@ -135,7 +192,9 @@ describe('renderer — shortcode slot', () => {
     const container = document.createElement('div')
     r.mount(
       {
-        id: 'root', type: 'shortcode', shortcode: { name: 'x', props: {} },
+        id: 'root',
+        type: 'shortcode',
+        shortcode: { name: 'x', props: {} },
         children: [{ id: 'c', type: 'text', content: 'Hi' }],
       },
       container,

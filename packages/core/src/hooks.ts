@@ -2,22 +2,22 @@ import type { SigilDoc } from './model/types.js'
 import type { Engine } from './engine/types.js'
 
 /**
- * 殼層／宿主生命週期 hooks（第一版）
+ * 殼層與宿主生命週期 hooks
  *
- * 皆可選；失敗不應拖垮編輯器（呼叫端 try／catch）
+ * hooks 皆可選且隔離錯誤
  */
 export interface EditorHooks {
   onSelect?: (id: string | null, ctx: { engine: Engine }) => void
   /**
-   * 存檔前；可回傳新 doc 覆寫寫入內容，或 void 使用原 doc
-   * 拋錯則中止 save（由殼層決定是否提示）
+   * 存檔前可覆寫 doc
+   * 拋錯時中止 save
    */
   beforeSave?: (
     doc: SigilDoc,
     ctx: { engine: Engine },
   ) => void | SigilDoc | Promise<void | SigilDoc>
   afterSave?: (doc: SigilDoc, ctx: { engine: Engine }) => void | Promise<void>
-  /** 初始 doc 載入後（createApp／createEditor 完成 mount 時） */
+  /** 初始 doc 掛載後 */
   afterLoad?: (doc: SigilDoc, ctx: { engine: Engine }) => void | Promise<void>
   beforeDestroy?: (ctx: { engine: Engine }) => void
 }

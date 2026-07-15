@@ -26,7 +26,7 @@ export function defineBlock(def: BlockDefinition): BlockDefinition {
 }
 
 /**
- * 統一成 BlockDefinition[]；Record 形式預設分類「一般」
+ * 轉換為 BlockDefinition 陣列
  */
 export function normalizeBlocks(input: BlocksInput | undefined): BlockDefinition[] {
   if (!input) return []
@@ -68,7 +68,7 @@ export function blockShortcode(
   return { id: createId(), type: 'shortcode', shortcode: { name, props } }
 }
 
-/** 預設區塊（Record，相容舊 API） */
+/** 舊版 Record 預設區塊 */
 export const basicBlocks: Record<string, BlockFactory> = {
   section: blockSection,
   text: blockText,
@@ -77,7 +77,7 @@ export const basicBlocks: Record<string, BlockFactory> = {
   column: blockColumn,
 }
 
-/** 預設區塊（defineBlock，含分類與圖示） */
+/** 含分類與圖示的預設區塊 */
 export const basicBlockDefs: BlockDefinition[] = [
   defineBlock({
     id: 'section',

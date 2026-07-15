@@ -1,9 +1,9 @@
-// signal — 極簡 signal primitives（對齊 TC39 Signal.State／Computed）
+// 極簡 signal primitives
 
 export type Cleanup = () => void
 
 /**
- * 可訂閱物件（state 與 computed 共用），持有訂閱者 effect 集合
+ * state 與 computed 共用的訂閱物件
  */
 interface Subscribable {
   subs: Set<Effect>
@@ -20,7 +20,7 @@ interface Effect {
   running: boolean
 }
 
-/** 正在收集依賴的 computation（effect／computed 內部） */
+/** 目前收集依賴的 effect */
 let active: Effect | null = null
 
 /** batch 深度，>0 時 set 只排隊不立即觸發 */
@@ -67,8 +67,7 @@ export interface SignalComputed<T> {
 /**
  * 建立可讀寫的 signal state
  *
- * get 時若處於依賴收集（effect 內），自動與當前 effect 雙向登記；
- * set 時同值跳過，否則通知訂閱者（batch 內排隊，否則立即觸發）
+ * get 收集依賴 set 通知訂閱者
  */
 export function state<T>(initial: T): SignalState<T> {
   const node: Subscribable & { value: T } = { value: initial, subs: new Set<Effect>() }
@@ -95,10 +94,9 @@ export function state<T>(initial: T): SignalState<T> {
 }
 
 /**
- * 建立計算衍生值（lazy memo）
+ * 建立 lazy computed
  *
- * 首次 get 才計算並訂閱來源；來源變動時標記為髒、通知訂閱此 computed 的 effect 重跑；
- * 未變動時 get 回快取不重算
+ * 延遲計算並快取 computed
  */
 export function computed<T>(fn: () => T): SignalComputed<T> {
   let value: T | undefined
@@ -148,8 +146,7 @@ export function computed<T>(fn: () => T): SignalComputed<T> {
 }
 
 /**
- * 建立副作用：首次立即執行，自動追蹤讀取的 signal；
- * 回傳 dispose，呼叫後不再收通知並執行殘留 cleanup
+ * 建立自動追蹤 signal 的 effect
  */
 export function effect(fn: () => void | Cleanup): () => void {
   const e: Effect = { fn, deps: new Set<Subscribable>(), disposed: false, running: false }
@@ -168,7 +165,7 @@ export function effect(fn: () => void | Cleanup): () => void {
 }
 
 /**
- * 批次：fn 內所有 set 只排隊，結束後統一觸發（訂閱多來源的 effect 只跑一次）
+ * 批次觸發 signal 更新
  */
 export function batch(fn: () => void): void {
   batching++
@@ -187,7 +184,7 @@ export function batch(fn: () => void): void {
 }
 
 /**
- * 不追蹤：在 fn 內讀 signal 不建立依賴（用於 effect 內讀取但不希望重跑的情境）
+ * 讀取 signal 但不追蹤依賴
  */
 export function untrack<T>(fn: () => T): T {
   const prev = active
