@@ -1,5 +1,21 @@
 # @cluion/sigil
 
+## 0.7.0
+
+### Minor Changes
+
+- d54946d: Add template library: save the selected subtree as a reusable template and drop it back onto the canvas. Introduces a `TemplateStore` adapter (mirroring ProjectStore/AssetStore) with `MemoryTemplateStore`/`JsonTemplateStore` implementations, a `templateToBlockDef` bridge (clones with new ids and resets locked/hidden), a `save-as-template` command wired into createApp/createEditor, and `createBlocksPanel` reload so newly saved templates appear immediately. Templates surface in a dedicated category and insert as clean, selectable nodes. Backend integration (HTTP/Laravel) is left to hosts via the adapter.
+
+### Patch Changes
+
+- Updated dependencies [bd80887]
+- Updated dependencies [d54946d]
+  - @cluion/sigil-ui@0.7.0
+  - @cluion/sigil-core@0.7.0
+  - @cluion/sigil-blocks@0.7.0
+  - @cluion/sigil-store-json@0.7.0
+  - @cluion/sigil-shortcode@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes

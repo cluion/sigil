@@ -1,5 +1,12 @@
 # @cluion/sigil-shortcode
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies [d54946d]
+  - @cluion/sigil-core@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes

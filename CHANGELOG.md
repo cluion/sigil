@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+
+- Drag alignment guides: teal reference lines when edges/centers align with siblings or parent; gap labels show pixel distance
+- Insert drag shows gap hints only (new node has no size); move drag shows both guides and gaps
+- `TemplateStore` adapter (`MemoryTemplateStore` / `JsonTemplateStore`) for reusable node subtrees
+- `templateToBlockDef` bridge clones with new ids and resets locked/hidden on insert
+- `save-as-template` command in `createApp` / `createEditor`; `createBlocksPanel` reloads so saved templates appear immediately
+- `createBlocksPanel` gains `reload(blocks?)`
+
 ## 0.6.0
 
 - Responsive styles: Desktop base + Tablet/Mobile overrides (`responsiveStyles`)
