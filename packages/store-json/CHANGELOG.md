@@ -1,5 +1,12 @@
 # @cluion/sigil-store-json
 
+## 0.6.0
+
+### Patch Changes
+
+- Updated dependencies [c92f494]
+  - @cluion/sigil-core@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes

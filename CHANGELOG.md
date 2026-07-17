@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Responsive styles: Desktop base + Tablet/Mobile overrides (`responsiveStyles`)
+- Inspector reads/writes per-device styles; shows inheritance vs override
+- Renderer merges base + breakpoint by active device
+- `toHTML()` emits `@media` rules + `data-sigil-r` keys for deployable output
+- Backward compatible: old `style` docs load without migration
+
 ## 0.5.0
 
 - Topbar bound to commands (`toolbar` / `toolbarGroup`)

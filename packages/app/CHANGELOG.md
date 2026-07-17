@@ -1,5 +1,19 @@
 # @cluion/sigil-app
 
+## 0.6.0
+
+### Minor Changes
+
+- c92f494: Add editable Desktop, Tablet, and Mobile style inheritance across the model, renderer, Canvas, Inspector, and HTML serializer.
+
+### Patch Changes
+
+- Updated dependencies [c92f494]
+  - @cluion/sigil-core@0.6.0
+  - @cluion/sigil-ui@0.6.0
+  - @cluion/sigil-shortcode@0.6.0
+  - @cluion/sigil-store-json@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
