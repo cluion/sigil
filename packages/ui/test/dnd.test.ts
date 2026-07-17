@@ -4,6 +4,7 @@ import {
   contains,
   isMoveIntoSelf,
   autoScrollNearEdge,
+  computeDrop,
 } from '../src/dnd.js'
 import type { ComponentNode, Patch } from '@cluion/sigil-core'
 
@@ -124,5 +125,108 @@ describe('autoScrollNearEdge', () => {
 
     autoScrollNearEdge(iframe, -10, 150)
     expect(scrollBy).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * 建 mock iframe：命中指定 id 元素，該元素 rect 可控
+ *
+ * 座標原點在 iframe 左上角（rect.left=rect.top=0）
+ */
+function mockIframe(opts: {
+  width: number
+  height: number
+  hitId: string | null
+  hitRect: { left: number; top: number; width: number; height: number }
+}): HTMLIFrameElement {
+  const { width, height, hitId, hitRect } = opts
+  const fakeEl = hitId
+    ? ({
+        getAttribute: (k: string) => (k === 'data-sigil-id' ? hitId : null),
+        getBoundingClientRect: () => hitRect,
+        closest: () => fakeEl,
+      } as unknown as Element)
+    : null
+  const doc = {
+    elementFromPoint: () => fakeEl,
+  }
+  return {
+    contentDocument: doc as unknown as Document,
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: width, bottom: height, width, height }),
+  } as unknown as HTMLIFrameElement
+}
+
+describe('computeDrop', () => {
+  const dropTree: ComponentNode = {
+    id: 'root',
+    type: 'section',
+    children: [
+      { id: 'a', type: 'text', content: 'A' },
+      { id: 'box', type: 'section', children: [{ id: 'c', type: 'text', content: 'C' }] },
+    ],
+  }
+
+  it('命中容器中間 → mode child', () => {
+    const iframe = mockIframe({
+      width: 400,
+      height: 400,
+      hitId: 'box',
+      hitRect: { left: 0, top: 0, width: 200, height: 200 },
+    })
+    // 命中 (100,100) = box 中央
+    const t = computeDrop(iframe, dropTree, 100, 100)
+    expect(t).not.toBeNull()
+    expect(t!.mode).toBe('child')
+    expect(t!.parentId).toBe('box')
+    expect(t!.hitId).toBe('box')
+  })
+
+  it('命中容器邊緣 → sibling', () => {
+    const iframe = mockIframe({
+      width: 400,
+      height: 400,
+      hitId: 'a',
+      hitRect: { left: 0, top: 0, width: 200, height: 100 },
+    })
+    // relY 接近 0.5（中線），relX 接近 0.02（左邊緣 <0.05）→ onEdge → sibling
+    const t = computeDrop(iframe, dropTree, 3, 50)
+    expect(t).not.toBeNull()
+    expect(t!.mode).toBe('sibling')
+  })
+
+  it('超出 iframe rect → null', () => {
+    const iframe = mockIframe({
+      width: 400,
+      height: 400,
+      hitId: 'a',
+      hitRect: { left: 0, top: 0, width: 100, height: 100 },
+    })
+    expect(computeDrop(iframe, dropTree, -5, 50)).toBeNull()
+    expect(computeDrop(iframe, dropTree, 500, 50)).toBeNull()
+  })
+
+  it('命中 root 邊緣 → append 成 root child', () => {
+    const iframe = mockIframe({
+      width: 400,
+      height: 400,
+      hitId: 'root',
+      hitRect: { left: 0, top: 0, width: 400, height: 400 },
+    })
+    // relX = 2/400 ≈ 0.005 < 0.05 → onEdge，命中 root 邊緣
+    const t = computeDrop(iframe, dropTree, 2, 200)
+    expect(t).not.toBeNull()
+    expect(t!.parentId).toBe('root')
+    // root 邊緣邏輯：一律 append
+    expect(t!.index).toBe(dropTree.children!.length)
+  })
+
+  it('無命中元素 → null', () => {
+    const iframe = mockIframe({
+      width: 400,
+      height: 400,
+      hitId: null,
+      hitRect: { left: 0, top: 0, width: 0, height: 0 },
+    })
+    expect(computeDrop(iframe, dropTree, 100, 100)).toBeNull()
   })
 })

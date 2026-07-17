@@ -1,5 +1,6 @@
 import type { Engine, ComponentNode, Patch } from '@cluion/sigil-core'
 import { findNode, findParent } from '@cluion/sigil-core'
+import { computeGuides, computeGaps, type AlignLine, type GapHint, type Rect } from './alignment.js'
 
 export type Side = 'before' | 'after'
 export type Orient = 'h' | 'v'
@@ -20,6 +21,9 @@ const ACCENT = '#4f46e5'
 const ACCENT_SOFT = 'rgba(79, 70, 229, 0.14)'
 const DANGER = '#dc2626'
 const DANGER_SOFT = 'rgba(220, 38, 38, 0.12)'
+// 對齊參考線：青綠色，與 drop indicator 的紫色區隔
+const GUIDE = '#14b8a6'
+const GUIDE_LABEL_BG = '#0f766e'
 
 function escapeId(id: string): string {
   return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(id) : id
@@ -299,6 +303,147 @@ function setDragCursor(cursor: string | null): void {
   document.body.style.cursor = cursor ?? ''
 }
 
+export interface GuideShowOpts {
+  lines: AlignLine[]
+  gaps: GapHint[]
+}
+
+/**
+ * 建立對齊參考線與間距提示
+ *
+ * DOM 掛 documentElement 避開 mount 清空 body（比照 type badge）
+ * z-index 9998 低於 indicator 9999 與 badge 10000
+ */
+function makeGuides(iframe: HTMLIFrameElement): {
+  show: (opts: GuideShowOpts) => void
+  clear: () => void
+} {
+  let layer: HTMLElement | null = null
+  const lineEls: HTMLElement[] = []
+  const labelEls: HTMLElement[] = []
+
+  function ensureLayer(doc: Document): HTMLElement {
+    if (!layer || !layer.isConnected) {
+      layer = doc.createElement('div')
+      layer.setAttribute('data-sigil-guides', '1')
+      layer.style.cssText = 'position:fixed;inset:0;z-index:9998;pointer-events:none'
+      doc.documentElement.appendChild(layer)
+    }
+    // clear() 會把 display 設 none，show 時必須復原
+    layer.style.display = 'block'
+    return layer
+  }
+
+  return {
+    show(opts) {
+      const doc = iframe.contentDocument
+      if (!doc) return
+      const root = ensureLayer(doc)
+      // 對齊線
+      while (lineEls.length < opts.lines.length) {
+        const el = doc.createElement('div')
+        el.style.cssText = `position:absolute;background:${GUIDE};pointer-events:none`
+        root.appendChild(el)
+        lineEls.push(el)
+      }
+      for (let i = opts.lines.length; i < lineEls.length; i++) lineEls[i]!.style.display = 'none'
+      opts.lines.forEach((line, i) => {
+        const el = lineEls[i]!
+        el.style.display = 'block'
+        if (line.axis === 'x') {
+          el.style.width = '1px'
+          el.style.height = `${line.end - line.start}px`
+          el.style.left = `${line.pos}px`
+          el.style.top = `${line.start}px`
+        } else {
+          el.style.height = '1px'
+          el.style.width = `${line.end - line.start}px`
+          el.style.top = `${line.pos}px`
+          el.style.left = `${line.start}px`
+        }
+      })
+      // 間距標籤
+      while (labelEls.length < opts.gaps.length) {
+        const el = doc.createElement('div')
+        el.style.cssText = `position:absolute;padding:1px 5px;font-size:10px;font-weight:600;line-height:1.4;color:#fff;background:${GUIDE_LABEL_BG};border-radius:3px;pointer-events:none;transform:translate(-50%,-50%);white-space:nowrap`
+        root.appendChild(el)
+        labelEls.push(el)
+      }
+      for (let i = opts.gaps.length; i < labelEls.length; i++) labelEls[i]!.style.display = 'none'
+      opts.gaps.forEach((gap, i) => {
+        const el = labelEls[i]!
+        el.style.display = 'block'
+        el.textContent = gap.label
+        el.style.left = `${gap.midX}px`
+        el.style.top = `${gap.midY}px`
+      })
+    },
+    clear() {
+      if (layer) layer.style.display = 'none'
+    },
+  }
+}
+
+/**
+ * 收集 drop 目標的同層 sibling 與父容器 rect（排除 source）
+ *
+ * 座標皆為 iframe 內 viewport 座標，可直接餵 computeGuides
+ */
+function collectGuidesCandidates(
+  doc: Document,
+  root: ComponentNode,
+  target: DropTarget,
+  sourceId?: string,
+): Rect[] {
+  const candidates: Rect[] = []
+  const parent = findNode(root, target.parentId)
+  const addRect = (id: string): void => {
+    const el = doc.querySelector(`[data-sigil-id="${escapeId(id)}"]`) as HTMLElement | null
+    if (el) {
+      const r = el.getBoundingClientRect()
+      candidates.push({ left: r.left, top: r.top, width: r.width, height: r.height })
+    }
+  }
+  for (const child of parent?.children ?? []) {
+    if (child.id === sourceId) continue
+    addRect(child.id)
+  }
+  // 父容器
+  if (target.parentId !== root.id || parent?.children?.length) addRect(target.parentId)
+  return candidates
+}
+
+function rectOf(doc: Document, id: string): Rect | null {
+  const el = doc.querySelector(`[data-sigil-id="${escapeId(id)}"]`) as HTMLElement | null
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  return { left: r.left, top: r.top, width: r.width, height: r.height }
+}
+
+/**
+ * drop 落點的前後鄰居 rect
+ *
+ * 以命中元素在 parent.children 的位置為準，排除 source
+ */
+function neighborsOf(
+  doc: Document,
+  root: ComponentNode,
+  target: DropTarget,
+  sourceId?: string,
+): { prev?: Rect; next?: Rect } {
+  const parent = findNode(root, target.parentId)
+  const children = parent?.children ?? []
+  const idx = children.findIndex((c) => c.id === target.hitId)
+  if (idx < 0) return {}
+  const visible = children.filter((c) => c.id !== sourceId)
+  const vIdx = visible.findIndex((c) => c.id === target.hitId)
+  const result: { prev?: Rect; next?: Rect } = {}
+  if (vIdx > 0) result.prev = rectOf(doc, visible[vIdx - 1]!.id) ?? undefined
+  if (vIdx >= 0 && vIdx < visible.length - 1)
+    result.next = rectOf(doc, visible[vIdx + 1]!.id) ?? undefined
+  return result
+}
+
 /**
  * 啟動拖入 — 從面板拖新節點進 canvas
  */
@@ -310,17 +455,27 @@ export function startInsertDrag(opts: {
 }): { cancel: () => void } {
   const { engine, iframe, node, pointerId } = opts
   const indicator = makeIndicator(iframe)
+  const guides = makeGuides(iframe)
   let target: DropTarget | null = null
   setDragCursor('grabbing')
 
   function onMove(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
     autoScrollNearEdge(iframe, e.clientX, e.clientY)
-    target = computeDrop(iframe, engine.getTree(), e.clientX, e.clientY)
+    const root = engine.getTree()
+    target = computeDrop(iframe, root, e.clientX, e.clientY)
     const overCanvas = isOverIframe(iframe, e.clientX, e.clientY)
+    const doc = iframe.contentDocument
     if (target) {
       setDragCursor('copy')
       indicator.show({ target })
+      // insert 無 source rect → 只顯示縫隙間距（sibling 模式才有縫隙）
+      let gaps: GapHint[] = []
+      if (doc && target.mode === 'sibling') {
+        const hit = rectOf(doc, target.hitId)
+        if (hit) gaps = computeGaps(hit, target.side, target.orient, neighborsOf(doc, root, target))
+      }
+      guides.show({ lines: [], gaps })
     } else if (overCanvas) {
       setDragCursor('not-allowed')
       indicator.show({
@@ -328,9 +483,11 @@ export function startInsertDrag(opts: {
         invalid: true,
         hitId: hitTest(iframe, e.clientX, e.clientY),
       })
+      guides.clear()
     } else {
       setDragCursor('grabbing')
       indicator.show({ target: null })
+      guides.clear()
     }
   }
   function onUp(e: PointerEvent): void {
@@ -342,6 +499,7 @@ export function startInsertDrag(opts: {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     indicator.clear()
+    guides.clear()
     setDragCursor(null)
   }
   window.addEventListener('pointermove', onMove)
@@ -365,6 +523,7 @@ export function startMoveDrag(opts: {
 }): { cancel: () => void } {
   const { engine, iframe, id, pointerId, startX, startY } = opts
   const indicator = makeIndicator(iframe)
+  const guides = makeGuides(iframe)
   let started = false
   let target: DropTarget | null = null
 
@@ -385,6 +544,20 @@ export function startMoveDrag(opts: {
     if (target) {
       setDragCursor('grabbing')
       indicator.show({ target })
+      const doc = iframe.contentDocument
+      if (doc) {
+        const source = rectOf(doc, id)
+        const candidates = collectGuidesCandidates(doc, root, target, id)
+        const lines = source ? computeGuides(source, candidates) : []
+        let gaps: GapHint[] = []
+        if (target.mode === 'sibling') {
+          const hit = rectOf(doc, target.hitId)
+          if (hit) gaps = computeGaps(hit, target.side, target.orient, neighborsOf(doc, root, target, id))
+        }
+        guides.show({ lines, gaps })
+      } else {
+        guides.clear()
+      }
     } else if (overCanvas && (forbidden || !!raw || !!hitTest(iframe, e.clientX, e.clientY))) {
       setDragCursor('not-allowed')
       indicator.show({
@@ -392,12 +565,15 @@ export function startMoveDrag(opts: {
         invalid: true,
         hitId: raw?.hitId ?? hitTest(iframe, e.clientX, e.clientY),
       })
+      guides.clear()
     } else if (overCanvas) {
       setDragCursor('not-allowed')
       indicator.show({ target: null, invalid: true, hitId: id })
+      guides.clear()
     } else {
       setDragCursor('grabbing')
       indicator.show({ target: null })
+      guides.clear()
     }
   }
   function onUp(e: PointerEvent): void {
@@ -409,6 +585,7 @@ export function startMoveDrag(opts: {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     indicator.clear()
+    guides.clear()
     setDragCursor(null)
   }
   window.addEventListener('pointermove', onMove)
