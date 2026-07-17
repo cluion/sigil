@@ -5,6 +5,7 @@ import {
   createEventBus,
   createStore,
   findNode,
+  createId,
   createI18n,
   createCommandRegistry,
   createDefaultEditingCommands,
@@ -22,6 +23,7 @@ import {
   type Locale,
   type ProjectStore,
   type AssetStore,
+  type TemplateStore,
   type CommandDefinition,
   type CommandContext,
   type EditorHooks,
@@ -41,6 +43,7 @@ import {
   createShortcodeResolver,
   type ShortcodeDefinition,
 } from '@cluion/sigil-shortcode'
+import { templateToBlockDef } from '@cluion/sigil-blocks'
 import { ensureTokens } from './tokens.js'
 
 const i18nMessages = {
@@ -69,6 +72,8 @@ const i18nMessages = {
     'app.empty_title': '從左側拖入區塊開始',
     'app.empty_body': '拖放「區塊」到畫布，或點區塊加入。選取後可在右側改內容與樣式。',
     'app.empty_tip': '快捷鍵 Ctrl/Cmd+S 存檔 · 匯出可下載 HTML',
+    'app.save_as_template': '存為範本',
+    'app.template_name': '範本名稱',
     'status.none': '未選取',
   },
   en: {
@@ -97,6 +102,8 @@ const i18nMessages = {
     'app.empty_body':
       'Drop blocks onto the canvas. Select one to edit content and styles on the right.',
     'app.empty_tip': 'Ctrl/Cmd+S to save · Export downloads HTML',
+    'app.save_as_template': 'Save as Template',
+    'app.template_name': 'Template name',
     'status.none': 'Nothing selected',
   },
 }
@@ -109,6 +116,8 @@ export interface AppOptions {
   assets?: AssetStore
   /** Record 工廠或 defineBlock 列表 */
   blocks?: BlocksInput
+  /** 範本庫 adapter，傳入後啟用「另存為範本」命令 */
+  templates?: TemplateStore
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
   sanitize?: SanitizeFn
@@ -207,6 +216,32 @@ export function createApp(opts: AppOptions): SigilApp {
       },
     }),
   )
+  // 範本：另存為範本命令（閉包捕獲 templateStore 與 blocksPanel）
+  if (opts.templates) {
+    commandMap.set(
+      'save-as-template',
+      defineCommand({
+        id: 'save-as-template',
+        label: i18n.t('app.save_as_template'),
+        toolbar: true,
+        toolbarGroup: 'main',
+        when: (c) => {
+          const id = c.engine.getSelection()
+          return !!id && id !== c.engine.getTree().id
+        },
+        run: async (c) => {
+          const id = c.engine.getSelection()
+          if (!id) return
+          const node = findNode(c.engine.getTree(), id)
+          if (!node) return
+          const label = window.prompt(i18n.t('app.template_name'), node.name?.trim() || node.type)
+          if (!label) return
+          await Promise.resolve(opts.templates!.save({ id: createId(), label, node }))
+          reloadTemplates()
+        },
+      }),
+    )
+  }
   for (const c of opts.commands ?? []) commandMap.set(c.id, c)
   const commands = createCommandRegistry([...commandMap.values()])
   /** Topbar 上的命令按鈕，refreshChrome 依 when／dirty 更新 disabled */
@@ -440,9 +475,36 @@ export function createApp(opts: AppOptions): SigilApp {
   })
   const unsubDevice = canvas.subscribeDevice((next) => inspector.setDevice(next))
   const layers = createLayersPanel(engine, layersBox)
-  const blocksPanel = opts.blocks
-    ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)
+  // 合併靜態區塊與範本；有任一來源即建立面板
+  const templateStore = opts.templates
+  const hasTemplates = !!templateStore
+  const mergedBlocks: BlocksInput | null = opts.blocks
+    ? Array.isArray(opts.blocks)
+      ? [...opts.blocks]
+      : { ...opts.blocks }
+    : hasTemplates
+      ? []
+      : null
+
+  const blocksPanel = mergedBlocks
+    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks)
     : null
+
+  /** 重新從 store 載入範本並合併進面板 */
+  function reloadTemplates(): void {
+    if (!templateStore || !blocksPanel) return
+    void Promise.resolve(templateStore.list()).then((templates) => {
+      const tplBlocks = templates.map(templateToBlockDef)
+      const base = opts.blocks
+        ? Array.isArray(opts.blocks)
+          ? [...opts.blocks]
+          : { ...opts.blocks }
+        : []
+      const merged = Array.isArray(base) ? [...base, ...tplBlocks] : { ...base }
+      blocksPanel.reload(merged)
+    })
+  }
+  if (hasTemplates) reloadTemplates()
 
   function setDevice(next: CanvasDevice): void {
     device = next

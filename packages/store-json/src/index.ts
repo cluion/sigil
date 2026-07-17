@@ -1,4 +1,4 @@
-import type { AssetItem, AssetStore, ProjectStore, SigilDoc } from '@cluion/sigil-core'
+import type { AssetItem, AssetStore, ProjectStore, SigilDoc, TemplateDef, TemplateStore } from '@cluion/sigil-core'
 import { createId, migrate } from '@cluion/sigil-core'
 
 /**
@@ -54,5 +54,39 @@ export class MemoryAssetStore implements AssetStore {
   /** 測試／demo 用：直接塞入項目 */
   add(item: AssetItem): void {
     this.items = [item, ...this.items]
+  }
+}
+
+/**
+ * MemoryTemplateStore — 記憶體範本庫，save 覆蓋同 id
+ */
+export class MemoryTemplateStore implements TemplateStore {
+  private items: TemplateDef[] = []
+
+  constructor(initial: TemplateDef[] = []) {
+    this.items = [...initial]
+  }
+
+  list(): TemplateDef[] {
+    return this.items.map((t) => ({ ...t }))
+  }
+
+  save(template: TemplateDef): void {
+    const idx = this.items.findIndex((t) => t.id === template.id)
+    if (idx >= 0) this.items[idx] = template
+    else this.items = [...this.items, template]
+  }
+}
+
+/**
+ * JsonTemplateStore — 記憶體保存 + JSON 匯入匯出
+ */
+export class JsonTemplateStore extends MemoryTemplateStore {
+  exportJSON(templates: TemplateDef[]): string {
+    return JSON.stringify(templates)
+  }
+
+  importJSON(json: string): TemplateDef[] {
+    return JSON.parse(json) as TemplateDef[]
   }
 }

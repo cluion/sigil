@@ -4,6 +4,8 @@ import {
   toHTML,
   createEventBus,
   createStore,
+  findNode,
+  createId,
   createI18n,
   createCommandRegistry,
   createDefaultEditingCommands,
@@ -20,6 +22,7 @@ import {
   type ComponentNode,
   type Locale,
   type ProjectStore,
+  type TemplateStore,
   type CommandDefinition,
   type CommandContext,
   type EditorHooks,
@@ -37,6 +40,7 @@ import {
   createShortcodeResolver,
   type ShortcodeDefinition,
 } from '@cluion/sigil-shortcode'
+import { templateToBlockDef } from '@cluion/sigil-blocks'
 
 const i18nMessages = {
   zh: { 'canvas.title': '編輯畫布', 'canvas.edit': '✏ 編輯', 'canvas.preview': '👁 預覽' },
@@ -49,6 +53,8 @@ export interface EditorOptions {
   /** 頁面存取 adapter */
   store?: ProjectStore
   blocks?: BlocksInput
+  /** 範本庫 adapter，傳入後啟用「另存為範本」命令 */
+  templates?: TemplateStore
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
   sanitize?: SanitizeFn
@@ -117,6 +123,30 @@ export function createEditor(opts: EditorOptions): SigilEditor {
 
   const commandMap = new Map<string, CommandDefinition>()
   for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
+  // 範本：另存為範本命令（閉包捕獲 templateStore 與 blocksPanel）
+  if (opts.templates) {
+    commandMap.set(
+      'save-as-template',
+      defineCommand({
+        id: 'save-as-template',
+        label: 'Save as Template',
+        when: (c) => {
+          const id = c.engine.getSelection()
+          return !!id && id !== c.engine.getTree().id
+        },
+        run: async (c) => {
+          const id = c.engine.getSelection()
+          if (!id) return
+          const node = findNode(c.engine.getTree(), id)
+          if (!node) return
+          const label = window.prompt('Template name', node.name?.trim() || node.type)
+          if (!label) return
+          await Promise.resolve(opts.templates!.save({ id: createId(), label, node }))
+          reloadTemplates()
+        },
+      }),
+    )
+  }
   for (const c of opts.commands ?? []) commandMap.set(c.id, c)
   const commands = createCommandRegistry([...commandMap.values()])
 
@@ -171,9 +201,35 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   })
   const unsubDevice = canvas.subscribeDevice((device) => props.setDevice(device))
   const layers = createLayersPanel(engine, layersBox)
-  const blocksPanel = opts.blocks
-    ? createBlocksPanel(engine, blocksBox, canvas.iframe, opts.blocks)
+  // 合併靜態區塊與範本；有任一來源即建立面板
+  const templateStore = opts.templates
+  const hasTemplates = !!templateStore
+  const mergedBlocks: BlocksInput | null = opts.blocks
+    ? Array.isArray(opts.blocks)
+      ? [...opts.blocks]
+      : { ...opts.blocks }
+    : hasTemplates
+      ? []
+      : null
+
+  const blocksPanel = mergedBlocks
+    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks)
     : null
+
+  function reloadTemplates(): void {
+    if (!templateStore || !blocksPanel) return
+    void Promise.resolve(templateStore.list()).then((templates) => {
+      const tplBlocks = templates.map(templateToBlockDef)
+      const base = opts.blocks
+        ? Array.isArray(opts.blocks)
+          ? [...opts.blocks]
+          : { ...opts.blocks }
+        : []
+      const merged = Array.isArray(base) ? [...base, ...tplBlocks] : { ...base }
+      blocksPanel.reload(merged)
+    })
+  }
+  if (hasTemplates) reloadTemplates()
 
   const unsubSel = engine.subscribe((ev) => {
     if (ev.type === 'selection') runOnSelect(hooks, ev.id, engine)

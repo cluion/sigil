@@ -43,7 +43,7 @@ export function createBlocksPanel(
   container: HTMLElement,
   iframe: HTMLIFrameElement,
   blocks: BlocksInput,
-): { destroy: () => void } {
+): { destroy: () => void; reload: (blocks?: BlocksInput) => void } {
   container.replaceChildren()
   container.classList.add('sigil-blocks-panel')
 
@@ -58,7 +58,7 @@ export function createBlocksPanel(
   list.className = 'sigil-blocks-list'
   container.appendChild(list)
 
-  const defs = normalize(blocks)
+  let defs = normalize(blocks)
 
   function renderList(filter: string): void {
     list.replaceChildren()
@@ -121,5 +121,11 @@ export function createBlocksPanel(
 
   search.addEventListener('input', () => renderList(search.value))
   renderList('')
-  return { destroy() {} }
+  return {
+    destroy() {},
+    reload(next?: BlocksInput) {
+      if (next !== undefined) defs = normalize(next)
+      renderList(search.value)
+    },
+  }
 }

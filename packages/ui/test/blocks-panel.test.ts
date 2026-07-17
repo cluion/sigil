@@ -58,4 +58,25 @@ describe('createBlocksPanel', () => {
     const labels = [...box.querySelectorAll('.sigil-block-label')].map((el) => el.textContent)
     expect(labels).toEqual(['主視覺'])
   })
+
+  it('reload 後新項目出現', () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    const iframe = document.createElement('iframe')
+    const panel = createBlocksPanel(engine, box, iframe, [
+      { id: 'a', label: 'A', create: () => ({ id: 'a', type: 'text', content: '' }) },
+    ])
+    let labels = [...box.querySelectorAll('.sigil-block-label')].map((el) => el.textContent)
+    expect(labels).toEqual(['A'])
+
+    // 另存後注入新範本
+    panel.reload([
+      { id: 'a', label: 'A', create: () => ({ id: 'a', type: 'text', content: '' }) },
+      { id: 'b', label: 'B', category: '範本', create: () => ({ id: 'b', type: 'text', content: '' }) },
+    ])
+    labels = [...box.querySelectorAll('.sigil-block-label')].map((el) => el.textContent)
+    expect(labels).toContain('B')
+  })
 })

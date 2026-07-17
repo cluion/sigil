@@ -1,4 +1,4 @@
-import { createId, type ComponentNode } from '@cluion/sigil-core'
+import { createId, cloneWithNewIds, type ComponentNode, type TemplateDef } from '@cluion/sigil-core'
 
 /**
  * 區塊定義 — 圖示、分類、搜尋關鍵字 + create 工廠
@@ -66,6 +66,26 @@ export function blockShortcode(
   props: Record<string, unknown> = {},
 ): ComponentNode {
   return { id: createId(), type: 'shortcode', shortcode: { name, props } }
+}
+
+/**
+ * 範本轉 BlockDefinition — 插入時 cloneWithNewIds 並重設鎖定／隱藏
+ *
+ * 與 paste 命令同路徑：clone 帶新 id 避免衝突，重設 locked／hidden 維持乾淨插入
+ */
+export function templateToBlockDef(tpl: TemplateDef): BlockDefinition {
+  return defineBlock({
+    id: `template:${tpl.id}`,
+    label: tpl.label,
+    category: tpl.category ?? '範本',
+    icon: tpl.icon,
+    create: () => {
+      const cloned = cloneWithNewIds(tpl.node)
+      delete cloned.locked
+      delete cloned.hidden
+      return cloned
+    },
+  })
 }
 
 /** 舊版 Record 預設區塊 */

@@ -172,6 +172,9 @@ importers:
 
   packages/app:
     dependencies:
+      '@cluion/sigil-blocks':
+        specifier: workspace:*
+        version: link:../blocks
       '@cluion/sigil-core':
         specifier: workspace:*
         version: link:../core
@@ -195,6 +198,9 @@ importers:
 
   packages/editor:
     dependencies:
+      '@cluion/sigil-blocks':
+        specifier: workspace:*
+        version: link:../blocks
       '@cluion/sigil-core':
         specifier: workspace:*
         version: link:../core

@@ -8,7 +8,7 @@ import {
   blockImage,
   blockShortcode,
 } from '@cluion/sigil-blocks'
-import { JsonProjectStore, MemoryAssetStore } from '@cluion/sigil-store-json'
+import { JsonProjectStore, MemoryAssetStore, MemoryTemplateStore } from '@cluion/sigil-store-json'
 import type { SigilDoc } from '@cluion/sigil-core'
 import { counterDef } from './shortcodes/counter'
 import { cardDef } from './shortcodes/card'
@@ -75,6 +75,17 @@ const assets = new MemoryAssetStore([
   { id: 'a1', url: 'https://placehold.co/200x120/png?text=A', name: '圖 A' },
   { id: 'a2', url: 'https://placehold.co/200x120/png?text=B', name: '圖 B' },
   { id: 'a3', url: 'https://placehold.co/200x120/png?text=C', name: '圖 C' },
+])
+
+// 預放一個靜態範本：標題 + 按鈕組合，示範子樹複用
+const heroTpl = blockSection()
+heroTpl.name = 'Hero 範本'
+heroTpl.children = [
+  Object.assign(blockText('範本標題'), { name: '標題' }),
+  Object.assign(blockButton('立即行動'), { name: 'CTA' }),
+]
+const templates = new MemoryTemplateStore([
+  { id: 'hero', label: 'Hero 組合', icon: '✨', node: heroTpl },
 ])
 
 // 建立含圖層與 callout 的初始文件
@@ -209,6 +220,7 @@ function mountApp(d: SigilDoc): SigilApp {
     store,
     assets,
     blocks,
+    templates,
     shortcodes,
     fetchJSON: mockFetchJSON,
     locale,
