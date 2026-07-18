@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- Dark theme: `createApp` / `createEditor` accept `theme: 'light' | 'dark' | 'auto'`; app shell has a topbar toggle cycling the three modes, persisted to `localStorage`; `auto` tracks `prefers-color-scheme`
+- Canvas iframe stays white regardless of theme (real-page preview)
+- Refined global scrollbar style across all editor panels
+- Internal: `tokens.css` is now the single source of truth (imported via `?raw`), eliminating the manual two-way sync that had drifted
+
 ## 0.8.0
 
 - PropSchema `repeater`: add/remove list of groups, each with its own sub-schema (e.g. links with label + href); changes reassemble the whole array

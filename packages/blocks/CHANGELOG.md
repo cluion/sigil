@@ -1,5 +1,11 @@
 # @cluion/sigil-blocks
 
+## 0.9.0
+
+### Patch Changes
+
+- @cluion/sigil-core@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes

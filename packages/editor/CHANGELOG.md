@@ -1,5 +1,20 @@
 # @cluion/sigil
 
+## 0.9.0
+
+### Minor Changes
+
+- c7a5c90: Add dark theme support. `createApp` / `createEditor` accept `theme: 'light' | 'dark' | 'auto'` (`auto` tracks `prefers-color-scheme`); the app shell gets a topbar toggle that cycles the three modes and persists the choice to `localStorage`. Canvas iframe stays on a white background regardless of theme (it is a real-page preview). Also adds a refined global scrollbar style across all editor panels.
+
+### Patch Changes
+
+- Updated dependencies [c7a5c90]
+  - @cluion/sigil-ui@0.9.0
+  - @cluion/sigil-blocks@0.9.0
+  - @cluion/sigil-core@0.9.0
+  - @cluion/sigil-shortcode@0.9.0
+  - @cluion/sigil-store-json@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes
