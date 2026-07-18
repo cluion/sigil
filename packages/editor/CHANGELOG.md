@@ -1,5 +1,16 @@
 # @cluion/sigil
 
+## 0.8.0
+
+### Patch Changes
+
+- Updated dependencies [77d9126]
+  - @cluion/sigil-core@0.8.0
+  - @cluion/sigil-ui@0.8.0
+  - @cluion/sigil-blocks@0.8.0
+  - @cluion/sigil-shortcode@0.8.0
+  - @cluion/sigil-store-json@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

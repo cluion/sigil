@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+- PropSchema `repeater`: add/remove list of groups, each with its own sub-schema (e.g. links with label + href); changes reassemble the whole array
+- PropSchema `date`: native date input, value stored as string
+- Repeater items get a bordered card layout with delete action right-aligned
+
 ## 0.7.0
 
 - Drag alignment guides: teal reference lines when edges/centers align with siblings or parent; gap labels show pixel distance
