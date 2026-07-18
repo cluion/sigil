@@ -521,6 +521,7 @@ export function createApp(opts: AppOptions): SigilApp {
   const inspector = createInspector(engine, inspectorBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
     assets: opts.assets,
+    fetchJSON,
   })
   const unsubDevice = canvas.subscribeDevice((next) => inspector.setDevice(next))
   const layers = createLayersPanel(engine, layersBox)

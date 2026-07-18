@@ -17,6 +17,8 @@ export interface InspectorOptions {
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
   assets?: AssetStore
   device?: ResponsiveDevice
+  /** select optionsFrom 用的非同步能力 */
+  fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
 }
 
 export interface InspectorHandle {
@@ -74,8 +76,12 @@ export function createInspector(
     }
   }
 
+  let currentFormDestroy: (() => void) | null = null
+
   function render(): void {
     syncTabs()
+    currentFormDestroy?.()
+    currentFormDestroy = null
     body.replaceChildren()
     const id = engine.getSelection()
     if (!id) {
@@ -100,7 +106,10 @@ export function createInspector(
     head.textContent = `${node.name?.trim() || node.type} · ${node.id}`
     body.appendChild(head)
 
-    if (tab === 'content') renderContent(body, engine, node, opts)
+    if (tab === 'content')
+      renderContent(body, engine, node, opts, (fn) => {
+        currentFormDestroy = fn
+      })
     else if (tab === 'style') renderStyle(body, engine, node, device, render)
     else renderAdvanced(body, engine, node)
   }
@@ -116,6 +125,8 @@ export function createInspector(
       if (tab === 'style') render()
     },
     destroy() {
+      currentFormDestroy?.()
+      currentFormDestroy = null
       unsub()
     },
   }
@@ -126,6 +137,7 @@ function renderContent(
   engine: Engine,
   node: ComponentNode,
   opts?: InspectorOptions,
+  registerDestroy?: (fn: () => void) => void,
 ): void {
   if (node.type === 'text' || node.type === 'button') {
     field(container, '內容', () => {
@@ -146,7 +158,15 @@ function renderContent(
     container.appendChild(h)
     const schema = opts?.getShortcodeSchema?.(node.shortcode.name)
     if (schema?.length) {
-      container.appendChild(createPropForm({ engine, node, schema, assets: opts?.assets }))
+      const formHandle = createPropForm({
+        engine,
+        node,
+        schema,
+        assets: opts?.assets,
+        fetchJSON: opts?.fetchJSON,
+      })
+      registerDestroy?.(formHandle.destroy)
+      container.appendChild(formHandle.el)
     } else {
       for (const [k, v] of Object.entries(node.shortcode.props)) {
         field(container, k, () => {

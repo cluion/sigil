@@ -20,6 +20,7 @@ import { cartDef } from './shortcodes/cart'
 import { bannerDef } from './shortcodes/banner'
 import { calloutDef } from './shortcodes/callout'
 import { linksDef } from './shortcodes/links'
+import { specDef } from './shortcodes/spec'
 
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
@@ -200,6 +201,14 @@ const blocks = [
         items: [{ label: 'Sigil', href: 'https://github.com/cluion/sigil' }],
       }),
   }),
+  defineBlock({
+    id: 'spec',
+    label: '規格選擇器',
+    category: '互動',
+    icon: '⚙',
+    keywords: ['spec', 'optionsFrom', 'dependsOn'],
+    create: () => blockShortcode('spec', { color: 'red', size: 'm' }),
+  }),
 ]
 
 const shortcodes = [
@@ -213,6 +222,7 @@ const shortcodes = [
   bannerDef,
   calloutDef,
   linksDef,
+  specDef,
 ]
 
 const hookLog = document.createElement('span')

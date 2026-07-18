@@ -13,27 +13,35 @@ export interface FormOptions {
   node: ComponentNode
   schema: PropSchema[]
   assets?: AssetStore
+  /** select optionsFrom 用的非同步能力；未注入時動態 select 顯示「無法載入」 */
+  fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
+}
+
+export interface PropFormHandle {
+  el: HTMLElement
+  destroy: () => void
 }
 
 /**
  * 依 schema 建立分組表單
+ *
+ * optionsFrom select 會訂閱 engine，dependsOn prop 變動時重載
  */
-export function createPropForm(opts: FormOptions): HTMLElement {
-  const { engine, schema, assets } = opts
+export function createPropForm(opts: FormOptions): PropFormHandle {
+  const { engine, schema, assets, fetchJSON } = opts
   const nodeId = opts.node.id
   const wrap = document.createElement('div')
   wrap.className = 'sigil-prop-form'
 
   /** dependsOn 欄位索引 */
   const fieldRoots = new Map<string, HTMLElement>()
+  /** optionsFrom select 的重載器，鍵為 prop name */
+  const reloaders = new Map<string, () => void>()
+  const disposers: (() => void)[] = []
 
   function currentProps(): Record<string, unknown> {
     const n = findNode(engine.getTree(), nodeId)
     return n?.shortcode?.props ?? {}
-  }
-
-  function currentNode(): ComponentNode {
-    return findNode(engine.getTree(), nodeId) ?? opts.node
   }
 
   function refreshVisibility(): void {
@@ -69,11 +77,48 @@ export function createPropForm(opts: FormOptions): HTMLElement {
     field.dataset.propField = s.name
     fieldRoots.set(s.name, field)
     wrap.appendChild(field)
+
+    // select + optionsFrom：掛載載入/重載
+    if (s.type === 'select' && s.optionsFrom) {
+      const sel = field.querySelector('select') as HTMLSelectElement | null
+      if (sel) {
+        const setup = setupOptionsFrom(
+          sel,
+          s,
+          () => currentProps(),
+          fetchJSON,
+        )
+        reloaders.set(s.name, setup.reload)
+        disposers.push(setup.destroy)
+      }
+    }
   }
 
   refreshVisibility()
-  void currentNode
-  return wrap
+
+  // 訂閱 engine：dependsOn prop 變動時重載對應 optionsFrom select
+  let lastProps = currentProps()
+  const unsub = engine.subscribe((ev) => {
+    if (ev.type !== 'patch' && ev.type !== 'tree') return
+    const next = currentProps()
+    for (const [name, reload] of reloaders) {
+      const s = schema.find((x) => x.name === name)
+      const dep = s?.dependsOn?.prop
+      if (!dep) continue
+      if (lastProps[dep] !== next[dep]) reload()
+    }
+    lastProps = next
+    refreshVisibility()
+  })
+  disposers.push(unsub)
+
+  return {
+    el: wrap,
+    destroy() {
+      for (const d of disposers) d()
+      disposers.length = 0
+    },
+  }
 }
 
 function createField(
@@ -276,6 +321,80 @@ function createMediaField(
 
   wrap.append(span, preview, row)
   return wrap
+}
+
+/**
+ * select + optionsFrom 的載入／重載管理
+ *
+ * - 每次載入用新 AbortController，舊的 abort（race 安全）
+ * - 載入中顯示 placeholder；失敗顯示「載入失敗」；無 fetchJSON 顯示「無法載入」
+ * - 重載後保留已選值（若新選項仍含），否則清空
+ */
+function setupOptionsFrom(
+  sel: HTMLSelectElement,
+  schema: PropSchema,
+  getProps: () => Record<string, unknown>,
+  fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>,
+): { reload: () => void; destroy: () => void } {
+  const fn = schema.optionsFrom!
+  let ac: AbortController | null = null
+
+  function fill(options: { value: string; label?: string }[]): void {
+    // 保留已選值：優先取 props（select 空時 sel.value 不可靠）
+    const keep = String(getProps()[schema.name] ?? sel.value ?? '')
+    sel.replaceChildren()
+    for (const opt of options) {
+      const o = document.createElement('option')
+      o.value = opt.value
+      o.textContent = opt.label ?? opt.value
+      sel.appendChild(o)
+    }
+    sel.value = options.some((o) => o.value === keep) ? keep : (options[0]?.value ?? '')
+  }
+
+  function placeholder(text: string): void {
+    sel.replaceChildren()
+    const o = document.createElement('option')
+    o.value = ''
+    o.textContent = text
+    o.disabled = true
+    sel.appendChild(o)
+    sel.value = ''
+  }
+
+  async function load(): Promise<void> {
+    ac?.abort()
+    ac = new AbortController()
+    const current = ac
+    if (!fetchJSON) {
+      placeholder('無法載入')
+      return
+    }
+    placeholder('載入中…')
+    try {
+      const options = await fn({
+        props: getProps(),
+        fetchJSON,
+        signal: current.signal,
+      })
+      // race 防護：只接受仍為當前的 controller 結果
+      if (current !== ac) return
+      fill(options)
+    } catch (err) {
+      if (current === ac && err instanceof DOMException && err.name === 'AbortError') return
+      if (current !== ac) return
+      placeholder('載入失敗')
+    }
+  }
+
+  load()
+  return {
+    reload: load,
+    destroy() {
+      ac?.abort()
+      ac = null
+    },
+  }
 }
 
 function createControl(schema: PropSchema, value: unknown): HTMLElement {

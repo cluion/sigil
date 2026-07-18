@@ -205,6 +205,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   })
   const props = createPropsPanel(engine, propsBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
+    fetchJSON,
   })
   const unsubDevice = canvas.subscribeDevice((device) => props.setDevice(device))
   const layers = createLayersPanel(engine, layersBox)

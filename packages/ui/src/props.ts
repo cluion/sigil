@@ -18,6 +18,8 @@ import {
 export interface PropsPanelOptions {
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
   device?: ResponsiveDevice
+  /** select optionsFrom 用的非同步能力 */
+  fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
 }
 
 export interface PropsPanelHandle {
@@ -32,7 +34,11 @@ export function createPropsPanel(
 ): PropsPanelHandle {
   let device: ResponsiveDevice = opts?.device ?? 'desktop'
 
+  let currentFormDestroy: (() => void) | null = null
+
   function render(): void {
+    currentFormDestroy?.()
+    currentFormDestroy = null
     const id = engine.getSelection()
     container.replaceChildren()
     if (!id) {
@@ -50,7 +56,16 @@ export function createPropsPanel(
 
     appendContentField(container, engine, node)
     appendClassField(container, engine, node)
-    appendShortcodePropsField(container, engine, node, opts?.getShortcodeSchema)
+    appendShortcodePropsField(
+      container,
+      engine,
+      node,
+      opts?.getShortcodeSchema,
+      opts?.fetchJSON,
+      (fn) => {
+        currentFormDestroy = fn
+      },
+    )
     appendStyleField(container, engine, node, device, render)
   }
 
@@ -65,6 +80,8 @@ export function createPropsPanel(
       render()
     },
     destroy() {
+      currentFormDestroy?.()
+      currentFormDestroy = null
       unsub()
     },
   }
@@ -113,6 +130,8 @@ function appendShortcodePropsField(
   engine: Engine,
   node: ComponentNode,
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined,
+  fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>,
+  registerDestroy?: (fn: () => void) => void,
 ): void {
   if (!node.shortcode) return
   const heading = document.createElement('h4')
@@ -121,7 +140,9 @@ function appendShortcodePropsField(
 
   const schema = getShortcodeSchema?.(node.shortcode.name)
   if (schema && schema.length > 0) {
-    container.appendChild(createPropForm({ engine, node, schema }))
+    const handle = createPropForm({ engine, node, schema, fetchJSON })
+    registerDestroy?.(handle.destroy)
+    container.appendChild(handle.el)
     return
   }
 

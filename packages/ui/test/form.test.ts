@@ -6,8 +6,8 @@ function setup(schema: PropSchema[], props: Record<string, unknown> = {}) {
   const engine = createEngine({
     doc: { version: 1 as const, root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props } } },
   })
-  const form = createPropForm({ engine, node: engine.getTree(), schema })
-  return { engine, form }
+  const handle = createPropForm({ engine, node: engine.getTree(), schema })
+  return { engine, form: handle.el, destroy: handle.destroy }
 }
 
 describe('createPropForm', () => {
@@ -119,7 +119,7 @@ describe('createPropForm', () => {
         },
       },
     })
-    const form = createPropForm({
+    const handle = createPropForm({
       engine,
       node: engine.getTree(),
       schema: [{ name: 'src', type: 'media', label: '圖' }],
@@ -127,6 +127,7 @@ describe('createPropForm', () => {
         list: () => [{ id: '1', url: 'https://b.test/y.png', name: 'Y' }],
       },
     })
+    const form = handle.el
     const input = form.querySelector('input.sigil-input') as HTMLInputElement
     expect(input.value).toBe('https://a.test/x.png')
     const pick = form.querySelector('button') as HTMLButtonElement
@@ -227,6 +228,140 @@ describe('createPropForm', () => {
     const sel = form.querySelector('.sigil-repeater-item select') as HTMLSelectElement
     expect(sel.options.length).toBe(2)
     expect(sel.value).toBe('l')
+  })
+
+  it('optionsFrom select 初始載入選項', async () => {
+    const fetchJSON = vi.fn(async (url: string) => {
+      if (url.startsWith('/sizes')) return { sizes: [{ value: 's', label: 'S' }, { value: 'm', label: 'M' }] }
+      return {}
+    })
+    const engine = createEngine({
+      doc: {
+        version: 1 as const,
+        root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props: { color: 'red', size: 'm' } } },
+      },
+    })
+    const handle = createPropForm({
+      engine,
+      node: engine.getTree(),
+      schema: [
+        {
+          name: 'size',
+          type: 'select',
+          dependsOn: { prop: 'color' },
+          optionsFrom: async (ctx) => {
+            const d = (await ctx.fetchJSON('/sizes', ctx.signal)) as { sizes: { value: string; label: string }[] }
+            return d.sizes ?? []
+          },
+        },
+      ],
+      fetchJSON,
+    })
+    const sel = handle.el.querySelector('select') as HTMLSelectElement
+    // 載入中 placeholder
+    expect(sel.options.length).toBe(1)
+    await vi.waitFor(() => expect(sel.options.length).toBe(2))
+    expect(sel.value).toBe('m') // 保留已選值
+    handle.destroy()
+  })
+
+  it('dependsOn prop 變動 → optionsFrom 重載', async () => {
+    const sizesByColor: Record<string, { value: string; label: string }[]> = {
+      red: [{ value: 's', label: 'S' }],
+      blue: [{ value: 'm', label: 'M' }, { value: 'l', label: 'L' }],
+    }
+    const fetchJSON = vi.fn(async (url: string) => {
+      const params = new URLSearchParams(url.split('?')[1] ?? '')
+      return { sizes: sizesByColor[params.get('color') ?? 'red'] ?? [] }
+    })
+    const engine = createEngine({
+      doc: {
+        version: 1 as const,
+        root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props: { color: 'red', size: 's' } } },
+      },
+    })
+    const handle = createPropForm({
+      engine,
+      node: engine.getTree(),
+      schema: [
+        { name: 'color', type: 'select', options: [{ value: 'red' }, { value: 'blue' }] },
+        {
+          name: 'size',
+          type: 'select',
+          dependsOn: { prop: 'color' },
+          optionsFrom: async (ctx) => {
+            const d = (await ctx.fetchJSON(`/sizes?color=${ctx.props.color}`, ctx.signal)) as {
+              sizes: { value: string; label: string }[]
+            }
+            return d.sizes ?? []
+          },
+        },
+      ],
+      fetchJSON,
+    })
+    const selects = handle.el.querySelectorAll('select')
+    const colorSel = selects[0] as HTMLSelectElement
+    const sizeSel = selects[1] as HTMLSelectElement
+
+    await vi.waitFor(() => expect(sizeSel.options.length).toBe(1)) // red → 1 個 size
+
+    // 改 color → blue，觸發 size 重載
+    colorSel.value = 'blue'
+    colorSel.dispatchEvent(new Event('change'))
+    await vi.waitFor(() => expect(sizeSel.options.length).toBe(2)) // blue → 2 個 size
+    handle.destroy()
+  })
+
+  it('optionsFrom 載入失敗顯示提示、不崩', async () => {
+    const fetchJSON = vi.fn(async () => Promise.reject(new Error('fail')))
+    const engine = createEngine({
+      doc: {
+        version: 1 as const,
+        root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props: {} } },
+      },
+    })
+    const handle = createPropForm({
+      engine,
+      node: engine.getTree(),
+      schema: [
+        {
+          name: 'size',
+          type: 'select',
+          optionsFrom: async (ctx) => {
+            await ctx.fetchJSON('/sizes', ctx.signal)
+            return []
+          },
+        },
+      ],
+      fetchJSON,
+    })
+    const sel = handle.el.querySelector('select') as HTMLSelectElement
+    await vi.waitFor(() => expect(sel.options[0]?.textContent).toBe('載入失敗'))
+    handle.destroy()
+  })
+
+  it('無 fetchJSON → 顯示無法載入', async () => {
+    const engine = createEngine({
+      doc: {
+        version: 1 as const,
+        root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props: {} } },
+      },
+    })
+    const handle = createPropForm({
+      engine,
+      node: engine.getTree(),
+      schema: [
+        {
+          name: 'size',
+          type: 'select',
+          optionsFrom: async () => [],
+        },
+      ],
+      // 不傳 fetchJSON
+    })
+    const sel = handle.el.querySelector('select') as HTMLSelectElement
+    expect(sel.options[0]?.textContent).toBe('無法載入')
+    handle.destroy()
   })
 })
 
