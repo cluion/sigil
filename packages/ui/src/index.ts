@@ -24,3 +24,5 @@ export {
 export type { DropTarget, Side, Orient, DropMode, IndicatorShowOpts, IndicatorKind } from './dnd.js'
 export { computeGuides, computeGaps, ALIGN_THRESHOLD } from './alignment.js'
 export type { Rect, AlignLine, GapHint } from './alignment.js'
+export { applyTheme, effectiveTheme, nextTheme } from './theme.js'
+export type { ThemeChoice } from './theme.js'

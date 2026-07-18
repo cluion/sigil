@@ -69,6 +69,29 @@
   box-sizing: border-box;
 }
 
+/* 全域精緻捲動條：圓角、與內容有間距、暗色自適應 */
+.sigil-app * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sigil-color-border-strong) transparent;
+}
+.sigil-app ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.sigil-app ::-webkit-scrollbar-track {
+  margin: 4px;
+}
+.sigil-app ::-webkit-scrollbar-thumb {
+  background: var(--sigil-color-border-strong);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.sigil-app ::-webkit-scrollbar-thumb:hover {
+  background: var(--sigil-color-muted);
+  background-clip: content-box;
+}
+
 /* —— Topbar —— */
 .sigil-topbar {
   display: flex;

@@ -33,9 +33,12 @@ import {
   createBlocksPanel,
   createLayersPanel,
   createInspector,
+  applyTheme,
+  nextTheme,
   type BlocksInput,
   type CanvasDevice,
   type CanvasMode,
+  type ThemeChoice,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -74,6 +77,10 @@ const i18nMessages = {
     'app.empty_tip': '快捷鍵 Ctrl/Cmd+S 存檔 · 匯出可下載 HTML',
     'app.save_as_template': '存為範本',
     'app.template_name': '範本名稱',
+    'app.theme': '主題',
+    'app.theme_auto': '自動',
+    'app.theme_light': '亮色',
+    'app.theme_dark': '暗色',
     'status.none': '未選取',
   },
   en: {
@@ -104,6 +111,10 @@ const i18nMessages = {
     'app.empty_tip': 'Ctrl/Cmd+S to save · Export downloads HTML',
     'app.save_as_template': 'Save as Template',
     'app.template_name': 'Template name',
+    'app.theme': 'Theme',
+    'app.theme_auto': 'Auto',
+    'app.theme_light': 'Light',
+    'app.theme_dark': 'Dark',
     'status.none': 'Nothing selected',
   },
 }
@@ -123,6 +134,8 @@ export interface AppOptions {
   sanitize?: SanitizeFn
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
   locale?: Locale
+  /** 主題：light／dark／auto；未傳時讀 localStorage，預設 auto */
+  theme?: ThemeChoice
   /** 額外命令可覆寫同 id 預設 */
   commands?: CommandDefinition[]
   /** 生命週期 hooks */
@@ -310,6 +323,29 @@ export function createApp(opts: AppOptions): SigilApp {
   root.className = 'sigil-app'
   mountEl.appendChild(root)
 
+  // —— 主題：opts > localStorage > auto ——
+  function readStoredTheme(): ThemeChoice {
+    try {
+      const v = localStorage.getItem('sigil-theme')
+      if (v === 'light' || v === 'dark' || v === 'auto') return v
+    } catch {
+      /* 隱私模式或 SSR */
+    }
+    return 'auto'
+  }
+  let themeChoice: ThemeChoice = opts.theme ?? readStoredTheme()
+  let cleanupTheme = applyTheme(root, themeChoice)
+  function writeStoredTheme(c: ThemeChoice): void {
+    try {
+      localStorage.setItem('sigil-theme', c)
+    } catch {
+      /* ignore */
+    }
+  }
+  function themeLabel(c: ThemeChoice): string {
+    return i18n.t(c === 'auto' ? 'app.theme_auto' : c === 'light' ? 'app.theme_light' : 'app.theme_dark')
+  }
+
   // —— Topbar 命令分組 ——
   const topbar = document.createElement('header')
   topbar.className = 'sigil-topbar'
@@ -382,6 +418,19 @@ export function createApp(opts: AppOptions): SigilApp {
     if (endOrder.includes(cmd.id)) continue
     mountCommandButton(cmd, actions, cmd.toolbar === 'primary')
   }
+  const themeBtn = btn(themeLabel(themeChoice), () => {
+    cleanupTheme()
+    themeChoice = nextTheme(themeChoice)
+    cleanupTheme = applyTheme(root, themeChoice)
+    writeStoredTheme(themeChoice)
+    themeBtn.textContent = themeLabel(themeChoice)
+    themeBtn.setAttribute('aria-label', `${i18n.t('app.theme')}: ${themeLabel(themeChoice)}`)
+    refreshChrome()
+  }, true)
+  themeBtn.title = i18n.t('app.theme')
+  themeBtn.setAttribute('aria-label', `${i18n.t('app.theme')}: ${themeLabel(themeChoice)}`)
+  actions.append(themeBtn)
+
   const helpBtn = btn(i18n.t('app.help'), () => {
     helpOpen = !helpOpen
     helpPanel.hidden = !helpOpen
@@ -681,6 +730,7 @@ export function createApp(opts: AppOptions): SigilApp {
     destroy() {
       runBeforeDestroy(hooks, engine)
       closeExportDialog?.()
+      cleanupTheme()
       window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('keydown', onKeyDown)
       unsub()

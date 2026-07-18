@@ -239,4 +239,46 @@ describe('createApp', () => {
     expect(ping).toHaveBeenCalledOnce()
     app.destroy()
   })
+
+  it('theme 初始值套 class，切換鈕循環三態（auto→light→dark→auto）', () => {
+    localStorage.clear()
+    const mount = document.createElement('div')
+    const app = createApp({
+      mount,
+      doc: emptyDoc(),
+      theme: 'dark',
+    })
+    const root = mount.querySelector('.sigil-app') as HTMLElement
+    expect(root.classList.contains('sigil-theme-dark')).toBe(true)
+
+    // 主題按鈕：靠 title 找
+    const themeBtn = [...mount.querySelectorAll<HTMLButtonElement>('.sigil-topbar button')].find(
+      (b) => b.title === '主題' || b.title === 'Theme',
+    )!
+    expect(themeBtn).toBeTruthy()
+
+    // dark → auto：系統非暗（happy-dom 預設）→ 移除 class
+    themeBtn.click()
+    expect(root.classList.contains('sigil-theme-dark')).toBe(false)
+    // auto → light：移除 class（仍亮）
+    themeBtn.click()
+    expect(root.classList.contains('sigil-theme-dark')).toBe(false)
+    // light → dark：加回 class
+    themeBtn.click()
+    expect(root.classList.contains('sigil-theme-dark')).toBe(true)
+    app.destroy()
+  })
+
+  it('theme 記 localStorage', () => {
+    localStorage.clear()
+    const mount = document.createElement('div')
+    const app = createApp({ mount, doc: emptyDoc(), theme: 'dark' })
+    const themeBtn = [...mount.querySelectorAll<HTMLButtonElement>('.sigil-topbar button')].find(
+      (b) => b.title === '主題' || b.title === 'Theme',
+    )!
+    // dark → auto，應寫入 localStorage
+    themeBtn.click()
+    expect(localStorage.getItem('sigil-theme')).toBe('auto')
+    app.destroy()
+  })
 })

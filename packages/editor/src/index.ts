@@ -32,7 +32,9 @@ import {
   createPropsPanel,
   createBlocksPanel,
   createLayersPanel,
+  applyTheme,
   type BlocksInput,
+  type ThemeChoice,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -60,6 +62,8 @@ export interface EditorOptions {
   sanitize?: SanitizeFn
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
   locale?: Locale
+  /** 主題：light／dark／auto；預設 auto。SDK 無切換按鈕，宿主自理 */
+  theme?: ThemeChoice
   /** 額外命令可覆寫同 id 預設 */
   commands?: CommandDefinition[]
   /** 生命週期 hooks */
@@ -192,6 +196,9 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   layout.append(blocksBox, canvasBox, rightBox)
   mountEl.appendChild(layout)
 
+  // 主題：套到 layout；SDK 無 toggle，宿主可 destroy+remount 切換
+  const cleanupTheme = applyTheme(layout, opts.theme ?? 'auto')
+
   const canvas = createCanvas(engine, canvasBox, {
     rendererOptions: { shortcodeResolver },
     i18n,
@@ -263,6 +270,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     },
     destroy() {
       runBeforeDestroy(hooks, engine)
+      cleanupTheme()
       document.removeEventListener('keydown', onKeyDown)
       unsubSel()
       unsubDevice()

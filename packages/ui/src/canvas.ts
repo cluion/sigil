@@ -44,8 +44,9 @@ export function createCanvas(
   container.classList.add('sigil-canvas-host')
   const iframe = document.createElement('iframe')
   iframe.className = 'sigil-canvas-iframe'
+  // 畫布為真實頁面預覽，永遠白底深字，不受編輯器主題影響
   iframe.style.cssText =
-    'border:1px solid var(--sigil-color-border, #ccc);width:100%;height:100%;min-height:420px;background:var(--sigil-color-canvas, #fff);pointer-events:none;display:block;border-radius:var(--sigil-radius-sm, 6px)'
+    'border:1px solid var(--sigil-color-border, #ccc);width:100%;height:100%;min-height:420px;background:#fff;pointer-events:none;display:block;border-radius:var(--sigil-radius-sm, 6px)'
   iframe.title = i18n?.t('canvas.title') ?? '編輯畫布'
   container.appendChild(iframe)
 
@@ -210,7 +211,12 @@ export function createCanvas(
   function injectStyle(doc: Document): void {
     const style = doc.createElement('style')
     style.textContent = [
-      'body{margin:12px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#0f172a;line-height:1.5}',
+      'body{margin:12px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#0f172a;line-height:1.5;scrollbar-gutter:stable}',
+      /* 精緻捲動條，避免緊貼內容 */
+      'body::-webkit-scrollbar{width:10px;height:10px}',
+      'body::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:6px;border:2px solid transparent;background-clip:content-box}',
+      'body::-webkit-scrollbar-thumb:hover{background:#94a3b8;background-clip:content-box}',
+      'body::-webkit-scrollbar-track{margin:4px}',
       /* 容器提示 */
       'section[data-sigil-id]{padding:8px;min-height:28px;outline:1px dashed #e2e8f0;outline-offset:-1px;border-radius:6px;transition:outline-color .12s,box-shadow .12s}',
       'div[data-sigil-id]{padding:8px;min-height:28px;outline:1px dashed #d1fae5;outline-offset:-1px;background:rgba(167,243,208,0.08);border-radius:6px;transition:outline-color .12s,box-shadow .12s}',
