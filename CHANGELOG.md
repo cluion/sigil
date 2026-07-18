@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0
+
+- PropSchema `optionsFrom`: dynamic select options via `optionsFrom(ctx)` with `fetchJSON` + abort `signal`; pair with `dependsOn` for race-safe reload on dependency change (e.g. color → size cascade)
+- `createInspector` / `createPropsPanel` / `createPropForm` now accept optional `fetchJSON`; `createApp` / `createEditor` thread it through
+- Without `fetchJSON` injected, an `optionsFrom` select degrades to "無法載入" instead of crashing
+- Completes PropSchema advanced types (group / media / dependsOn / repeater / date / optionsFrom)
+
 ## 0.9.0
 
 - Dark theme: `createApp` / `createEditor` accept `theme: 'light' | 'dark' | 'auto'`; app shell has a topbar toggle cycling the three modes, persisted to `localStorage`; `auto` tracks `prefers-color-scheme`

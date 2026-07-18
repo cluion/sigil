@@ -1,6 +1,6 @@
 {
   "name": "@cluion/sigil-core",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Sigil core engine — zero-dependency, CSP-safe page model and renderer",
   "license": "MIT",
   "type": "module",

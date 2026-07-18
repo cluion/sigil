@@ -1,5 +1,20 @@
 # @cluion/sigil-app
 
+## 0.10.0
+
+### Minor Changes
+
+- 6915ccb: Add `optionsFrom` to PropSchema for dynamic select options. A `select` field can declare `optionsFrom(ctx)` where `ctx` carries the current `props`, a `fetchJSON` adapter, and an abort `signal`; pair it with `dependsOn` and the options reload (aborting the previous request, race-safe) whenever the dependency prop changes. This completes the product-card spec-cascade use case (color → size). `createInspector` / `createPropsPanel` / `createPropForm` now accept an optional `fetchJSON`; `createApp` / `createEditor` thread their existing `fetchJSON` down to the form. Without `fetchJSON` injected, an `optionsFrom` select shows "無法載入" instead of crashing.
+
+### Patch Changes
+
+- Updated dependencies [6915ccb]
+  - @cluion/sigil-core@0.10.0
+  - @cluion/sigil-ui@0.10.0
+  - @cluion/sigil-blocks@0.10.0
+  - @cluion/sigil-shortcode@0.10.0
+  - @cluion/sigil-store-json@0.10.0
+
 ## 0.9.0
 
 ### Minor Changes
