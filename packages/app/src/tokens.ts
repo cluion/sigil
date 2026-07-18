@@ -79,6 +79,10 @@ export function ensureTokens(): void {
 .sigil-dialog-actions{display:flex;flex-wrap:wrap;gap:8px}
 .sigil-field-row{display:flex;gap:6px;align-items:center}
 .sigil-field-row .sigil-input{flex:1}
+.sigil-repeater-list{display:flex;flex-direction:column;gap:8px}
+.sigil-repeater-item{border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);background:var(--sigil-color-surface-2);padding:8px}
+.sigil-repeater-fields{display:flex;flex-direction:column;gap:6px}
+.sigil-repeater-actions{display:flex;justify-content:flex-end;margin-top:6px}
 .sigil-img-preview{max-width:100%;max-height:120px;object-fit:contain;border:1px solid var(--sigil-color-border);border-radius:var(--sigil-radius-sm);background:var(--sigil-color-surface-2)}
 .sigil-media-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000}
 .sigil-media-panel{width:min(520px,92vw);max-height:80vh;overflow:auto;background:var(--sigil-color-surface);border-radius:var(--sigil-radius-md);box-shadow:var(--sigil-shadow-md);padding:var(--sigil-space-3);display:flex;flex-direction:column;gap:var(--sigil-space-3)}

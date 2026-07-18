@@ -83,6 +83,10 @@ function createField(
   value: unknown,
   onChanged: () => void,
 ): HTMLElement {
+  // repeater 自行管理寫入，分流到專屬渲染
+  if (schema.type === 'repeater') {
+    return createRepeaterField(engine, nodeId, schema, value, onChanged)
+  }
   const label = document.createElement('label')
   label.className = 'sigil-field'
   const span = document.createElement('span')
@@ -96,6 +100,113 @@ function createField(
   })
   label.append(span, control)
   return label
+}
+
+/**
+ * repeater 欄位 — 可增刪的重複群組
+ *
+ * 每筆是一個 group，子欄位用 createControl 渲染；
+ * 變動／增／刪一律從 engine 樹取最新陣列後重組整段寫入
+ */
+function createRepeaterField(
+  engine: Engine,
+  nodeId: string,
+  schema: PropSchema,
+  value: unknown,
+  onChanged: () => void,
+): HTMLElement {
+  const wrap = document.createElement('div')
+  wrap.className = 'sigil-field sigil-repeater'
+  const span = document.createElement('span')
+  span.className = 'sigil-field-label'
+  span.textContent = schema.label ?? schema.name
+  const list = document.createElement('div')
+  list.className = 'sigil-repeater-list'
+  const addBtn = document.createElement('button')
+  addBtn.type = 'button'
+  addBtn.className = 'sigil-btn'
+  addBtn.textContent = '+ 新增'
+
+  /** 取得目前陣列（同步讀 engine 樹，保證最新） */
+  function currentArray(): Record<string, unknown>[] {
+    const node = findNode(engine.getTree(), nodeId)
+    const v = node?.shortcode?.props?.[schema.name]
+    return Array.isArray(v) ? (v as Record<string, unknown>[]).map((x) => ({ ...x })) : []
+  }
+
+  /** 寫回整個陣列 */
+  function write(arr: Record<string, unknown>[]): void {
+    setProp(engine, nodeId, schema.name, arr)
+    onChanged()
+  }
+
+  function renderList(): void {
+    list.replaceChildren()
+    const arr = currentArray()
+    arr.forEach((item, index) => {
+      const itemWrap = document.createElement('div')
+      itemWrap.className = 'sigil-repeater-item'
+      const fields = document.createElement('div')
+      fields.className = 'sigil-repeater-fields'
+      for (const sub of schema.schema ?? []) {
+        const label = document.createElement('label')
+        label.className = 'sigil-field'
+        const subSpan = document.createElement('span')
+        subSpan.className = 'sigil-field-label'
+        subSpan.textContent = sub.label ?? sub.name
+        const control = createControl(sub, item[sub.name])
+        const evt = sub.type === 'text' || sub.type === 'number' ? 'input' : 'change'
+        control.addEventListener(evt, () => {
+          const next = currentArray()
+          next[index] = { ...next[index], ...readControl(sub, control) }
+          write(next)
+        })
+        label.append(subSpan, control)
+        fields.appendChild(label)
+      }
+      const actions = document.createElement('div')
+      actions.className = 'sigil-repeater-actions'
+      const delBtn = document.createElement('button')
+      delBtn.type = 'button'
+      delBtn.className = 'sigil-btn sigil-btn--ghost'
+      delBtn.textContent = '刪除'
+      delBtn.addEventListener('click', () => {
+        const next = currentArray()
+        next.splice(index, 1)
+        write(next)
+        renderList()
+      })
+      actions.appendChild(delBtn)
+      itemWrap.append(fields, actions)
+      list.appendChild(itemWrap)
+    })
+  }
+
+  addBtn.addEventListener('click', () => {
+    const next = currentArray()
+    next.push({})
+    write(next)
+    renderList()
+  })
+
+  // 首次渲染：value 即 engine 樹內的 props，currentArray() 會取到同值
+  void value
+  renderList()
+  wrap.append(span, list, addBtn)
+  return wrap
+}
+
+/** 從 control 讀出 { name: value } */
+function readControl(schema: PropSchema, control: HTMLElement): Record<string, unknown> {
+  let v: unknown
+  if (schema.type === 'boolean') {
+    v = (control as HTMLInputElement).checked
+  } else if (schema.type === 'number') {
+    v = Number((control as HTMLInputElement).value)
+  } else {
+    v = (control as HTMLInputElement | HTMLSelectElement).value
+  }
+  return { [schema.name]: v }
 }
 
 function createMediaField(
@@ -199,6 +310,13 @@ function createControl(schema: PropSchema, value: unknown): HTMLElement {
       el.className = 'sigil-input'
       el.type = 'number'
       el.value = value === undefined ? '' : String(value)
+      return el
+    }
+    case 'date': {
+      const el = document.createElement('input')
+      el.className = 'sigil-input'
+      el.type = 'date'
+      el.value = String(value ?? '')
       return el
     }
     case 'text':

@@ -590,6 +590,31 @@
   flex: 1;
 }
 
+.sigil-repeater-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sigil-repeater-item {
+  border: 1px solid var(--sigil-color-border);
+  border-radius: var(--sigil-radius-sm);
+  background: var(--sigil-color-surface-2);
+  padding: 8px;
+}
+
+.sigil-repeater-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sigil-repeater-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
 .sigil-img-preview {
   max-width: 100%;
   max-height: 120px;

@@ -19,6 +19,7 @@ import { productDef } from './shortcodes/product'
 import { cartDef } from './shortcodes/cart'
 import { bannerDef } from './shortcodes/banner'
 import { calloutDef } from './shortcodes/callout'
+import { linksDef } from './shortcodes/links'
 
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
@@ -187,6 +188,18 @@ const blocks = [
         ctaLabel: '了解更多',
       }),
   }),
+  defineBlock({
+    id: 'links',
+    label: '連結清單',
+    category: '內容',
+    icon: '🔗',
+    keywords: ['links', 'repeater', 'date'],
+    create: () =>
+      blockShortcode('links', {
+        heading: '相關連結',
+        items: [{ label: 'Sigil', href: 'https://github.com/cluion/sigil' }],
+      }),
+  }),
 ]
 
 const shortcodes = [
@@ -199,6 +212,7 @@ const shortcodes = [
   cartDef,
   bannerDef,
   calloutDef,
+  linksDef,
 ]
 
 const hookLog = document.createElement('span')

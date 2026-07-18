@@ -36,4 +36,28 @@ describe('isPropVisible / dependsOn', () => {
     expect(isPropVisible(s, { enabled: '' })).toBe(false)
     expect(isPropVisible(s, {})).toBe(false)
   })
+
+  it('PropType 含 date／repeater', () => {
+    const date: PropSchema = { name: 'd', type: 'date' }
+    const repeater: PropSchema = {
+      name: 'items',
+      type: 'repeater',
+      schema: [{ name: 'label', type: 'text' }],
+    }
+    expect(isPropVisible(date, {})).toBe(true)
+    expect(isPropVisible(repeater, {})).toBe(true)
+    // repeater 子結構可描述多欄位
+    expect(repeater.schema).toHaveLength(1)
+  })
+
+  it('repeater 整體可受 dependsOn 控制', () => {
+    const repeater: PropSchema = {
+      name: 'items',
+      type: 'repeater',
+      dependsOn: { prop: 'enabled', eq: true },
+      schema: [{ name: 'label', type: 'text' }],
+    }
+    expect(isPropVisible(repeater, { enabled: true })).toBe(true)
+    expect(isPropVisible(repeater, { enabled: false })).toBe(false)
+  })
 })

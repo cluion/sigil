@@ -1,5 +1,13 @@
 /** shortcode prop 控制項型別 */
-export type PropType = 'text' | 'number' | 'boolean' | 'select' | 'color' | 'media'
+export type PropType =
+  | 'text'
+  | 'number'
+  | 'boolean'
+  | 'select'
+  | 'color'
+  | 'media'
+  | 'date'
+  | 'repeater'
 
 /** select 型別的選項 */
 export interface SelectOption {
@@ -31,6 +39,8 @@ export interface PropSchema {
   group?: string
   /** 可見條件 */
   dependsOn?: PropDependsOn
+  /** repeater 子欄位；每筆是一個 group */
+  schema?: PropSchema[]
 }
 
 /**

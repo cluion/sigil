@@ -138,5 +138,95 @@ describe('createPropForm', () => {
     ;(document.querySelector('.sigil-media-card') as HTMLButtonElement).click()
     expect(engine.getTree().shortcode!.props.src).toBe('https://b.test/y.png')
   })
+
+  it('date 生成 input[type=date]，變動寫入字串', () => {
+    const { engine, form } = setup([{ name: 'd', type: 'date' }], { d: '2026-07-01' })
+    const input = form.querySelector('input') as HTMLInputElement
+    expect(input.type).toBe('date')
+    expect(input.value).toBe('2026-07-01')
+    input.value = '2026-08-15'
+    input.dispatchEvent(new Event('change'))
+    expect(engine.getTree().shortcode!.props.d).toBe('2026-08-15')
+  })
+
+  it('repeater 初始渲染多筆，子欄位變動寫入陣列', () => {
+    const { engine, form } = setup(
+      [
+        {
+          name: 'items',
+          type: 'repeater',
+          schema: [
+            { name: 'label', type: 'text' },
+            { name: 'href', type: 'text' },
+          ],
+        },
+      ],
+      { items: [{ label: 'A', href: '/a' }, { label: 'B', href: '/b' }] },
+    )
+    const inputs = [...form.querySelectorAll('.sigil-repeater-item input')] as HTMLInputElement[]
+    expect(inputs.length).toBe(4) // 2 筆 × 2 欄位
+    // 改第一筆的 label
+    inputs[0]!.value = 'A2'
+    inputs[0]!.dispatchEvent(new Event('input'))
+    expect((engine.getTree().shortcode!.props.items as { label: string }[])[0]!.label).toBe('A2')
+  })
+
+  it('repeater 新增一筆 → props 陣列 +1', () => {
+    const { engine, form } = setup(
+      [
+        {
+          name: 'items',
+          type: 'repeater',
+          schema: [{ name: 'label', type: 'text' }],
+        },
+      ],
+      { items: [{ label: 'A' }] },
+    )
+    const addBtn = [...form.querySelectorAll('button')].find((b) => b.textContent === '+ 新增')!
+    addBtn.click()
+    const items = engine.getTree().shortcode!.props.items as unknown[]
+    expect(items.length).toBe(2)
+    expect(items[1]).toEqual({})
+  })
+
+  it('repeater 刪除一筆 → props 陣列 -1', () => {
+    const { engine, form } = setup(
+      [
+        {
+          name: 'items',
+          type: 'repeater',
+          schema: [{ name: 'label', type: 'text' }],
+        },
+      ],
+      { items: [{ label: 'A' }, { label: 'B' }] },
+    )
+    const delBtn = [...form.querySelectorAll('button')].find((b) => b.textContent === '刪除')!
+    delBtn.click()
+    const items = engine.getTree().shortcode!.props.items as { label: string }[]
+    expect(items.length).toBe(1)
+    expect(items[0]!.label).toBe('B')
+  })
+
+  it('repeater 子欄位含 select 正確渲染', () => {
+    const { form } = setup(
+      [
+        {
+          name: 'items',
+          type: 'repeater',
+          schema: [
+            {
+              name: 'align',
+              type: 'select',
+              options: [{ value: 'l' }, { value: 'r' }],
+            },
+          ],
+        },
+      ],
+      { items: [{ align: 'l' }] },
+    )
+    const sel = form.querySelector('.sigil-repeater-item select') as HTMLSelectElement
+    expect(sel.options.length).toBe(2)
+    expect(sel.value).toBe('l')
+  })
 })
 
