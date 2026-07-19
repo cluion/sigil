@@ -18,6 +18,14 @@ export interface CanvasHandle {
   setDevice: (device: CanvasDevice) => void
   getDevice: () => CanvasDevice
   subscribeDevice: (listener: (device: CanvasDevice) => void) => () => void
+  /** 進入 inline 文字編輯（text／button 節點）；非可編輯型別無反應 */
+  startEditing: (id: string) => void
+  /** 結束編輯並寫回 engine */
+  commitEditing: () => void
+  /** 結束編輯不寫回 */
+  cancelEditing: () => void
+  /** 目前是否正在編輯，與其 id */
+  getEditingId: () => string | null
   destroy: () => void
 }
 
@@ -67,11 +75,16 @@ export function createCanvas(
   let mode: CanvasMode = 'edit'
   let device: CanvasDevice = 'desktop'
   let hoverId: string | null = null
+  // —— inline 文字編輯狀態 ——
+  let editingId: string | null = null
+  let editingEl: HTMLElement | null = null
+  let editingCommitted = false
   const deviceListeners = new Set<(device: CanvasDevice) => void>()
   /** iframe 類型標籤 */
   let typeBadge: HTMLElement | null = null
 
   function setMode(next: CanvasMode): void {
+    if (editingId) endEditing(true)
     mode = next
     iframe.style.pointerEvents = next === 'preview' ? 'auto' : 'none'
     overlay.style.display = next === 'preview' ? 'none' : ''
@@ -115,6 +128,7 @@ export function createCanvas(
   if (showChrome) container.appendChild(deviceBar)
 
   function setDevice(next: CanvasDevice): void {
+    if (editingId) endEditing(true)
     device = next
     iframe.style.width = deviceWidths[next]
     iframe.style.margin = next === 'desktop' ? '' : '0 auto'
@@ -182,7 +196,100 @@ export function createCanvas(
     paintTypeBadge()
   }
 
+  // —— 雙擊 inline 編輯文字（text／button 節點）——
+  function setEditing(id: string | null): void {
+    if (editingId) endEditing(true)
+    if (!id) return
+    const doc = iframe.contentDocument
+    if (!doc || mode !== 'edit') return
+    const node = findNode(engine.getTree(), id)
+    if (!node || (node.type !== 'text' && node.type !== 'button')) return
+    const el = doc.querySelector(`[data-sigil-id="${escapeCssId(id)}"]`) as HTMLElement | null
+    if (!el) return
+
+    engine.select(id)
+    editingId = id
+    editingEl = el
+    editingCommitted = false
+
+    // 讓 iframe 能接收 pointer 以操作 caret
+    iframe.style.pointerEvents = 'auto'
+    overlay.style.display = 'none'
+
+    el.setAttribute('contenteditable', 'true')
+    el.focus()
+    selectAll(el, doc)
+
+    el.addEventListener('blur', onEditingBlur)
+    el.addEventListener('keydown', onEditingKeydown)
+  }
+
+  function endEditing(commit: boolean): void {
+    if (!editingId || !editingEl) return
+    const el = editingEl
+    const id = editingId
+    if (commit) {
+      const next = el.textContent ?? ''
+      // 先拆 listener 再寫回，避免 blur 重入
+      el.removeEventListener('blur', onEditingBlur)
+      el.removeEventListener('keydown', onEditingKeydown)
+      engine.update(id, { content: next })
+      // 重觸發 selection 讓 Inspector 同步 content（Inspector 不訂閱 patch）
+      engine.select(id)
+    } else {
+      el.removeEventListener('blur', onEditingBlur)
+      el.removeEventListener('keydown', onEditingKeydown)
+    }
+    el.removeAttribute('contenteditable')
+    // 復原 edit 模式的 pointer-events
+    iframe.style.pointerEvents = 'none'
+    overlay.style.display = ''
+    editingId = null
+    editingEl = null
+    editingCommitted = false
+    paintSelection()
+  }
+
+  function onEditingBlur(): void {
+    // blur 預設提交（Enter 也走此路；Esc 先設 flag 再 blur）
+    endEditing(!editingCommitted)
+  }
+
+  function onEditingKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      // 提交：blur handler 會寫回
+      ;(e.target as HTMLElement).blur()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      editingCommitted = true // 標記取消，blur 不寫回
+      ;(e.target as HTMLElement).blur()
+    }
+  }
+
+  function selectAll(el: HTMLElement, doc: Document): void {
+    const win = iframe.contentWindow
+    if (!win) return
+    try {
+      const sel = win.getSelection()
+      if (!sel) return
+      const range = doc.createRange()
+      range.selectNodeContents(el)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    } catch {
+      /* happy-dom／舊環境不支援，忽略 */
+    }
+  }
+
+  function onOverlayDblClick(e: MouseEvent): void {
+    const id = hitTest(iframe, e.clientX, e.clientY)
+    if (!id) return
+    setEditing(id)
+  }
+
   overlay.addEventListener('click', onOverlayClick)
+  overlay.addEventListener('dblclick', onOverlayDblClick)
   overlay.addEventListener('pointerdown', onOverlayPointerDown)
   overlay.addEventListener('pointermove', onOverlayPointerMove)
   overlay.addEventListener('pointerleave', onOverlayPointerLeave)
@@ -400,6 +507,18 @@ export function createCanvas(
     iframe,
     setMode,
     setDevice,
+    startEditing(id) {
+      setEditing(id)
+    },
+    commitEditing() {
+      endEditing(true)
+    },
+    cancelEditing() {
+      endEditing(false)
+    },
+    getEditingId() {
+      return editingId
+    },
     getDevice() {
       return device
     },
@@ -411,7 +530,9 @@ export function createCanvas(
       }
     },
     destroy() {
+      if (editingId) endEditing(false)
       overlay.removeEventListener('click', onOverlayClick)
+      overlay.removeEventListener('dblclick', onOverlayDblClick)
       overlay.removeEventListener('pointerdown', onOverlayPointerDown)
       overlay.removeEventListener('pointermove', onOverlayPointerMove)
       overlay.removeEventListener('pointerleave', onOverlayPointerLeave)

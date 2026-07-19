@@ -221,3 +221,87 @@ describe('createCanvas — selection chrome', () => {
     container.remove()
   })
 })
+
+describe('createCanvas — inline 文字編輯', () => {
+  it('startEditing text 節點 → contenteditable + iframe pointerEvents auto', async () => {
+    const engine = createEngine({ doc: docWithText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const { iframe, startEditing, getEditingId, destroy } = createCanvas(engine, container)
+    await waitIframeLoad(iframe)
+    await new Promise((r) => setTimeout(r, 30))
+
+    startEditing('t1')
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(getEditingId()).toBe('t1')
+    const el = iframe.contentDocument?.querySelector('[data-sigil-id="t1"]') as HTMLElement
+    expect(el.getAttribute('contenteditable')).toBe('true')
+    // 進入編輯：iframe 開放 pointer、overlay 隱藏
+    expect(iframe.style.pointerEvents).toBe('auto')
+    destroy()
+    container.remove()
+  })
+
+  it('commitEditing → 寫回 content', async () => {
+    const engine = createEngine({ doc: docWithText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const { iframe, startEditing, commitEditing, getEditingId, destroy } = createCanvas(
+      engine,
+      container,
+    )
+    await waitIframeLoad(iframe)
+    await new Promise((r) => setTimeout(r, 30))
+
+    startEditing('t1')
+    await new Promise((r) => setTimeout(r, 0))
+    // 模擬使用者改字（直接改 DOM，因 blur 才寫回）
+    const el = iframe.contentDocument?.querySelector('[data-sigil-id="t1"]') as HTMLElement
+    el.textContent = 'world'
+    commitEditing()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(getEditingId()).toBeNull()
+    expect(engine.getTree().children?.[0]?.content).toBe('world')
+    // 退出後 contenteditable 移除、pointer 復原
+    expect(el.getAttribute('contenteditable')).toBeNull()
+    expect(iframe.style.pointerEvents).toBe('none')
+    destroy()
+    container.remove()
+  })
+
+  it('cancelEditing → 不寫回', async () => {
+    const engine = createEngine({ doc: docWithText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const { iframe, startEditing, cancelEditing, destroy } = createCanvas(engine, container)
+    await waitIframeLoad(iframe)
+    await new Promise((r) => setTimeout(r, 30))
+
+    startEditing('t1')
+    await new Promise((r) => setTimeout(r, 0))
+    const el = iframe.contentDocument?.querySelector('[data-sigil-id="t1"]') as HTMLElement
+    el.textContent = 'changed'
+    cancelEditing()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(engine.getTree().children?.[0]?.content).toBe('hello')
+    destroy()
+    container.remove()
+  })
+
+  it('startEditing 非 text/button 節點 → 無反應', async () => {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const { iframe, startEditing, getEditingId, destroy } = createCanvas(engine, container)
+    await waitIframeLoad(iframe)
+    await new Promise((r) => setTimeout(r, 30))
+
+    startEditing('r') // root section
+    expect(getEditingId()).toBeNull()
+    destroy()
+    container.remove()
+  })
+})
