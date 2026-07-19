@@ -1,5 +1,15 @@
 # @cluion/sigil-ui
 
+## 0.11.0
+
+### Minor Changes
+
+- 598f14f: Double-click a text or button node on the canvas to edit its content in place (contenteditable, single-line). Enter or blur commits the change, Esc cancels. The canvas toggles iframe pointer-events while editing so the caret is reachable; on commit it re-selects the node so the Inspector's content field stays in sync. Only `text` and `button` nodes are editable this way (rich text is out of scope).
+
+### Patch Changes
+
+- @cluion/sigil-core@0.11.0
+
 ## 0.10.0
 
 ### Minor Changes

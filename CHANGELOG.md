@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0
+
+- Double-click a text or button node to edit its content in place on the canvas (contenteditable, single-line)
+- Enter or blur commits; Esc cancels; on commit the node is re-selected so the Inspector content field stays in sync
+- Only `text` and `button` nodes are editable this way
+
 ## 0.10.0
 
 - PropSchema `optionsFrom`: dynamic select options via `optionsFrom(ctx)` with `fetchJSON` + abort `signal`; pair with `dependsOn` for race-safe reload on dependency change (e.g. color → size cascade)
