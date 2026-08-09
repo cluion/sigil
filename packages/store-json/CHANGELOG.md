@@ -1,5 +1,11 @@
 # @cluion/sigil-store-json
 
+## 0.14.0
+
+### Patch Changes
+
+- @cluion/sigil-core@0.14.0
+
 ## 0.13.1
 
 ### Patch Changes

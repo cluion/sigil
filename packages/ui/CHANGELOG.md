@@ -1,5 +1,15 @@
 # @cluion/sigil-ui
 
+## 0.14.0
+
+### Minor Changes
+
+- ba0979d: Add keyboard block insertion, accessible layer-tree navigation, and modal dialog focus management. Block items now insert at the document root with Enter or Space; layer rows support roving focus, selection, renaming, and context-menu shortcuts; export and media dialogs trap focus, close with Escape, expose modal labels, and restore focus to their trigger.
+
+### Patch Changes
+
+- @cluion/sigil-core@0.14.0
+
 ## 0.13.1
 
 ### Patch Changes
