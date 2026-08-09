@@ -53,6 +53,8 @@ app.destroy()
 pnpm install
 pnpm dev
 pnpm test
+pnpm exec playwright install chromium # 第一次執行 E2E 前
+pnpm test:e2e
 pnpm build
 ```
 
