@@ -1,5 +1,20 @@
 # @cluion/sigil-app
 
+## 0.13.0
+
+### Minor Changes
+
+- 433b396: Add a container-aware compact app shell. Mounts narrower than 900px keep the canvas usable by moving Blocks and Layers / Settings into mutually exclusive drawers with backdrop dismissal, Escape handling, focus restoration, and accessible expanded state.
+- 7d50eda: Drop Node.js 20 support and require Node.js 24 or newer across all published packages.
+
+### Patch Changes
+
+- @cluion/sigil-blocks@0.13.0
+- @cluion/sigil-core@0.13.0
+- @cluion/sigil-shortcode@0.13.0
+- @cluion/sigil-store-json@0.13.0
+- @cluion/sigil-ui@0.13.0
+
 ## 0.12.0
 
 ### Minor Changes

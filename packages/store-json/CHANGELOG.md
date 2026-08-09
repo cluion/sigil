@@ -1,5 +1,15 @@
 # @cluion/sigil-store-json
 
+## 0.13.0
+
+### Minor Changes
+
+- 7d50eda: Drop Node.js 20 support and require Node.js 24 or newer across all published packages.
+
+### Patch Changes
+
+- @cluion/sigil-core@0.13.0
+
 ## 0.12.0
 
 ### Patch Changes
