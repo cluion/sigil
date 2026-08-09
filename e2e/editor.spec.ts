@@ -33,6 +33,18 @@ test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async
   await expect(layerLabels.nth(1)).toHaveText('標題文字')
   await expect(layerLabels.nth(2)).toHaveText('主按鈕')
 
+  const layerTree = page.getByRole('tree', { name: '圖層', exact: true })
+  const layerRows = layerTree.getByRole('treeitem')
+  await layerRows.first().focus()
+  await layerRows.first().press('ArrowRight')
+  await expect(layerRows.nth(1)).toBeFocused()
+  await layerRows.nth(1).press('Space')
+  await expect(layerRows.nth(1)).toHaveAttribute('aria-selected', 'true')
+  await layerRows.nth(1).press('Shift+F10')
+  await expect(page.getByRole('menu', { name: '節點操作', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(layerRows.nth(1)).toBeFocused()
+
   const layerCount = await layerLabels.count()
   const textBlock = page.getByRole('button', { name: '插入 文字', exact: true })
   await textBlock.focus()

@@ -728,6 +728,7 @@ export function createApp(opts: AppOptions): SigilApp {
   })
   const unsubDevice = canvas.subscribeDevice((next) => inspector.setDevice(next))
   const layers = createLayersPanel(engine, layersBox, {
+    ariaLabel: i18n.t('app.layers'),
     onContextMenu: (_id, x, y) => {
       openSelectionMenu(x, y)
     },

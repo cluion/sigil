@@ -1,6 +1,8 @@
 import type { Engine, ComponentNode } from '@cluion/sigil-core'
 
 export interface LayersPanelOptions {
+  /** 圖層樹的無障礙名稱 */
+  ariaLabel?: string
   /** 右鍵選單命中節點與游標座標 */
   onContextMenu?: (id: string, x: number, y: number) => void
 }
@@ -16,12 +18,38 @@ export function createLayersPanel(
   destroy: () => void
 } {
   container.classList.add('sigil-layers-panel')
+  container.setAttribute('role', 'tree')
+  container.setAttribute('aria-label', opts?.ariaLabel ?? '圖層')
 
   function render(): void {
+    const active = document.activeElement
+    const focusedRow =
+      active instanceof HTMLElement
+        ? active.closest<HTMLElement>('.sigil-layer-row[data-layer-id]')
+        : null
+    const focusedId =
+      focusedRow && container.contains(focusedRow) ? focusedRow.dataset.layerId : null
+    const focusedAction =
+      focusedId && active instanceof HTMLButtonElement ? active.dataset.layerAction : null
     const tree = engine.getTree()
     const sel = engine.getSelection()
     container.replaceChildren()
     container.appendChild(renderNode(tree, sel, 0, engine, opts?.onContextMenu))
+
+    const rows = [...container.querySelectorAll<HTMLElement>('.sigil-layer-row[data-layer-id]')]
+    const tabStop =
+      rows.find((row) => row.dataset.layerId === focusedId) ??
+      rows.find((row) => row.dataset.layerId === sel) ??
+      rows[0]
+    for (const row of rows) row.tabIndex = row === tabStop ? 0 : -1
+
+    if (focusedId) {
+      const nextRow = rows.find((row) => row.dataset.layerId === focusedId)
+      const nextFocus = focusedAction
+        ? nextRow?.querySelector<HTMLElement>(`[data-layer-action="${focusedAction}"]`)
+        : nextRow
+      nextFocus?.focus()
+    }
   }
 
   const unsub = engine.subscribe((ev) => {
@@ -42,6 +70,7 @@ function typeLabel(node: ComponentNode): string {
 }
 
 function iconBtn(
+  action: 'visibility' | 'lock',
   label: string,
   title: string,
   active: boolean,
@@ -50,6 +79,7 @@ function iconBtn(
   const b = document.createElement('button')
   b.type = 'button'
   b.className = 'sigil-layer-icon-btn'
+  b.dataset.layerAction = action
   b.textContent = label
   b.title = title
   b.setAttribute('aria-label', title)
@@ -87,6 +117,10 @@ function renderNode(
   if (node.locked) row.classList.add('sigil-layer-row--locked')
   if (node.hidden) row.classList.add('sigil-layer-row--hidden')
   row.dataset.layerId = node.id
+  row.setAttribute('role', 'treeitem')
+  row.setAttribute('aria-level', String(depth + 1))
+  row.setAttribute('aria-selected', String(node.id === sel))
+  row.setAttribute('aria-label', typeLabel(node))
   row.style.cssText = [
     'display:flex;align-items:center;gap:2px',
     `padding:3px 4px;padding-left:${depth * 12 + 4}px`,
@@ -113,20 +147,29 @@ function renderNode(
 
   // 隱藏
   actions.appendChild(
-    iconBtn(node.hidden ? '○' : '●', node.hidden ? '顯示' : '隱藏', !!node.hidden, () => {
-      engine.update(node.id, { hidden: !node.hidden })
-    }),
+    iconBtn(
+      'visibility',
+      node.hidden ? '○' : '●',
+      node.hidden ? '顯示' : '隱藏',
+      !!node.hidden,
+      () => {
+        engine.update(node.id, { hidden: !node.hidden })
+      },
+    ),
   )
   // 鎖定
   actions.appendChild(
-    iconBtn(node.locked ? '🔒' : '🔓', node.locked ? '解鎖' : '鎖定', !!node.locked, () => {
+    iconBtn('lock', node.locked ? '🔒' : '🔓', node.locked ? '解鎖' : '鎖定', !!node.locked, () => {
       engine.update(node.id, { locked: !node.locked })
     }),
   )
 
   row.append(label, actions)
 
-  row.addEventListener('click', () => engine.select(node.id))
+  row.addEventListener('click', () => {
+    row.focus()
+    engine.select(node.id)
+  })
   row.addEventListener('contextmenu', (e) => {
     if (!onContextMenu) return
     e.preventDefault()
@@ -136,11 +179,59 @@ function renderNode(
   row.addEventListener('dblclick', (e) => {
     e.preventDefault()
     e.stopPropagation()
-    // 鎖定時仍可重命名
-    const current = node.name ?? ''
-    const next = window.prompt('圖層名稱', current)
-    if (next === null) return
-    engine.update(node.id, { name: next })
+    renameNode(engine, node)
+  })
+  row.addEventListener('keydown', (e) => {
+    if (e.target !== row) return
+
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      engine.select(node.id)
+      return
+    }
+    if (e.key === 'F2') {
+      e.preventDefault()
+      renameNode(engine, node)
+      return
+    }
+    if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+      if (!onContextMenu) return
+      e.preventDefault()
+      const rect = row.getBoundingClientRect()
+      engine.select(node.id)
+      onContextMenu(node.id, rect.left, rect.bottom)
+      return
+    }
+
+    const rows = [
+      ...containerRows(row).filter((candidate) => candidate.dataset.layerId !== undefined),
+    ]
+    const current = rows.indexOf(row)
+    let next: HTMLElement | undefined
+    if (e.key === 'ArrowDown') next = rows[current + 1]
+    else if (e.key === 'ArrowUp') next = rows[current - 1]
+    else if (e.key === 'Home') next = rows[0]
+    else if (e.key === 'End') next = rows.at(-1)
+    else if (e.key === 'ArrowRight') {
+      next = rows.find(
+        (candidate) =>
+          Number(candidate.getAttribute('aria-level')) === depth + 2 &&
+          rows.indexOf(candidate) > current,
+      )
+      if (next && rows.indexOf(next) > current + 1) next = undefined
+    } else if (e.key === 'ArrowLeft' && depth > 0) {
+      for (let index = current - 1; index >= 0; index -= 1) {
+        if (rows[index]?.getAttribute('aria-level') === String(depth)) {
+          next = rows[index]
+          break
+        }
+      }
+    } else return
+
+    e.preventDefault()
+    if (!next) return
+    for (const candidate of rows) candidate.tabIndex = candidate === next ? 0 : -1
+    next.focus()
   })
   row.addEventListener('mouseenter', () => {
     if (node.id !== sel) row.style.background = 'rgba(15,23,42,0.04)'
@@ -155,4 +246,17 @@ function renderNode(
     wrap.appendChild(renderNode(c, sel, depth + 1, engine, onContextMenu))
   }
   return wrap
+}
+
+function renameNode(engine: Engine, node: ComponentNode): void {
+  // 鎖定時仍可重命名
+  const current = node.name ?? ''
+  const next = window.prompt('圖層名稱', current)
+  if (next === null) return
+  engine.update(node.id, { name: next })
+}
+
+function containerRows(row: HTMLElement): HTMLElement[] {
+  const panel = row.closest('.sigil-layers-panel')
+  return panel ? [...panel.querySelectorAll<HTMLElement>('.sigil-layer-row[data-layer-id]')] : []
 }
