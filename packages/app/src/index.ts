@@ -59,6 +59,9 @@ const i18nMessages = {
     'app.brand': 'Sigil',
     'app.blocks': '區塊',
     'app.layers': '圖層',
+    'app.panels': '面板',
+    'app.panel_settings': '圖層／設定',
+    'app.close_panel': '關閉面板',
     'app.save': '存檔',
     'app.export': '匯出',
     'app.help': '快捷鍵',
@@ -97,6 +100,9 @@ const i18nMessages = {
     'app.brand': 'Sigil',
     'app.blocks': 'Blocks',
     'app.layers': 'Layers',
+    'app.panels': 'Panels',
+    'app.panel_settings': 'Layers / Settings',
+    'app.close_panel': 'Close panel',
     'app.save': 'Save',
     'app.export': 'Export',
     'app.help': 'Keys',
@@ -168,14 +174,19 @@ export interface SigilApp {
 export { defineCommand, createDefaultEditingCommands }
 export type { CommandDefinition, CommandContext, EditorHooks }
 
+type CompactPanel = 'blocks' | 'settings'
+
+const COMPACT_LAYOUT_BREAKPOINT = 900
+
 /**
  * 開箱即用產品殼 — Design tokens + Topbar + 三欄 + Inspector 分頁
  */
 export function createApp(opts: AppOptions): SigilApp {
   ensureTokens()
-  const mountEl =
+  const mountTarget =
     typeof opts.mount === 'string' ? document.querySelector<HTMLElement>(opts.mount) : opts.mount
-  if (!mountEl) throw new Error('createApp：mount 目標不存在')
+  if (!mountTarget) throw new Error('createApp：mount 目標不存在')
+  const mountEl = mountTarget
 
   const engine = createEngine({ doc: opts.doc })
   const store = opts.store ?? new JsonProjectStore()
@@ -205,6 +216,8 @@ export function createApp(opts: AppOptions): SigilApp {
   let device: CanvasDevice = 'desktop'
   let mode: CanvasMode = 'edit'
   let helpOpen = false
+  let compactLayout = false
+  let activePanel: CompactPanel | null = null
   let clipboard: ComponentNode | null = null
   let closeExportDialog: (() => void) | null = null
   const hooks = opts.hooks
@@ -360,7 +373,9 @@ export function createApp(opts: AppOptions): SigilApp {
     }
   }
   function themeLabel(c: ThemeChoice): string {
-    return i18n.t(c === 'auto' ? 'app.theme_auto' : c === 'light' ? 'app.theme_light' : 'app.theme_dark')
+    return i18n.t(
+      c === 'auto' ? 'app.theme_auto' : c === 'light' ? 'app.theme_light' : 'app.theme_dark',
+    )
   }
 
   // —— Topbar 命令分組 ——
@@ -370,6 +385,24 @@ export function createApp(opts: AppOptions): SigilApp {
   const brand = document.createElement('div')
   brand.className = 'sigil-topbar-brand'
   brand.textContent = i18n.t('app.brand')
+
+  const compactControls = document.createElement('div')
+  compactControls.className = 'sigil-topbar-group sigil-compact-controls'
+  compactControls.setAttribute('aria-label', i18n.t('app.panels'))
+  const panelIdSuffix = createId()
+  const blocksDrawerId = `sigil-blocks-drawer-${panelIdSuffix}`
+  const settingsDrawerId = `sigil-settings-drawer-${panelIdSuffix}`
+  const blocksToggle = btn(i18n.t('app.blocks'), () => toggleCompactPanel('blocks'), true)
+  blocksToggle.dataset.panelToggle = 'blocks'
+  blocksToggle.setAttribute('aria-controls', blocksDrawerId)
+  const settingsToggle = btn(
+    i18n.t('app.panel_settings'),
+    () => toggleCompactPanel('settings'),
+    true,
+  )
+  settingsToggle.dataset.panelToggle = 'settings'
+  settingsToggle.setAttribute('aria-controls', settingsDrawerId)
+  compactControls.append(blocksToggle, settingsToggle)
 
   const hist = document.createElement('div')
   hist.className = 'sigil-topbar-group'
@@ -435,15 +468,19 @@ export function createApp(opts: AppOptions): SigilApp {
     if (endOrder.includes(cmd.id)) continue
     mountCommandButton(cmd, actions, cmd.toolbar === 'primary')
   }
-  const themeBtn = btn(themeLabel(themeChoice), () => {
-    cleanupTheme()
-    themeChoice = nextTheme(themeChoice)
-    cleanupTheme = applyTheme(root, themeChoice)
-    writeStoredTheme(themeChoice)
-    themeBtn.textContent = themeLabel(themeChoice)
-    themeBtn.setAttribute('aria-label', `${i18n.t('app.theme')}: ${themeLabel(themeChoice)}`)
-    refreshChrome()
-  }, true)
+  const themeBtn = btn(
+    themeLabel(themeChoice),
+    () => {
+      cleanupTheme()
+      themeChoice = nextTheme(themeChoice)
+      cleanupTheme = applyTheme(root, themeChoice)
+      writeStoredTheme(themeChoice)
+      themeBtn.textContent = themeLabel(themeChoice)
+      themeBtn.setAttribute('aria-label', `${i18n.t('app.theme')}: ${themeLabel(themeChoice)}`)
+      refreshChrome()
+    },
+    true,
+  )
   themeBtn.title = i18n.t('app.theme')
   themeBtn.setAttribute('aria-label', `${i18n.t('app.theme')}: ${themeLabel(themeChoice)}`)
   actions.append(themeBtn)
@@ -455,7 +492,16 @@ export function createApp(opts: AppOptions): SigilApp {
   helpBtn.dataset.commandId = 'help'
   actions.append(helpBtn)
 
-  const topbarParts: HTMLElement[] = [brand, hist, sep1, devices, sep2, modes, spacer]
+  const topbarParts: HTMLElement[] = [
+    brand,
+    compactControls,
+    hist,
+    sep1,
+    devices,
+    sep2,
+    modes,
+    spacer,
+  ]
   if (customBar.childNodes.length) topbarParts.push(customBar)
   topbarParts.push(actions)
   topbar.append(...topbarParts)
@@ -464,11 +510,19 @@ export function createApp(opts: AppOptions): SigilApp {
   const body = el('div', 'sigil-body')
 
   const sidebar = el('aside', 'sigil-sidebar')
+  sidebar.id = blocksDrawerId
+  sidebar.dataset.compactPanel = 'blocks'
+  sidebar.setAttribute('aria-label', i18n.t('app.blocks'))
+  const blocksHead = el('div', 'sigil-panel-head')
   const blocksTitle = document.createElement('h3')
   blocksTitle.className = 'sigil-sidebar-title'
   blocksTitle.textContent = i18n.t('app.blocks')
+  const blocksClose = btn('×', () => closeCompactPanel(), true)
+  blocksClose.classList.add('sigil-panel-close')
+  blocksClose.setAttribute('aria-label', i18n.t('app.close_panel'))
+  blocksHead.append(blocksTitle, blocksClose)
   const blocksBox = document.createElement('div')
-  sidebar.append(blocksTitle, blocksBox)
+  sidebar.append(blocksHead, blocksBox)
 
   const canvasWrap = el('div', 'sigil-canvas-wrap')
   const canvasBox = el('div', 'sigil-canvas-host')
@@ -509,15 +563,27 @@ export function createApp(opts: AppOptions): SigilApp {
   canvasWrap.appendChild(helpPanel)
 
   const right = el('aside', 'sigil-inspector-wrap')
+  right.id = settingsDrawerId
+  right.dataset.compactPanel = 'settings'
+  right.setAttribute('aria-label', i18n.t('app.panel_settings'))
+  const settingsHead = el('div', 'sigil-panel-head sigil-panel-head--settings')
   const layersTitle = document.createElement('h3')
   layersTitle.className = 'sigil-sidebar-title'
-  layersTitle.style.padding = '12px 12px 0'
   layersTitle.textContent = i18n.t('app.layers')
+  const settingsClose = btn('×', () => closeCompactPanel(), true)
+  settingsClose.classList.add('sigil-panel-close')
+  settingsClose.setAttribute('aria-label', i18n.t('app.close_panel'))
+  settingsHead.append(layersTitle, settingsClose)
   const layersBox = el('div', 'sigil-layers-box')
   const inspectorBox = document.createElement('div')
-  right.append(layersTitle, layersBox, inspectorBox)
+  right.append(settingsHead, layersBox, inspectorBox)
 
-  body.append(sidebar, canvasWrap, right)
+  const panelBackdrop = el('div', 'sigil-panel-backdrop')
+  panelBackdrop.hidden = true
+  panelBackdrop.setAttribute('aria-hidden', 'true')
+  panelBackdrop.addEventListener('click', () => closeCompactPanel())
+
+  body.append(sidebar, canvasWrap, right, panelBackdrop)
 
   // —— Status ——
   const status = el('footer', 'sigil-status')
@@ -527,6 +593,88 @@ export function createApp(opts: AppOptions): SigilApp {
   status.append(statusSel, statusDirty, statusMsg)
 
   root.append(topbar, body, status)
+
+  function getPanel(panel: CompactPanel): HTMLElement {
+    return panel === 'blocks' ? sidebar : right
+  }
+
+  function getPanelToggle(panel: CompactPanel): HTMLButtonElement {
+    return panel === 'blocks' ? blocksToggle : settingsToggle
+  }
+
+  function refreshCompactPanels(): void {
+    root.classList.toggle('sigil-app--compact', compactLayout)
+    root.dataset.layout = compactLayout ? 'compact' : 'desktop'
+
+    for (const panel of ['blocks', 'settings'] as const) {
+      const drawer = getPanel(panel)
+      const toggle = getPanelToggle(panel)
+      const open = compactLayout && activePanel === panel
+      drawer.dataset.open = String(open)
+      drawer.inert = compactLayout && !open
+      drawer.setAttribute('aria-hidden', String(compactLayout && !open))
+      toggle.setAttribute('aria-expanded', String(open))
+      toggle.classList.toggle('sigil-btn--active', open)
+    }
+
+    panelBackdrop.hidden = !compactLayout || activePanel === null
+  }
+
+  function setCompactLayout(next: boolean): void {
+    if (compactLayout === next && root.dataset.layout) return
+    compactLayout = next
+    if (!next) activePanel = null
+    refreshCompactPanels()
+  }
+
+  function toggleCompactPanel(panel: CompactPanel): void {
+    if (!compactLayout) return
+    if (activePanel === panel) {
+      closeCompactPanel()
+      return
+    }
+    activePanel = panel
+    refreshCompactPanels()
+  }
+
+  function closeCompactPanel(restoreFocus = true): void {
+    if (!compactLayout || !activePanel) return
+    const previous = activePanel
+    activePanel = null
+    refreshCompactPanels()
+    if (restoreFocus) getPanelToggle(previous).focus()
+  }
+
+  function updateLayoutFromWidth(width: number): void {
+    if (width <= 0) return
+    setCompactLayout(width < COMPACT_LAYOUT_BREAKPOINT)
+  }
+
+  function measureLayout(): void {
+    const width = root.getBoundingClientRect().width || mountEl.getBoundingClientRect().width
+    updateLayoutFromWidth(width)
+  }
+
+  let layoutObserver: ResizeObserver | null = null
+  const onWindowResize = (): void => measureLayout()
+  if (typeof ResizeObserver !== 'undefined') {
+    layoutObserver = new ResizeObserver((entries) => {
+      const entry = entries.find((candidate) => candidate.target === root) ?? entries[0]
+      updateLayoutFromWidth(entry?.contentRect.width ?? 0)
+    })
+    layoutObserver.observe(root)
+  } else {
+    window.addEventListener('resize', onWindowResize)
+  }
+  refreshCompactPanels()
+  measureLayout()
+
+  function onCompactPanelKeyDown(e: KeyboardEvent): void {
+    if (e.key !== 'Escape' || !compactLayout || !activePanel) return
+    e.preventDefault()
+    closeCompactPanel()
+  }
+  document.addEventListener('keydown', onCompactPanelKeyDown)
 
   // 依命令狀態組裝右鍵選單
   let closeMenu: (() => void) | null = null
@@ -791,7 +939,10 @@ export function createApp(opts: AppOptions): SigilApp {
       closeExportDialog?.()
       closeMenu?.()
       cleanupTheme()
+      layoutObserver?.disconnect()
+      window.removeEventListener('resize', onWindowResize)
       window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('keydown', onCompactPanelKeyDown)
       document.removeEventListener('keydown', onKeyDown)
       unsub()
       unsubDevice()

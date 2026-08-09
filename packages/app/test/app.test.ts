@@ -318,4 +318,73 @@ describe('createApp', () => {
     expect(localStorage.getItem('sigil-theme')).toBe('auto')
     app.destroy()
   })
+
+  it('依容器寬度切換 compact 抽屜，互斥開啟並可 Escape 關閉及還原焦點', () => {
+    let resizeCallback: ResizeObserverCallback | undefined
+    const disconnectObserver = vi.fn()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resizeCallback = callback
+        }
+        observe() {}
+        disconnect = disconnectObserver
+      },
+    )
+
+    const mount = document.createElement('div')
+    document.body.appendChild(mount)
+    const app = createApp({ mount, doc: emptyDoc() })
+    const root = mount.querySelector('.sigil-app') as HTMLElement
+    const blocks = mount.querySelector('[data-compact-panel="blocks"]') as HTMLElement
+    const settings = mount.querySelector('[data-compact-panel="settings"]') as HTMLElement
+    const blocksToggle = mount.querySelector('[data-panel-toggle="blocks"]') as HTMLButtonElement
+    const settingsToggle = mount.querySelector(
+      '[data-panel-toggle="settings"]',
+    ) as HTMLButtonElement
+    const backdrop = mount.querySelector('.sigil-panel-backdrop') as HTMLElement
+
+    resizeCallback?.(
+      [{ target: root, contentRect: { width: 720 } } as unknown as ResizeObserverEntry],
+      {} as ResizeObserver,
+    )
+    expect(root.dataset.layout).toBe('compact')
+    expect(blocks.getAttribute('aria-hidden')).toBe('true')
+    expect(settings.getAttribute('aria-hidden')).toBe('true')
+
+    blocksToggle.click()
+    expect(blocks.dataset.open).toBe('true')
+    expect(blocksToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(settings.dataset.open).toBe('false')
+    expect(backdrop.hidden).toBe(false)
+
+    settingsToggle.click()
+    expect(blocks.dataset.open).toBe('false')
+    expect(settings.dataset.open).toBe('true')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(settings.dataset.open).toBe('false')
+    expect(settingsToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(settingsToggle)
+    expect(backdrop.hidden).toBe(true)
+
+    blocksToggle.click()
+    backdrop.click()
+    expect(blocks.dataset.open).toBe('false')
+    expect(document.activeElement).toBe(blocksToggle)
+
+    resizeCallback?.(
+      [{ target: root, contentRect: { width: 1100 } } as unknown as ResizeObserverEntry],
+      {} as ResizeObserver,
+    )
+    expect(root.dataset.layout).toBe('desktop')
+    expect(blocks.getAttribute('aria-hidden')).toBe('false')
+    expect(settings.getAttribute('aria-hidden')).toBe('false')
+
+    app.destroy()
+    mount.remove()
+    expect(disconnectObserver).toHaveBeenCalledOnce()
+    vi.unstubAllGlobals()
+  })
 })

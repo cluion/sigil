@@ -129,11 +129,17 @@
   margin: 0 var(--sigil-space-1);
 }
 
+.sigil-compact-controls,
+.sigil-panel-close {
+  display: none;
+}
+
 /* —— Body —— */
 .sigil-body {
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .sigil-sidebar {
@@ -146,6 +152,18 @@
   background: var(--sigil-color-surface);
   border-right: 1px solid var(--sigil-color-border);
   overflow: auto;
+}
+
+.sigil-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sigil-space-2);
+  flex-shrink: 0;
+}
+
+.sigil-panel-head--settings {
+  padding: var(--sigil-space-3) var(--sigil-space-3) 0;
 }
 
 .sigil-sidebar-title {
@@ -185,6 +203,10 @@
   background: var(--sigil-color-surface);
   border-left: 1px solid var(--sigil-color-border);
   overflow: hidden;
+}
+
+.sigil-panel-backdrop {
+  display: none;
 }
 
 .sigil-layers-box {
@@ -232,6 +254,104 @@
 .sigil-status-dirty {
   color: var(--sigil-color-accent);
   font-weight: 600;
+}
+
+/* —— Compact app shell（依 mount 容器寬度切換） —— */
+.sigil-app--compact .sigil-topbar {
+  flex-wrap: wrap;
+  align-content: center;
+  padding-block: var(--sigil-space-2);
+}
+
+.sigil-app--compact .sigil-topbar-group {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.sigil-app--compact .sigil-compact-controls,
+.sigil-app--compact .sigil-panel-close {
+  display: flex;
+}
+
+.sigil-app--compact .sigil-topbar-sep,
+.sigil-app--compact .sigil-topbar-spacer {
+  display: none;
+}
+
+.sigil-app--compact .sigil-body {
+  position: relative;
+}
+
+.sigil-app--compact .sigil-sidebar,
+.sigil-app--compact .sigil-inspector-wrap {
+  position: absolute;
+  inset-block: 0;
+  z-index: calc(var(--sigil-z-overlay) + 1);
+  max-width: calc(100% - 40px);
+  box-shadow: var(--sigil-shadow-md);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    clip-path 0.18s ease,
+    opacity 0.18s ease,
+    visibility 0.18s;
+  opacity: 0;
+}
+
+.sigil-app--compact .sigil-sidebar {
+  left: 0;
+  width: min(280px, calc(100% - 40px));
+  border-right: 1px solid var(--sigil-color-border);
+  clip-path: inset(0 100% 0 0);
+}
+
+.sigil-app--compact .sigil-inspector-wrap {
+  right: 0;
+  width: min(320px, calc(100% - 40px));
+  border-left: 1px solid var(--sigil-color-border);
+  clip-path: inset(0 0 0 100%);
+}
+
+.sigil-app--compact [data-compact-panel][data-open='true'] {
+  visibility: visible;
+  pointer-events: auto;
+  clip-path: inset(0);
+  opacity: 1;
+}
+
+.sigil-app--compact .sigil-panel-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--sigil-z-overlay);
+  display: block;
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.sigil-app--compact .sigil-panel-backdrop[hidden] {
+  display: none;
+}
+
+.sigil-app--compact .sigil-canvas-wrap {
+  padding: var(--sigil-space-2);
+}
+
+.sigil-app--compact .sigil-status {
+  overflow: hidden;
+}
+
+.sigil-app--compact .sigil-status > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sigil-app--compact .sigil-sidebar,
+  .sigil-app--compact .sigil-inspector-wrap {
+    transition: none;
+  }
 }
 
 /* —— Controls —— */

@@ -46,6 +46,8 @@ app.toJSON()
 app.toHTML()
 ```
 
+`createApp()` 會依 mount 容器寬度調整產品殼。窄於 900px 時，左右面板會改成互斥抽屜；可用面板按鈕開關，或按 Escape／點擊背景關閉。這項判斷以嵌入容器為準，不依賴整個瀏覽器視窗寬度。
+
 - `createEditor`：`@cluion/sigil`
 - `createEngine`：`@cluion/sigil-core`
 - 響應式樣式：見 [Desktop／Tablet／Mobile 覆寫](/guide/responsive-styles)
