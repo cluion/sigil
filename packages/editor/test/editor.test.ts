@@ -28,6 +28,15 @@ describe('editor — toHTML', () => {
     )
     expect(rootActions[0]?.getAttribute('aria-label')).toBe('Hide')
     expect(rootActions[1]?.getAttribute('aria-label')).toBe('Lock')
+    expect([...el.querySelectorAll('h4')].map((heading) => heading.textContent)).toEqual([
+      'Layers',
+      'Properties',
+    ])
+    expect(el.textContent).toContain('No node selected')
+
+    editor.engine.select('t')
+    expect(el.textContent).toContain('Content:')
+    expect(el.textContent).toContain('Styles · Desktop')
 
     editor.destroy()
   })

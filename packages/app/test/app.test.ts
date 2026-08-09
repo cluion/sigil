@@ -42,9 +42,15 @@ describe('createApp', () => {
     expect(rootActions[1]?.getAttribute('aria-label')).toBe('Lock')
 
     app.engine.select('image')
-    const pick = mount.querySelector(
-      '.sigil-inspector .sigil-field-row button',
-    ) as HTMLButtonElement
+    expect([...mount.querySelectorAll('.sigil-tab')].map((tab) => tab.textContent)).toEqual([
+      'Content',
+      'Style',
+      'Advanced',
+    ])
+    expect(mount.querySelector('.sigil-inspector .sigil-field-label')?.textContent).toBe('Image')
+    const pick = [...mount.querySelectorAll<HTMLButtonElement>('.sigil-inspector button')].find(
+      (button) => button.textContent === 'Choose image',
+    )!
     pick.click()
     const dialog = document.querySelector('.sigil-media-backdrop') as HTMLElement
     expect(dialog.querySelector('h3')?.textContent).toBe('Media library')

@@ -1,8 +1,56 @@
 import { describe, expect, it } from 'vitest'
 import { createEngine } from '@cluion/sigil-core'
 import { createInspector } from '../src/inspector.js'
+import { createEnglishUiI18n } from './i18n.js'
 
 describe('createInspector — responsive style', () => {
+  it('英文 i18n 翻譯分頁、空狀態、樣式與進階操作', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 't', type: 'text', content: 'Hello', style: { margin: '16px' } }],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const inspector = createInspector(engine, box, { i18n: createEnglishUiI18n() })
+
+    expect([...box.querySelectorAll('.sigil-tab')].map((tab) => tab.textContent)).toEqual([
+      'Content',
+      'Style',
+      'Advanced',
+    ])
+    expect(box.textContent).toContain('No component selected')
+    engine.select('t')
+    expect(box.querySelector('.sigil-field-label')?.textContent).toBe('Content')
+
+    ;(
+      [...box.querySelectorAll<HTMLButtonElement>('.sigil-tab')].find(
+        (tab) => tab.textContent === 'Style',
+      ) as HTMLButtonElement
+    ).click()
+    inspector.setDevice('tablet')
+    expect(
+      [...box.querySelectorAll('.sigil-section-title')].map((title) => title.textContent),
+    ).toEqual(['Layout', 'Typography', 'Appearance'])
+    expect(box.querySelector('.sigil-responsive-style-context')?.textContent).toContain(
+      'Inherits Desktop when not overridden',
+    )
+    expect(box.textContent).toContain('Use inherited')
+    expect(box.textContent).toContain('Clear Tablet Override')
+
+    ;(
+      [...box.querySelectorAll<HTMLButtonElement>('.sigil-tab')].find(
+        (tab) => tab.textContent === 'Advanced',
+      ) as HTMLButtonElement
+    ).click()
+    expect(box.textContent).toContain('Delete component')
+    inspector.destroy()
+  })
+
   it('裝置切換後顯示繼承來源，清除只影響目前 breakpoint', () => {
     const engine = createEngine({
       doc: {

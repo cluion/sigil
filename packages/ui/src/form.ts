@@ -7,6 +7,7 @@ import {
   type I18n,
   type PropSchema,
 } from '@cluion/sigil-core'
+import { uiText } from './i18n.js'
 import { openMediaPicker } from './media-picker.js'
 
 export interface FormOptions {
@@ -72,7 +73,7 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
         refreshVisibility()
       })
     } else {
-      field = createField(engine, nodeId, s, currentProps()[s.name], () => {
+      field = createField(engine, nodeId, s, currentProps()[s.name], i18n, () => {
         refreshVisibility()
       })
     }
@@ -84,7 +85,7 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
     if (s.type === 'select' && s.optionsFrom) {
       const sel = field.querySelector('select') as HTMLSelectElement | null
       if (sel) {
-        const setup = setupOptionsFrom(sel, s, () => currentProps(), fetchJSON)
+        const setup = setupOptionsFrom(sel, s, () => currentProps(), fetchJSON, i18n)
         reloaders.set(s.name, setup.reload)
         disposers.push(setup.destroy)
       }
@@ -123,11 +124,12 @@ function createField(
   nodeId: string,
   schema: PropSchema,
   value: unknown,
+  i18n: I18n | undefined,
   onChanged: () => void,
 ): HTMLElement {
   // repeater 自行管理寫入，分流到專屬渲染
   if (schema.type === 'repeater') {
-    return createRepeaterField(engine, nodeId, schema, value, onChanged)
+    return createRepeaterField(engine, nodeId, schema, value, i18n, onChanged)
   }
   const label = document.createElement('label')
   label.className = 'sigil-field'
@@ -155,6 +157,7 @@ function createRepeaterField(
   nodeId: string,
   schema: PropSchema,
   value: unknown,
+  i18n: I18n | undefined,
   onChanged: () => void,
 ): HTMLElement {
   const wrap = document.createElement('div')
@@ -167,7 +170,7 @@ function createRepeaterField(
   const addBtn = document.createElement('button')
   addBtn.type = 'button'
   addBtn.className = 'sigil-btn'
-  addBtn.textContent = '+ 新增'
+  addBtn.textContent = `+ ${uiText(i18n, 'form.add', '新增')}`
 
   /** 取得目前陣列（同步讀 engine 樹，保證最新） */
   function currentArray(): Record<string, unknown>[] {
@@ -211,7 +214,7 @@ function createRepeaterField(
       const delBtn = document.createElement('button')
       delBtn.type = 'button'
       delBtn.className = 'sigil-btn sigil-btn--ghost'
-      delBtn.textContent = '刪除'
+      delBtn.textContent = uiText(i18n, 'form.delete', '刪除')
       delBtn.addEventListener('click', () => {
         const next = currentArray()
         next.splice(index, 1)
@@ -299,7 +302,7 @@ function createMediaField(
     const pickBtn = document.createElement('button')
     pickBtn.type = 'button'
     pickBtn.className = 'sigil-btn'
-    pickBtn.textContent = '選圖'
+    pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
     pickBtn.addEventListener('click', () => {
       openMediaPicker({
         assets,
@@ -334,6 +337,7 @@ function setupOptionsFrom(
   schema: PropSchema,
   getProps: () => Record<string, unknown>,
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>,
+  i18n?: I18n,
 ): { reload: () => void; destroy: () => void } {
   const fn = schema.optionsFrom!
   let ac: AbortController | null = null
@@ -366,10 +370,10 @@ function setupOptionsFrom(
     ac = new AbortController()
     const current = ac
     if (!fetchJSON) {
-      placeholder('無法載入')
+      placeholder(uiText(i18n, 'form.load_unavailable', '無法載入'))
       return
     }
-    placeholder('載入中…')
+    placeholder(uiText(i18n, 'form.loading', '載入中…'))
     try {
       const options = await fn({
         props: getProps(),
@@ -382,7 +386,7 @@ function setupOptionsFrom(
     } catch (err) {
       if (current === ac && err instanceof DOMException && err.name === 'AbortError') return
       if (current !== ac) return
-      placeholder('載入失敗')
+      placeholder(uiText(i18n, 'form.load_failed', '載入失敗'))
     }
   }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createEngine, type PropSchema } from '@cluion/sigil-core'
 import { createPropForm } from '../src/form.js'
+import { createEnglishUiI18n } from './i18n.js'
 
 function setup(schema: PropSchema[], props: Record<string, unknown> = {}) {
   const engine = createEngine({
@@ -14,6 +15,78 @@ function setup(schema: PropSchema[], props: Record<string, unknown> = {}) {
 }
 
 describe('createPropForm', () => {
+  it('英文 i18n 翻譯 repeater、media 與不可載入狀態', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'n',
+          type: 'shortcode',
+          shortcode: { name: 'x', props: { items: [{ label: 'A' }], src: '' } },
+        },
+      },
+    })
+    const handle = createPropForm({
+      engine,
+      node: engine.getTree(),
+      i18n: createEnglishUiI18n(),
+      schema: [
+        {
+          name: 'items',
+          type: 'repeater',
+          schema: [{ name: 'label', type: 'text' }],
+        },
+        { name: 'src', type: 'media' },
+        { name: 'remote', type: 'select', optionsFrom: async () => [] },
+      ],
+      assets: { list: () => [] },
+    })
+
+    expect(handle.el.textContent).toContain('+ Add')
+    expect(handle.el.textContent).toContain('Delete')
+    expect(handle.el.textContent).toContain('Choose image')
+    expect(
+      (handle.el.querySelector('[data-prop-field="remote"] select') as HTMLSelectElement)
+        .textContent,
+    ).toBe('Unavailable')
+    handle.destroy()
+  })
+
+  it('英文 i18n 翻譯 optionsFrom 載入中與失敗狀態', async () => {
+    let rejectRequest: ((reason?: unknown) => void) | undefined
+    const request = new Promise<unknown>((_resolve, reject) => {
+      rejectRequest = reject
+    })
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props: {} } },
+      },
+    })
+    const handle = createPropForm({
+      engine,
+      node: engine.getTree(),
+      i18n: createEnglishUiI18n(),
+      schema: [
+        {
+          name: 'remote',
+          type: 'select',
+          optionsFrom: async (ctx) => {
+            await ctx.fetchJSON('/remote', ctx.signal)
+            return []
+          },
+        },
+      ],
+      fetchJSON: () => request,
+    })
+    const select = handle.el.querySelector('select') as HTMLSelectElement
+
+    expect(select.textContent).toBe('Loading…')
+    rejectRequest?.(new Error('failed'))
+    await vi.waitFor(() => expect(select.textContent).toBe('Failed to load'))
+    handle.destroy()
+  })
+
   it('text 生成 input[type=text],初始值取自 props', () => {
     const { form } = setup([{ name: 'label', type: 'text' }], { label: 'hi' })
     const input = form.querySelector('input') as HTMLInputElement

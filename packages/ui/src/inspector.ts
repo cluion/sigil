@@ -1,6 +1,7 @@
 import type { AssetStore, Engine, I18n, PropSchema, ResponsiveDevice } from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
+import { uiText } from './i18n.js'
 import { openMediaPicker } from './media-picker.js'
 import {
   clearDeviceStyles,
@@ -48,9 +49,9 @@ export function createInspector(
   let tab: InspectorTab = 'content'
   let device: ResponsiveDevice = opts?.device ?? 'desktop'
   const tabBtns: Record<InspectorTab, HTMLButtonElement> = {
-    content: makeTab('content', '內容'),
-    style: makeTab('style', '樣式'),
-    advanced: makeTab('advanced', '進階'),
+    content: makeTab('content', uiText(opts?.i18n, 'inspector.tab_content', '內容')),
+    style: makeTab('style', uiText(opts?.i18n, 'inspector.tab_style', '樣式')),
+    advanced: makeTab('advanced', uiText(opts?.i18n, 'inspector.tab_advanced', '進階')),
   }
   for (const b of Object.values(tabBtns)) tabs.appendChild(b)
   container.append(tabs, body)
@@ -90,11 +91,15 @@ export function createInspector(
       empty.className = 'sigil-empty'
       const t = document.createElement('p')
       t.className = 'sigil-muted'
-      t.textContent = '尚未選取元件'
+      t.textContent = uiText(opts?.i18n, 'inspector.empty', '尚未選取元件')
       const tip = document.createElement('p')
       tip.className = 'sigil-muted'
       tip.style.marginTop = '8px'
-      tip.textContent = '在畫布點一下區塊，即可編輯內容、樣式與進階屬性。'
+      tip.textContent = uiText(
+        opts?.i18n,
+        'inspector.empty_hint',
+        '在畫布點一下區塊，即可編輯內容、樣式與進階屬性。',
+      )
       empty.append(t, tip)
       body.appendChild(empty)
       return
@@ -111,8 +116,8 @@ export function createInspector(
       renderContent(body, engine, node, opts, (fn) => {
         currentFormDestroy = fn
       })
-    else if (tab === 'style') renderStyle(body, engine, node, device, render)
-    else renderAdvanced(body, engine, node)
+    else if (tab === 'style') renderStyle(body, engine, node, device, render, opts?.i18n)
+    else renderAdvanced(body, engine, node, opts?.i18n)
   }
 
   const unsub = engine.subscribe((ev) => {
@@ -141,7 +146,7 @@ function renderContent(
   registerDestroy?: (fn: () => void) => void,
 ): void {
   if (node.type === 'text' || node.type === 'button') {
-    field(container, '內容', () => {
+    field(container, uiText(opts?.i18n, 'inspector.tab_content', '內容'), () => {
       const input = document.createElement('input')
       input.className = 'sigil-input'
       input.value = node.content ?? ''
@@ -193,7 +198,11 @@ function renderContent(
   if (node.type !== 'text' && node.type !== 'button' && node.type !== 'image' && !node.shortcode) {
     const p = document.createElement('p')
     p.className = 'sigil-muted'
-    p.textContent = '此節點無可編輯內容欄位，可切到樣式分頁'
+    p.textContent = uiText(
+      opts?.i18n,
+      'inspector.no_content',
+      '此節點無可編輯內容欄位，可切到樣式分頁',
+    )
     container.appendChild(p)
   }
 }
@@ -210,7 +219,7 @@ function appendImageFields(
 
   const label = document.createElement('span')
   label.className = 'sigil-field-label'
-  label.textContent = '圖片'
+  label.textContent = uiText(i18n, 'inspector.image', '圖片')
 
   const preview = document.createElement('img')
   preview.className = 'sigil-img-preview'
@@ -243,7 +252,7 @@ function appendImageFields(
     const pickBtn = document.createElement('button')
     pickBtn.type = 'button'
     pickBtn.className = 'sigil-btn'
-    pickBtn.textContent = '選圖'
+    pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
     pickBtn.addEventListener('click', () => {
       openMediaPicker({
         assets,
@@ -270,6 +279,7 @@ function renderStyle(
   node: ComponentNode,
   device: ResponsiveDevice,
   rerender: () => void,
+  i18n?: I18n,
 ): void {
   const context = document.createElement('div')
   context.className = 'sigil-responsive-style-context'
@@ -277,32 +287,42 @@ function renderStyle(
   const contextTitle = document.createElement('strong')
   contextTitle.textContent = deviceLabel(device)
   const contextHint = document.createElement('span')
-  contextHint.textContent = inheritanceLabel(device)
+  contextHint.textContent = inheritanceLabel(device, i18n)
   context.append(contextTitle, contextHint)
   container.appendChild(context)
 
-  section(container, '版面')
+  section(container, uiText(i18n, 'inspector.layout', '版面'))
   for (const prop of ['margin', 'padding', 'width', 'height', 'display'] as const) {
-    styleText(container, engine, node, device, prop)
+    styleText(container, engine, node, device, prop, i18n)
   }
 
-  section(container, '文字')
-  styleText(container, engine, node, device, 'font-size')
-  styleSelect(container, engine, node, device, 'font-weight', ['normal', 'bold', '600'])
-  styleSelect(container, engine, node, device, 'text-align', ['left', 'center', 'right', 'justify'])
-  styleColor(container, engine, node, device, 'color')
+  section(container, uiText(i18n, 'inspector.typography', '文字'))
+  styleText(container, engine, node, device, 'font-size', i18n)
+  styleSelect(container, engine, node, device, 'font-weight', ['normal', 'bold', '600'], i18n)
+  styleSelect(
+    container,
+    engine,
+    node,
+    device,
+    'text-align',
+    ['left', 'center', 'right', 'justify'],
+    i18n,
+  )
+  styleColor(container, engine, node, device, 'color', i18n)
 
-  section(container, '外觀')
-  styleColor(container, engine, node, device, 'background-color')
-  styleText(container, engine, node, device, 'border')
-  styleText(container, engine, node, device, 'border-radius')
-  styleText(container, engine, node, device, 'box-shadow')
+  section(container, uiText(i18n, 'inspector.appearance', '外觀'))
+  styleColor(container, engine, node, device, 'background-color', i18n)
+  styleText(container, engine, node, device, 'border', i18n)
+  styleText(container, engine, node, device, 'border-radius', i18n)
+  styleText(container, engine, node, device, 'box-shadow', i18n)
 
   const reset = document.createElement('button')
   reset.type = 'button'
   reset.className = 'sigil-btn'
   reset.textContent =
-    device === 'desktop' ? '清除 Desktop 樣式' : `清除 ${deviceLabel(device)} 覆寫`
+    device === 'desktop'
+      ? uiText(i18n, 'style.clear_desktop', '清除 Desktop 樣式')
+      : `${uiText(i18n, 'style.clear', '清除')} ${deviceLabel(device)} ${uiText(i18n, 'style.override', '覆寫')}`
   reset.addEventListener('click', () => {
     clearDeviceStyles(engine, node.id, device)
     rerender()
@@ -323,6 +343,7 @@ function styleText(
   node: ComponentNode,
   device: ResponsiveDevice,
   prop: string,
+  i18n?: I18n,
 ): void {
   field(container, prop, () => {
     const input = document.createElement('input')
@@ -333,7 +354,7 @@ function styleText(
     input.addEventListener('input', () => {
       updateDeviceStyle(engine, node.id, device, prop, input.value)
     })
-    return decorateStyleControl(input, engine, node, device, prop, value)
+    return decorateStyleControl(input, engine, node, device, prop, value, i18n)
   })
 }
 
@@ -343,6 +364,7 @@ function styleColor(
   node: ComponentNode,
   device: ResponsiveDevice,
   prop: string,
+  i18n?: I18n,
 ): void {
   field(container, prop, () => {
     const input = document.createElement('input')
@@ -354,7 +376,7 @@ function styleColor(
     input.addEventListener('input', () => {
       updateDeviceStyle(engine, node.id, device, prop, input.value)
     })
-    return decorateStyleControl(input, engine, node, device, prop, value)
+    return decorateStyleControl(input, engine, node, device, prop, value, i18n)
   })
 }
 
@@ -365,6 +387,7 @@ function styleSelect(
   device: ResponsiveDevice,
   prop: string,
   options: string[],
+  i18n?: I18n,
 ): void {
   field(container, prop, () => {
     const sel = document.createElement('select')
@@ -372,7 +395,10 @@ function styleSelect(
     const empty = document.createElement('option')
     empty.value = ''
     const value = getDeviceStyleValue(node, device, prop)
-    empty.textContent = value.inherited && value.effective ? `繼承 ${value.effective}` : '未設'
+    empty.textContent =
+      value.inherited && value.effective
+        ? `${uiText(i18n, 'style.inherit', '繼承')} ${value.effective}`
+        : uiText(i18n, 'style.unset_short', '未設')
     sel.appendChild(empty)
     for (const opt of options) {
       const o = document.createElement('option')
@@ -384,11 +410,16 @@ function styleSelect(
     sel.addEventListener('change', () => {
       updateDeviceStyle(engine, node.id, device, prop, sel.value)
     })
-    return decorateStyleControl(sel, engine, node, device, prop, value)
+    return decorateStyleControl(sel, engine, node, device, prop, value, i18n)
   })
 }
 
-function renderAdvanced(container: HTMLElement, engine: Engine, node: ComponentNode): void {
+function renderAdvanced(
+  container: HTMLElement,
+  engine: Engine,
+  node: ComponentNode,
+  i18n?: I18n,
+): void {
   field(container, 'id', () => {
     const input = document.createElement('input')
     input.className = 'sigil-input'
@@ -414,7 +445,7 @@ function renderAdvanced(container: HTMLElement, engine: Engine, node: ComponentN
     const del = document.createElement('button')
     del.type = 'button'
     del.className = 'sigil-btn sigil-btn--danger'
-    del.textContent = '刪除元件'
+    del.textContent = uiText(i18n, 'inspector.delete_component', '刪除元件')
     del.addEventListener('click', () => engine.remove(node.id))
     container.appendChild(del)
   }

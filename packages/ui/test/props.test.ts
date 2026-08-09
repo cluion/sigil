@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createEngine, type Engine, type PropSchema } from '@cluion/sigil-core'
 import { createPropsPanel } from '../src/props.js'
+import { createEnglishUiI18n } from './i18n.js'
 
 function panel(schema: PropSchema[] | undefined, props: Record<string, unknown> = {}) {
   const engine = createEngine({
@@ -18,6 +19,35 @@ function panel(schema: PropSchema[] | undefined, props: Record<string, unknown> 
 }
 
 describe('createPropsPanel — shortcode props', () => {
+  it('英文 i18n 翻譯空狀態、欄位、樣式與繼承操作', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: { id: 'n', type: 'text', content: 'Hello', style: { margin: '16px' } },
+      },
+    })
+    const box = document.createElement('div')
+    const handle = createPropsPanel(engine, box, { i18n: createEnglishUiI18n() })
+
+    expect(box.textContent).toBe('No node selected')
+    engine.select('n')
+    expect(box.querySelector('h3')?.textContent).toBe('text (n)')
+    expect(box.textContent).toContain('Content:')
+    expect(box.textContent).toContain('Styles · Desktop')
+
+    handle.setDevice('tablet')
+    expect(box.querySelector('.sigil-responsive-style-context')?.textContent).toBe(
+      'Inherits Desktop when not overridden',
+    )
+    expect(box.textContent).toContain('Use inherited')
+    expect(box.textContent).toContain('Clear Tablet Override')
+    const margin = box
+      .querySelector('button[data-style-reset="margin"]')
+      ?.parentElement?.querySelector('input') as HTMLInputElement
+    expect(margin.placeholder).toBe('Inherited: 16px')
+    handle.destroy()
+  })
+
   it('有 schema → 生成型別控制項(number)', () => {
     const { box } = panel([{ name: 'step', type: 'number', label: '步進' }], { step: 2 })
     const input = box.querySelector('input[type=number]') as HTMLInputElement

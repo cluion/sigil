@@ -192,7 +192,9 @@ test('英文 locale：Blocks、Layers、Media 與 compact 介面', async ({ page
   await expect(layerTree.getByRole('button', { name: 'Lock', exact: true }).first()).toBeVisible()
 
   await layerTree.getByRole('treeitem', { name: '主圖', exact: true }).click()
-  await page.locator('.sigil-inspector .sigil-field-row button').click()
+  await expect(page.locator('.sigil-tab')).toHaveText(['Content', 'Style', 'Advanced'])
+  await expect(page.locator('.sigil-inspector .sigil-field-label')).toHaveText('Image')
+  await page.getByRole('button', { name: 'Choose image', exact: true }).click()
   const media = page.getByRole('dialog', { name: 'Media library', exact: true })
   await expect(media).toBeVisible()
   await expect(media.getByRole('button', { name: 'Close', exact: true })).toBeFocused()
