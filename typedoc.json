@@ -22,6 +22,7 @@
   "excludeInternal": true,
   "excludeExternals": true,
   "skipErrorChecking": true,
+  "treatWarningsAsErrors": true,
   "githubPages": false,
   "hideGenerator": true,
   "router": "module",
