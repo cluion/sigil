@@ -7,7 +7,7 @@ export type { InspectorHandle, InspectorOptions, InspectorTab } from './inspecto
 export { openMediaPicker } from './media-picker.js'
 export type { MediaPickerOptions } from './media-picker.js'
 export { createPropForm } from './form.js'
-export type { FormOptions } from './form.js'
+export type { FormOptions, PropFormHandle } from './form.js'
 export { createBlocksPanel } from './blocks-panel.js'
 export { createLayersPanel } from './layers.js'
 export type { BlockFactory, BlockDef, BlocksInput } from './blocks-panel.js'
