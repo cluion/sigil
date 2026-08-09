@@ -26,6 +26,19 @@ jobs:
       - run: pnpm test
       - run: pnpm size
 
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm docs:build
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 10
