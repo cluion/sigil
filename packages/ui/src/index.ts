@@ -11,6 +11,7 @@ export type { FormOptions } from './form.js'
 export { createBlocksPanel } from './blocks-panel.js'
 export { createLayersPanel } from './layers.js'
 export type { BlockFactory, BlockDef, BlocksInput } from './blocks-panel.js'
+export type { LayersPanelOptions } from './layers.js'
 export {
   startInsertDrag,
   startMoveDrag,
@@ -26,3 +27,10 @@ export { computeGuides, computeGaps, ALIGN_THRESHOLD } from './alignment.js'
 export type { Rect, AlignLine, GapHint } from './alignment.js'
 export { applyTheme, effectiveTheme, nextTheme } from './theme.js'
 export type { ThemeChoice } from './theme.js'
+export { openContextMenu } from './context-menu.js'
+export type {
+  MenuActionItem,
+  MenuSeparatorItem,
+  MenuItem,
+  ContextMenuOptions,
+} from './context-menu.js'

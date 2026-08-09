@@ -39,6 +39,8 @@ export interface CanvasOptions {
   i18n?: I18n
   /** false 時隱藏內建裝置／編輯切換，改由產品殼 Topbar 控制 */
   chrome?: boolean
+  /** 右鍵選單命中節點與游標座標 */
+  onContextMenu?: (id: string | null, x: number, y: number) => void
 }
 
 export function createCanvas(
@@ -288,8 +290,17 @@ export function createCanvas(
     setEditing(id)
   }
 
+  function onOverlayContextMenu(e: MouseEvent): void {
+    if (!opts?.onContextMenu) return
+    e.preventDefault()
+    const id = hitTest(iframe, e.clientX, e.clientY)
+    engine.select(id)
+    opts.onContextMenu(id, e.clientX, e.clientY)
+  }
+
   overlay.addEventListener('click', onOverlayClick)
   overlay.addEventListener('dblclick', onOverlayDblClick)
+  overlay.addEventListener('contextmenu', onOverlayContextMenu)
   overlay.addEventListener('pointerdown', onOverlayPointerDown)
   overlay.addEventListener('pointermove', onOverlayPointerMove)
   overlay.addEventListener('pointerleave', onOverlayPointerLeave)
@@ -533,6 +544,7 @@ export function createCanvas(
       if (editingId) endEditing(false)
       overlay.removeEventListener('click', onOverlayClick)
       overlay.removeEventListener('dblclick', onOverlayDblClick)
+      overlay.removeEventListener('contextmenu', onOverlayContextMenu)
       overlay.removeEventListener('pointerdown', onOverlayPointerDown)
       overlay.removeEventListener('pointermove', onOverlayPointerMove)
       overlay.removeEventListener('pointerleave', onOverlayPointerLeave)

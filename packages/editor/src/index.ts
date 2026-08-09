@@ -33,8 +33,10 @@ import {
   createBlocksPanel,
   createLayersPanel,
   applyTheme,
+  openContextMenu,
   type BlocksInput,
   type ThemeChoice,
+  type MenuItem,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -199,16 +201,56 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   // 主題：套到 layout；SDK 無 toggle，宿主可 destroy+remount 切換
   const cleanupTheme = applyTheme(layout, opts.theme ?? 'auto')
 
+  // 依命令狀態組裝右鍵選單
+  let closeMenu: (() => void) | null = null
+  function openSelectionMenu(x: number, y: number): void {
+    closeMenu?.()
+    const ctx = makeCtx()
+    const groups = [['copy', 'paste'], ['move-up', 'move-down'], ['delete']]
+    const items: MenuItem[] = []
+    for (const group of groups) {
+      const actions: MenuItem[] = []
+      for (const id of group) {
+        const cmd = commands.get(id)
+        if (!cmd) continue
+        if (cmd.when && !cmd.when(ctx)) continue
+        actions.push({
+          id,
+          label: cmd.label ?? id,
+          run: () => {
+            void commands.run(id, makeCtx())
+          },
+        })
+      }
+      if (!actions.length) continue
+      if (items.length) items.push({ separator: true })
+      items.push(...actions)
+    }
+    if (!items.length) return
+    closeMenu = openContextMenu({
+      items,
+      x,
+      y,
+      theme: layout.classList.contains('sigil-theme-dark') ? 'dark' : 'light',
+      onClose: () => (closeMenu = null),
+    })
+  }
+
   const canvas = createCanvas(engine, canvasBox, {
     rendererOptions: { shortcodeResolver },
     i18n,
+    onContextMenu: (_id, x, y) => openSelectionMenu(x, y),
   })
   const props = createPropsPanel(engine, propsBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
     fetchJSON,
   })
   const unsubDevice = canvas.subscribeDevice((device) => props.setDevice(device))
-  const layers = createLayersPanel(engine, layersBox)
+  const layers = createLayersPanel(engine, layersBox, {
+    onContextMenu: (_id, x, y) => {
+      openSelectionMenu(x, y)
+    },
+  })
   // 合併靜態區塊與範本；有任一來源即建立面板
   const templateStore = opts.templates
   const hasTemplates = !!templateStore
@@ -271,6 +313,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     },
     destroy() {
       runBeforeDestroy(hooks, engine)
+      closeMenu?.()
       cleanupTheme()
       document.removeEventListener('keydown', onKeyDown)
       unsubSel()

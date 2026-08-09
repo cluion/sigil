@@ -240,6 +240,43 @@ describe('createApp', () => {
     app.destroy()
   })
 
+  it('圖層右鍵選單套用暗色主題並執行上移', () => {
+    const onSelect = vi.fn()
+    const mount = document.createElement('div')
+    const app = createApp({
+      mount,
+      theme: 'dark',
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            { id: 'a', type: 'text', content: 'A' },
+            { id: 'b', type: 'text', content: 'B' },
+          ],
+        },
+      },
+      hooks: { onSelect },
+    })
+    const row = mount.querySelector('.sigil-layer-row[data-layer-id="b"]') as HTMLElement
+
+    row.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 60 }),
+    )
+
+    const menu = document.querySelector('.sigil-context-menu') as HTMLElement
+    expect(menu.classList.contains('sigil-theme-dark')).toBe(true)
+    expect(menu.getAttribute('aria-label')).toBe('節點操作')
+    expect(menu.querySelectorAll('.sigil-context-menu-sep')).toHaveLength(2)
+    expect(onSelect).toHaveBeenCalledOnce()
+    const moveUp = menu.querySelector('[data-menu-item-id="move-up"]') as HTMLButtonElement
+    moveUp.click()
+    expect(app.engine.getTree().children?.map((node) => node.id)).toEqual(['b', 'a'])
+    expect(document.querySelector('.sigil-context-menu')).toBeNull()
+    app.destroy()
+  })
+
   it('theme 初始值套 class，切換鈕循環三態（auto→light→dark→auto）', () => {
     localStorage.clear()
     const mount = document.createElement('div')

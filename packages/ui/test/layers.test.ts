@@ -67,4 +67,35 @@ describe('createLayersPanel', () => {
     expect(engine.getTree().children?.[0]?.name).toBe('新名稱')
     panel.destroy()
   })
+
+  it('右鍵同步選取並回報節點與座標', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 't', type: 'text', content: 'x' }],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const onContextMenu = vi.fn()
+    const panel = createLayersPanel(engine, box, { onContextMenu })
+    const row = box.querySelector('.sigil-layer-row[data-layer-id="t"]') as HTMLElement
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 18,
+      clientY: 24,
+    })
+
+    row.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(engine.getSelection()).toBe('t')
+    expect(onContextMenu).toHaveBeenCalledOnce()
+    expect(onContextMenu).toHaveBeenCalledWith('t', 18, 24)
+    panel.destroy()
+  })
 })

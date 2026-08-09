@@ -4,6 +4,7 @@ import {
   defineCommand,
   createCommandRegistry,
   matchShortcut,
+  createDefaultEditingCommands,
 } from '../src/index.js'
 import type { CommandContext } from '../src/index.js'
 
@@ -91,5 +92,75 @@ describe('createCommandRegistry', () => {
     ])
     const e = new KeyboardEvent('keydown', { key: 's', ctrlKey: true })
     expect(reg.match(e, ctxOf())).toBeUndefined()
+  })
+})
+
+describe('move-up / move-down 命令', () => {
+  function setup() {
+    const engine = createEngine({
+      doc: {
+        version: 1 as const,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            { id: 'a', type: 'text', content: 'A' },
+            { id: 'b', type: 'text', content: 'B' },
+            { id: 'c', type: 'text', content: 'C' },
+          ],
+        },
+      },
+    })
+    const cmds = createDefaultEditingCommands()
+    const up = cmds.find((c) => c.id === 'move-up')!
+    const down = cmds.find((c) => c.id === 'move-down')!
+    return { engine, up, down, ctx: ctxOf(engine) }
+  }
+
+  it('move-up when：第一個子節點不能上移', () => {
+    const { engine, up, ctx } = setup()
+    engine.select('a')
+    expect(up.when!(ctx)).toBe(false)
+  })
+
+  it('move-up when：非第一個可上移', () => {
+    const { engine, up, ctx } = setup()
+    engine.select('b')
+    expect(up.when!(ctx)).toBe(true)
+  })
+
+  it('move-up run：b 上移到第一位', () => {
+    const { engine, up, ctx } = setup()
+    engine.select('b')
+    up.run(ctx)
+    expect(engine.getTree().children?.map((c) => c.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('move-down when：最後一個不能下移', () => {
+    const { engine, down, ctx } = setup()
+    engine.select('c')
+    expect(down.when!(ctx)).toBe(false)
+  })
+
+  it('move-down run：b 下移到最後', () => {
+    const { engine, down, ctx } = setup()
+    engine.select('b')
+    down.run(ctx)
+    expect(engine.getTree().children?.map((c) => c.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('root 不能移動', () => {
+    const { engine, up, down, ctx } = setup()
+    engine.select('r')
+    expect(up.when!(ctx)).toBe(false)
+    expect(down.when!(ctx)).toBe(false)
+  })
+
+  it('鎖定節點不能移動', () => {
+    const { engine, up, down, ctx } = setup()
+    engine.update('b', { locked: true })
+    engine.select('b')
+    expect(up.when!(ctx)).toBe(false)
+    expect(down.when!(ctx)).toBe(false)
   })
 })

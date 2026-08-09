@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createEngine } from '@cluion/sigil-core'
 import { createCanvas } from '../src/canvas.js'
 
@@ -45,6 +45,57 @@ describe('createCanvas — preview mode', () => {
     setMode('preview')
     setMode('edit')
     expect(iframe.style.pointerEvents).toBe('none')
+  })
+})
+
+describe('createCanvas — 右鍵選單', () => {
+  it('回報命中節點並同步選取', async () => {
+    const engine = createEngine({ doc: docWithText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const onContextMenu = vi.fn()
+    const canvas = createCanvas(engine, container, { onContextMenu })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const target = canvas.iframe.contentDocument?.querySelector('[data-sigil-id="t1"]') as Element
+    vi.spyOn(canvas.iframe.contentDocument!, 'elementFromPoint').mockReturnValue(target)
+    const overlay = container.querySelector('.sigil-canvas-overlay') as HTMLElement
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 12,
+      clientY: 16,
+    })
+
+    overlay.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(engine.getSelection()).toBe('t1')
+    expect(onContextMenu).toHaveBeenCalledWith('t1', 12, 16)
+    canvas.destroy()
+    container.remove()
+  })
+
+  it('右鍵空白會清除既有選取', async () => {
+    const engine = createEngine({ doc: docWithText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const onContextMenu = vi.fn()
+    const canvas = createCanvas(engine, container, { onContextMenu })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    vi.spyOn(canvas.iframe.contentDocument!, 'elementFromPoint').mockReturnValue(null)
+    engine.select('t1')
+    const overlay = container.querySelector('.sigil-canvas-overlay') as HTMLElement
+
+    overlay.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 20, clientY: 24 }),
+    )
+
+    expect(engine.getSelection()).toBeNull()
+    expect(onContextMenu).toHaveBeenCalledWith(null, 20, 24)
+    canvas.destroy()
+    container.remove()
   })
 })
 

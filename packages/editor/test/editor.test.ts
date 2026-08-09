@@ -250,3 +250,55 @@ describe('editor — commands / hooks', () => {
     editor.destroy()
   })
 })
+
+describe('editor — 右鍵選單', () => {
+  it('圖層右鍵選單執行下移', () => {
+    const mount = document.createElement('div')
+    const editor = createEditor({
+      mount,
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            { id: 'a', type: 'text', content: 'A' },
+            { id: 'b', type: 'text', content: 'B' },
+          ],
+        },
+      },
+    })
+    const row = mount.querySelector('.sigil-layer-row[data-layer-id="a"]') as HTMLElement
+
+    row.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 50 }),
+    )
+
+    const moveDown = document.querySelector(
+      '.sigil-context-menu [data-menu-item-id="move-down"]',
+    ) as HTMLButtonElement
+    expect(moveDown).toBeTruthy()
+    moveDown.click()
+    expect(editor.engine.getTree().children?.map((node) => node.id)).toEqual(['b', 'a'])
+    expect(document.querySelector('.sigil-context-menu')).toBeNull()
+    editor.destroy()
+  })
+
+  it('destroy 關閉已開啟選單', () => {
+    const mount = document.createElement('div')
+    const editor = createEditor({
+      mount,
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 'a', type: 'text', content: 'A' }] },
+      },
+    })
+    const row = mount.querySelector('.sigil-layer-row[data-layer-id="a"]') as HTMLElement
+    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    expect(document.querySelector('.sigil-context-menu')).toBeTruthy()
+
+    editor.destroy()
+
+    expect(document.querySelector('.sigil-context-menu')).toBeNull()
+  })
+})

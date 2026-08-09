@@ -17,6 +17,8 @@ app.destroy()
 ```
 
 樣式於執行時注入，或 `import '@cluion/sigil-app/tokens.css'`。  
+畫布與圖層支援右鍵選單，可複製、貼上、上下移動或刪除目前節點。
+
 自組 UI：`@cluion/sigil`。
 
 ## License

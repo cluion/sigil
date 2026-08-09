@@ -33,7 +33,8 @@ editor.toHTML()
 editor.destroy()
 ```
 
-預設命令：`undo`／`redo`／`delete`／`copy`／`paste`／`save`。  
+預設命令：`undo`／`redo`／`delete`／`copy`／`paste`／`move-up`／`move-down`／`save`。畫布與圖層的右鍵選單會依目前選取狀態顯示可執行命令。
+
 產品殼：`@cluion/sigil-app`（同樣支援 `commands`／`hooks`）。
 
 ## License

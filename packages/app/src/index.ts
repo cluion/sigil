@@ -35,10 +35,12 @@ import {
   createInspector,
   applyTheme,
   nextTheme,
+  openContextMenu,
   type BlocksInput,
   type CanvasDevice,
   type CanvasMode,
   type ThemeChoice,
+  type MenuItem,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -69,6 +71,11 @@ const i18nMessages = {
     'app.export_title': '匯出 HTML',
     'app.export_hint': '複製或下載正式輸出 HTML（CSP-safe）。',
     'app.copy': '複製',
+    'app.paste': '貼上',
+    'app.move_up': '上移',
+    'app.move_down': '下移',
+    'app.delete': '刪除',
+    'app.context_menu': '節點操作',
     'app.copied': '已複製',
     'app.download': '下載 .html',
     'app.close': '關閉',
@@ -102,6 +109,11 @@ const i18nMessages = {
     'app.export_title': 'Export HTML',
     'app.export_hint': 'Copy or download CSP-safe HTML output.',
     'app.copy': 'Copy',
+    'app.paste': 'Paste',
+    'app.move_up': 'Move Up',
+    'app.move_down': 'Move Down',
+    'app.delete': 'Delete',
+    'app.context_menu': 'Node actions',
     'app.copied': 'Copied',
     'app.download': 'Download .html',
     'app.close': 'Close',
@@ -280,6 +292,11 @@ export function createApp(opts: AppOptions): SigilApp {
     const known: Record<string, string> = {
       undo: i18n.t('app.undo'),
       redo: i18n.t('app.redo'),
+      copy: i18n.t('app.copy'),
+      paste: i18n.t('app.paste'),
+      'move-up': i18n.t('app.move_up'),
+      'move-down': i18n.t('app.move_down'),
+      delete: i18n.t('app.delete'),
       save: i18n.t('app.save'),
       export: i18n.t('app.export'),
     }
@@ -511,10 +528,47 @@ export function createApp(opts: AppOptions): SigilApp {
 
   root.append(topbar, body, status)
 
+  // 依命令狀態組裝右鍵選單
+  let closeMenu: (() => void) | null = null
+  function openSelectionMenu(x: number, y: number): void {
+    closeMenu?.()
+    const ctx = makeCtx()
+    const groups = [['copy', 'paste'], ['move-up', 'move-down'], ['delete']]
+    const items: MenuItem[] = []
+    for (const group of groups) {
+      const actions: MenuItem[] = []
+      for (const id of group) {
+        const cmd = commands.get(id)
+        if (!cmd) continue
+        if (cmd.when && !cmd.when(ctx)) continue
+        actions.push({
+          id,
+          label: commandLabel(cmd),
+          run: () => {
+            void commands.run(id, makeCtx())
+          },
+        })
+      }
+      if (!actions.length) continue
+      if (items.length) items.push({ separator: true })
+      items.push(...actions)
+    }
+    if (!items.length) return
+    closeMenu = openContextMenu({
+      items,
+      x,
+      y,
+      theme: root.classList.contains('sigil-theme-dark') ? 'dark' : 'light',
+      ariaLabel: i18n.t('app.context_menu'),
+      onClose: () => (closeMenu = null),
+    })
+  }
+
   const canvas = createCanvas(engine, canvasBox, {
     rendererOptions: { shortcodeResolver },
     i18n,
     chrome: false,
+    onContextMenu: (_id, x, y) => openSelectionMenu(x, y),
   })
   // empty guide 不攔截 pointer
   emptyGuide.style.pointerEvents = 'none'
@@ -524,7 +578,11 @@ export function createApp(opts: AppOptions): SigilApp {
     fetchJSON,
   })
   const unsubDevice = canvas.subscribeDevice((next) => inspector.setDevice(next))
-  const layers = createLayersPanel(engine, layersBox)
+  const layers = createLayersPanel(engine, layersBox, {
+    onContextMenu: (_id, x, y) => {
+      openSelectionMenu(x, y)
+    },
+  })
   // 合併靜態區塊與範本；有任一來源即建立面板
   const templateStore = opts.templates
   const hasTemplates = !!templateStore
@@ -731,6 +789,7 @@ export function createApp(opts: AppOptions): SigilApp {
     destroy() {
       runBeforeDestroy(hooks, engine)
       closeExportDialog?.()
+      closeMenu?.()
       cleanupTheme()
       window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('keydown', onKeyDown)

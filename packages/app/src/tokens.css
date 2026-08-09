@@ -722,3 +722,51 @@
   display: flex;
   gap: 8px;
 }
+
+/* 右鍵選單浮層 */
+.sigil-context-menu {
+  position: fixed;
+  z-index: 10001;
+  min-width: 160px;
+  max-width: calc(100vw - 8px);
+  max-height: calc(100vh - 8px);
+  padding: var(--sigil-space-1, 4px);
+  overflow-y: auto;
+  color: var(--sigil-color-text, #0f172a);
+  background: var(--sigil-color-surface, #fff);
+  border: 1px solid var(--sigil-color-border, #e2e8f0);
+  border-radius: var(--sigil-radius-sm, 6px);
+  box-shadow: var(--sigil-shadow-md, 0 4px 12px rgba(15, 23, 42, 0.08));
+  font-family: var(--sigil-font-sans, system-ui, -apple-system, 'Segoe UI', sans-serif);
+  font-size: var(--sigil-font-size-md, 13px);
+  color-scheme: light;
+}
+.sigil-context-menu.sigil-theme-dark {
+  color-scheme: dark;
+}
+.sigil-context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  border-radius: var(--sigil-radius-sm, 6px);
+  cursor: pointer;
+  font: inherit;
+}
+.sigil-context-menu-item:hover:not(:disabled),
+.sigil-context-menu-item:focus-visible {
+  outline: none;
+  background: var(--sigil-color-accent-soft, rgba(79, 70, 229, 0.1));
+}
+.sigil-context-menu-item:disabled {
+  color: var(--sigil-color-muted, #64748b);
+  cursor: default;
+}
+.sigil-context-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--sigil-color-border, #e2e8f0);
+}

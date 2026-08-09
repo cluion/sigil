@@ -73,6 +73,52 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
       },
     }),
     defineCommand({
+      id: 'move-up',
+      label: 'Move Up',
+      when: (c) => {
+        const id = c.engine.getSelection()
+        if (!id || id === c.engine.getTree().id) return false
+        const node = findNode(c.engine.getTree(), id)
+        if (!node || node.locked) return false
+        const parent = findParent(c.engine.getTree(), id)
+        if (!parent?.children) return false
+        const idx = parent.children.findIndex((ch) => ch.id === id)
+        return idx > 0
+      },
+      run: (c) => {
+        const id = c.engine.getSelection()
+        if (!id) return
+        const parent = findParent(c.engine.getTree(), id)
+        if (!parent?.children) return
+        const idx = parent.children.findIndex((ch) => ch.id === id)
+        if (idx <= 0) return
+        c.engine.move(id, parent.id, idx - 1)
+      },
+    }),
+    defineCommand({
+      id: 'move-down',
+      label: 'Move Down',
+      when: (c) => {
+        const id = c.engine.getSelection()
+        if (!id || id === c.engine.getTree().id) return false
+        const node = findNode(c.engine.getTree(), id)
+        if (!node || node.locked) return false
+        const parent = findParent(c.engine.getTree(), id)
+        if (!parent?.children) return false
+        const idx = parent.children.findIndex((ch) => ch.id === id)
+        return idx >= 0 && idx < parent.children.length - 1
+      },
+      run: (c) => {
+        const id = c.engine.getSelection()
+        if (!id) return
+        const parent = findParent(c.engine.getTree(), id)
+        if (!parent?.children) return
+        const idx = parent.children.findIndex((ch) => ch.id === id)
+        if (idx < 0 || idx >= parent.children.length - 1) return
+        c.engine.move(id, parent.id, idx + 1)
+      },
+    }),
+    defineCommand({
       id: 'save',
       label: 'Save',
       shortcut: 'mod+s',

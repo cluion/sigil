@@ -1,9 +1,18 @@
 import type { Engine, ComponentNode } from '@cluion/sigil-core'
 
+export interface LayersPanelOptions {
+  /** 右鍵選單命中節點與游標座標 */
+  onContextMenu?: (id: string, x: number, y: number) => void
+}
+
 /**
  * 建立 layers 面板 — 節點樹、選取同步、重命名／鎖定／隱藏
  */
-export function createLayersPanel(engine: Engine, container: HTMLElement): {
+export function createLayersPanel(
+  engine: Engine,
+  container: HTMLElement,
+  opts?: LayersPanelOptions,
+): {
   destroy: () => void
 } {
   container.classList.add('sigil-layers-panel')
@@ -12,7 +21,7 @@ export function createLayersPanel(engine: Engine, container: HTMLElement): {
     const tree = engine.getTree()
     const sel = engine.getSelection()
     container.replaceChildren()
-    container.appendChild(renderNode(tree, sel, 0, engine))
+    container.appendChild(renderNode(tree, sel, 0, engine, opts?.onContextMenu))
   }
 
   const unsub = engine.subscribe((ev) => {
@@ -66,6 +75,7 @@ function renderNode(
   sel: string | null,
   depth: number,
   engine: Engine,
+  onContextMenu?: (id: string, x: number, y: number) => void,
 ): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'sigil-layer-node'
@@ -116,6 +126,12 @@ function renderNode(
   row.append(label, actions)
 
   row.addEventListener('click', () => engine.select(node.id))
+  row.addEventListener('contextmenu', (e) => {
+    if (!onContextMenu) return
+    e.preventDefault()
+    engine.select(node.id)
+    onContextMenu(node.id, e.clientX, e.clientY)
+  })
   row.addEventListener('dblclick', (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -136,7 +152,7 @@ function renderNode(
   wrap.appendChild(row)
 
   for (const c of node.children ?? []) {
-    wrap.appendChild(renderNode(c, sel, depth + 1, engine))
+    wrap.appendChild(renderNode(c, sel, depth + 1, engine, onContextMenu))
   }
   return wrap
 }
