@@ -40,6 +40,18 @@ describe('createApp', () => {
     )
     expect(rootActions[0]?.getAttribute('aria-label')).toBe('Hide')
     expect(rootActions[1]?.getAttribute('aria-label')).toBe('Lock')
+    const help = mount.querySelector('button[data-command-id="help"]') as HTMLButtonElement
+    help.click()
+    expect(
+      [...mount.querySelectorAll('.sigil-help-panel li')].map((item) => item.textContent),
+    ).toEqual([
+      'Delete / Backspace — Delete',
+      'Ctrl/Cmd+Z — Undo',
+      'Ctrl/Cmd+Shift+Z / Y — Redo',
+      'Ctrl/Cmd+C / V — Copy / Paste',
+      'Ctrl/Cmd+S — Save',
+    ])
+    help.click()
 
     app.engine.select('image')
     expect([...mount.querySelectorAll('.sigil-tab')].map((tab) => tab.textContent)).toEqual([
@@ -58,6 +70,16 @@ describe('createApp', () => {
       expect(dialog.querySelector('.sigil-muted')?.textContent).toBe('No media yet'),
     )
     ;(dialog.querySelector('.sigil-media-head button') as HTMLButtonElement).click()
+
+    ;(mount.querySelector('button[data-command-id="export"]') as HTMLButtonElement).click()
+    expect(mount.querySelector('.sigil-status span:last-child')?.textContent).toMatch(
+      /^HTML \d+ characters$/,
+    )
+    ;(
+      document.querySelector(
+        '.sigil-dialog-backdrop .sigil-dialog-head button',
+      ) as HTMLButtonElement
+    ).click()
 
     app.destroy()
   })

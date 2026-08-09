@@ -56,6 +56,7 @@ const i18nMessages = {
     'canvas.title': '編輯畫布',
     'canvas.edit': '編輯',
     'canvas.preview': '預覽',
+    'canvas.empty_container': '拖入元件',
     'app.brand': 'Sigil',
     'app.blocks': '區塊',
     'app.layers': '圖層',
@@ -65,6 +66,11 @@ const i18nMessages = {
     'app.save': '存檔',
     'app.export': '匯出',
     'app.help': '快捷鍵',
+    'app.help_delete': 'Delete / Backspace — 刪除',
+    'app.help_undo': 'Ctrl/Cmd+Z — 復原',
+    'app.help_redo': 'Ctrl/Cmd+Shift+Z / Y — 重做',
+    'app.help_copy_paste': 'Ctrl/Cmd+C / V — 複製貼上',
+    'app.help_save': 'Ctrl/Cmd+S — 存檔',
     'app.undo': '復原',
     'app.redo': '重做',
     'app.dirty': '未儲存',
@@ -92,6 +98,7 @@ const i18nMessages = {
     'app.theme_auto': '自動',
     'app.theme_light': '亮色',
     'app.theme_dark': '暗色',
+    'app.characters': '字元',
     'blocks.search_placeholder': '搜尋區塊…',
     'blocks.search_label': '搜尋區塊',
     'blocks.insert': '插入',
@@ -147,6 +154,7 @@ const i18nMessages = {
     'canvas.title': 'Canvas',
     'canvas.edit': 'Edit',
     'canvas.preview': 'Preview',
+    'canvas.empty_container': 'Drop components here',
     'app.brand': 'Sigil',
     'app.blocks': 'Blocks',
     'app.layers': 'Layers',
@@ -156,6 +164,11 @@ const i18nMessages = {
     'app.save': 'Save',
     'app.export': 'Export',
     'app.help': 'Keys',
+    'app.help_delete': 'Delete / Backspace — Delete',
+    'app.help_undo': 'Ctrl/Cmd+Z — Undo',
+    'app.help_redo': 'Ctrl/Cmd+Shift+Z / Y — Redo',
+    'app.help_copy_paste': 'Ctrl/Cmd+C / V — Copy / Paste',
+    'app.help_save': 'Ctrl/Cmd+S — Save',
     'app.undo': 'Undo',
     'app.redo': 'Redo',
     'app.dirty': 'Unsaved',
@@ -183,6 +196,7 @@ const i18nMessages = {
     'app.theme_auto': 'Auto',
     'app.theme_light': 'Light',
     'app.theme_dark': 'Dark',
+    'app.characters': 'characters',
     'blocks.search_placeholder': 'Search blocks…',
     'blocks.search_label': 'Search blocks',
     'blocks.insert': 'Insert',
@@ -649,11 +663,11 @@ export function createApp(opts: AppOptions): SigilApp {
   helpTitle.textContent = i18n.t('app.help')
   const helpList = document.createElement('ul')
   for (const line of [
-    'Delete / Backspace — 刪除',
-    'Ctrl/Cmd+Z — 復原',
-    'Ctrl/Cmd+Shift+Z / Y — 重做',
-    'Ctrl/Cmd+C / V — 複製貼上',
-    'Ctrl/Cmd+S — 存檔',
+    i18n.t('app.help_delete'),
+    i18n.t('app.help_undo'),
+    i18n.t('app.help_redo'),
+    i18n.t('app.help_copy_paste'),
+    i18n.t('app.help_save'),
   ]) {
     const li = document.createElement('li')
     li.textContent = line
@@ -954,7 +968,9 @@ export function createApp(opts: AppOptions): SigilApp {
     actionsRow.className = 'sigil-dialog-actions'
     const copyBtn = btn(i18n.t('app.copy'), () => {
       void copyText(html).then((ok) => {
-        statusMsg.textContent = ok ? i18n.t('app.copied') : `HTML ${html.length} chars`
+        statusMsg.textContent = ok
+          ? i18n.t('app.copied')
+          : `HTML ${html.length} ${i18n.t('app.characters')}`
         if (ok) copyBtn.textContent = i18n.t('app.copied')
       })
     })
@@ -995,7 +1011,7 @@ export function createApp(opts: AppOptions): SigilApp {
     }
     closeExportDialog = close
 
-    statusMsg.textContent = `HTML ${html.length} chars`
+    statusMsg.textContent = `HTML ${html.length} ${i18n.t('app.characters')}`
   }
 
   const unsub = engine.subscribe((ev) => {

@@ -190,6 +190,15 @@ test('英文 locale：Blocks、Layers、Media 與 compact 介面', async ({ page
   await expect(page.getByRole('button', { name: 'Insert 文字', exact: true })).toBeVisible()
   await expect(layerTree.getByRole('button', { name: 'Hide', exact: true }).first()).toBeVisible()
   await expect(layerTree.getByRole('button', { name: 'Lock', exact: true }).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Keys', exact: true }).click()
+  await expect(page.locator('.sigil-help-panel li')).toHaveText([
+    'Delete / Backspace — Delete',
+    'Ctrl/Cmd+Z — Undo',
+    'Ctrl/Cmd+Shift+Z / Y — Redo',
+    'Ctrl/Cmd+C / V — Copy / Paste',
+    'Ctrl/Cmd+S — Save',
+  ])
+  await page.getByRole('button', { name: 'Keys', exact: true }).click()
 
   await layerTree.getByRole('treeitem', { name: '主圖', exact: true }).click()
   await expect(page.locator('.sigil-tab')).toHaveText(['Content', 'Style', 'Advanced'])

@@ -231,6 +231,29 @@ describe('editor — 快捷鍵', () => {
 })
 
 describe('editor — commands / hooks', () => {
+  it('中文 locale 翻譯另存範本命令與 prompt', async () => {
+    const save = vi.fn()
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('我的範本')
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      locale: 'zh',
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 'c', type: 'text', content: 'x' }] },
+      },
+      templates: { list: () => [], save },
+    })
+    editor.engine.select('c')
+
+    expect(await editor.runCommand('save-as-template')).toBe(true)
+    expect(prompt).toHaveBeenCalledWith('範本名稱', 'text')
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ label: '我的範本' }))
+
+    prompt.mockRestore()
+    editor.destroy()
+  })
+
   it('runCommand undo', async () => {
     const el = document.createElement('div')
     const editor = createEditor({
@@ -315,6 +338,10 @@ describe('editor — 右鍵選單', () => {
       '.sigil-context-menu [data-menu-item-id="move-down"]',
     ) as HTMLButtonElement
     expect(moveDown).toBeTruthy()
+    expect(moveDown.textContent).toBe('下移')
+    expect(document.querySelector('.sigil-context-menu')?.getAttribute('aria-label')).toBe(
+      '節點操作',
+    )
     moveDown.click()
     expect(editor.engine.getTree().children?.map((node) => node.id)).toEqual(['b', 'a'])
     expect(document.querySelector('.sigil-context-menu')).toBeNull()

@@ -51,6 +51,7 @@ const i18nMessages = {
     'canvas.title': '編輯畫布',
     'canvas.edit': '✏ 編輯',
     'canvas.preview': '👁 預覽',
+    'canvas.empty_container': '拖入元件',
     'blocks.search_placeholder': '搜尋區塊…',
     'blocks.search_label': '搜尋區塊',
     'blocks.insert': '插入',
@@ -100,11 +101,20 @@ const i18nMessages = {
     'style.use_inheritance': '使用繼承',
     'style.clear': '清除',
     'style.clear_desktop': '清除 Desktop 樣式',
+    'editor.save_as_template': '存為範本',
+    'editor.template_name': '範本名稱',
+    'editor.copy': '複製',
+    'editor.paste': '貼上',
+    'editor.move_up': '上移',
+    'editor.move_down': '下移',
+    'editor.delete': '刪除',
+    'editor.context_menu': '節點操作',
   },
   en: {
     'canvas.title': 'Canvas',
     'canvas.edit': '✏ Edit',
     'canvas.preview': '👁 Preview',
+    'canvas.empty_container': 'Drop components here',
     'blocks.search_placeholder': 'Search blocks…',
     'blocks.search_label': 'Search blocks',
     'blocks.insert': 'Insert',
@@ -155,6 +165,14 @@ const i18nMessages = {
     'style.use_inheritance': 'Use inherited',
     'style.clear': 'Clear',
     'style.clear_desktop': 'Clear Desktop styles',
+    'editor.save_as_template': 'Save as Template',
+    'editor.template_name': 'Template name',
+    'editor.copy': 'Copy',
+    'editor.paste': 'Paste',
+    'editor.move_up': 'Move Up',
+    'editor.move_down': 'Move Down',
+    'editor.delete': 'Delete',
+    'editor.context_menu': 'Node actions',
   },
 }
 
@@ -242,7 +260,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       'save-as-template',
       defineCommand({
         id: 'save-as-template',
-        label: 'Save as Template',
+        label: i18n.t('editor.save_as_template'),
         when: (c) => {
           const id = c.engine.getSelection()
           return !!id && id !== c.engine.getTree().id
@@ -252,7 +270,10 @@ export function createEditor(opts: EditorOptions): SigilEditor {
           if (!id) return
           const node = findNode(c.engine.getTree(), id)
           if (!node) return
-          const label = window.prompt('Template name', node.name?.trim() || node.type)
+          const label = window.prompt(
+            i18n.t('editor.template_name'),
+            node.name?.trim() || node.type,
+          )
           if (!label) return
           await Promise.resolve(opts.templates!.save({ id: createId(), label, node }))
           reloadTemplates()
@@ -277,6 +298,18 @@ export function createEditor(opts: EditorOptions): SigilEditor {
         },
       },
     }
+  }
+
+  function commandLabel(cmd: CommandDefinition): string {
+    const known: Record<string, string> = {
+      copy: i18n.t('editor.copy'),
+      paste: i18n.t('editor.paste'),
+      'move-up': i18n.t('editor.move_up'),
+      'move-down': i18n.t('editor.move_down'),
+      delete: i18n.t('editor.delete'),
+      'save-as-template': i18n.t('editor.save_as_template'),
+    }
+    return known[cmd.id] ?? cmd.label ?? cmd.id
   }
 
   mountEl.replaceChildren()
@@ -323,7 +356,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
         if (cmd.when && !cmd.when(ctx)) continue
         actions.push({
           id,
-          label: cmd.label ?? id,
+          label: commandLabel(cmd),
           run: () => {
             void commands.run(id, makeCtx())
           },
@@ -339,6 +372,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       x,
       y,
       theme: layout.classList.contains('sigil-theme-dark') ? 'dark' : 'light',
+      ariaLabel: i18n.t('editor.context_menu'),
       onClose: () => (closeMenu = null),
     })
   }

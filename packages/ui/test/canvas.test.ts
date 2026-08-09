@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createEngine } from '@cluion/sigil-core'
+import { createEngine, createI18n } from '@cluion/sigil-core'
 import { createCanvas } from '../src/canvas.js'
 
 const doc = { version: 1 as const, root: { id: 'r', type: 'section', children: [] } }
@@ -23,6 +23,39 @@ function waitIframeLoad(iframe: HTMLIFrameElement): Promise<void> {
 }
 
 describe('createCanvas — preview mode', () => {
+  it('英文 i18n 翻譯初始模式、切換模式與空容器提示', async () => {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const i18n = createI18n(
+      {
+        zh: {},
+        en: {
+          'canvas.title': 'Canvas',
+          'canvas.edit': 'Edit mode',
+          'canvas.preview': 'Preview mode',
+          'canvas.empty_container': 'Drop components here',
+        },
+      },
+      'en',
+    )
+    const canvas = createCanvas(engine, container, { i18n })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const toggle = container.querySelector('.sigil-canvas-mode-btn') as HTMLButtonElement
+
+    expect(canvas.iframe.title).toBe('Canvas')
+    expect(toggle.textContent).toBe('Edit mode')
+    expect(canvas.iframe.contentDocument?.head.textContent).toContain(
+      'content:"Drop components here"',
+    )
+    canvas.setMode('preview')
+    expect(toggle.textContent).toBe('Preview mode')
+
+    canvas.destroy()
+    container.remove()
+  })
+
   it('預設 edit:iframe pointerEvents none', () => {
     const engine = createEngine({ doc })
     const container = document.createElement('div')

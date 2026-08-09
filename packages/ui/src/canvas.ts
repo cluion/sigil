@@ -8,6 +8,7 @@ import type {
 import { createRenderer, findNode } from '@cluion/sigil-core'
 // findNode 用於鎖定檢查
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
+import { uiText } from './i18n.js'
 
 export type CanvasMode = 'edit' | 'preview'
 export type CanvasDevice = ResponsiveDevice
@@ -57,7 +58,7 @@ export function createCanvas(
   // 畫布為真實頁面預覽，永遠白底深字，不受編輯器主題影響
   iframe.style.cssText =
     'border:1px solid var(--sigil-color-border, #ccc);width:100%;height:100%;min-height:420px;background:#fff;pointer-events:none;display:block;border-radius:var(--sigil-radius-sm, 6px)'
-  iframe.title = i18n?.t('canvas.title') ?? '編輯畫布'
+  iframe.title = uiText(i18n, 'canvas.title', '編輯畫布')
   container.appendChild(iframe)
 
   // overlay 接收 pointer
@@ -70,7 +71,7 @@ export function createCanvas(
   const toggle = document.createElement('button')
   toggle.type = 'button'
   toggle.className = 'sigil-btn sigil-btn--ghost sigil-canvas-mode-btn'
-  toggle.textContent = '✏ 編輯'
+  toggle.textContent = uiText(i18n, 'canvas.edit', '✏ 編輯')
   toggle.style.cssText = 'position:absolute;top:8px;right:8px;z-index:10'
   if (showChrome) container.appendChild(toggle)
 
@@ -90,9 +91,11 @@ export function createCanvas(
     mode = next
     iframe.style.pointerEvents = next === 'preview' ? 'auto' : 'none'
     overlay.style.display = next === 'preview' ? 'none' : ''
-    toggle.textContent =
-      i18n?.t(next === 'preview' ? 'canvas.preview' : 'canvas.edit') ??
-      (next === 'preview' ? '👁 預覽' : '✏ 編輯')
+    toggle.textContent = uiText(
+      i18n,
+      next === 'preview' ? 'canvas.preview' : 'canvas.edit',
+      next === 'preview' ? '👁 預覽' : '✏ 編輯',
+    )
     toggle.setAttribute('aria-pressed', String(next === 'preview'))
     if (next === 'preview') {
       hoverId = null
@@ -328,6 +331,7 @@ export function createCanvas(
 
   function injectStyle(doc: Document): void {
     const style = doc.createElement('style')
+    const emptyContainerText = JSON.stringify(uiText(i18n, 'canvas.empty_container', '拖入元件'))
     style.textContent = [
       'body{margin:12px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#0f172a;line-height:1.5;scrollbar-gutter:stable}',
       /* 精緻捲動條，避免緊貼內容 */
@@ -341,7 +345,7 @@ export function createCanvas(
       'section[data-sigil-id]>*,div[data-sigil-id]>*{margin:4px;vertical-align:middle}',
       'img[data-sigil-id]{display:inline-block;vertical-align:middle;max-width:100%;border-radius:4px}',
       'section[data-sigil-id]:empty,div[data-sigil-id]:empty{min-height:64px;display:flex;align-items:center;justify-content:center}',
-      'section[data-sigil-id]:empty::before,div[data-sigil-id]:empty::before{content:"拖入元件";color:#94a3b8;font-size:12px;pointer-events:none}',
+      `section[data-sigil-id]:empty::before,div[data-sigil-id]:empty::before{content:${emptyContainerText};color:#94a3b8;font-size:12px;pointer-events:none}`,
       /* hover：非選取時的輕描邊 */
       '[data-sigil-id][data-sigil-hover="1"]{outline:1.5px solid #818cf8!important;outline-offset:2px;box-shadow:0 0 0 3px rgba(99,102,241,0.12)}',
       /* 選取焦點 */
