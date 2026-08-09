@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0
+
+- Command-backed context menus on the canvas and layers panel with copy, paste, move up, move down, and delete actions
+- Menu actions follow command availability, so locked nodes and boundary positions do not expose invalid moves
+- Keyboard focus navigation, Escape dismissal, focus restoration, light and dark themes, and viewport-safe positioning
+
 ## 0.11.0
 
 - Double-click a text or button node to edit its content in place on the canvas (contenteditable, single-line)
