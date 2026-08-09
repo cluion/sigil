@@ -58,7 +58,7 @@ pnpm test:e2e
 pnpm build
 ```
 
-Node ≥ 20、pnpm 10。[examples/](./examples/)
+Node ≥ 24、pnpm 10。[examples/](./examples/)
 
 ## License
 

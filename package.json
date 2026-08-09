@@ -7,7 +7,7 @@
   "type": "module",
   "packageManager": "pnpm@10.27.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "vite demo",
@@ -28,19 +28,19 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "publint": "pnpm -r --filter \"./packages/*\" exec publint",
-    "attw": "pnpm -r --filter \"./packages/*\" exec attw --pack",
+    "attw": "pnpm -r --filter \"./packages/*\" exec attw --pack --profile esm-only --exclude-entrypoints ./tokens.css",
     "size": "size-limit",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.17.4",
+    "@arethetypeswrong/cli": "^0.18.5",
     "@changesets/cli": "^2.27.12",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
     "@size-limit/preset-small-lib": "^12.1.0",
-    "@types/node": "^22.10.0",
+    "@types/node": "^24.13.3",
     "eslint": "^9.17.0",
     "happy-dom": "^20.10.6",
     "prettier": "^3.4.2",
