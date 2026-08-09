@@ -10,7 +10,7 @@ export { createPropForm } from './form.js'
 export type { FormOptions, PropFormHandle } from './form.js'
 export { createBlocksPanel } from './blocks-panel.js'
 export { createLayersPanel } from './layers.js'
-export type { BlockFactory, BlockDef, BlocksInput } from './blocks-panel.js'
+export type { BlockFactory, BlockDef, BlocksInput, BlocksPanelOptions } from './blocks-panel.js'
 export type { LayersPanelOptions } from './layers.js'
 export {
   startInsertDrag,

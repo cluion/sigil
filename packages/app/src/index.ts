@@ -92,6 +92,21 @@ const i18nMessages = {
     'app.theme_auto': '自動',
     'app.theme_light': '亮色',
     'app.theme_dark': '暗色',
+    'blocks.search_placeholder': '搜尋區塊…',
+    'blocks.search_label': '搜尋區塊',
+    'blocks.insert': '插入',
+    'blocks.default_category': '一般',
+    'blocks.empty': '無符合區塊',
+    'layers.title': '圖層',
+    'layers.show': '顯示',
+    'layers.hide': '隱藏',
+    'layers.lock': '鎖定',
+    'layers.unlock': '解鎖',
+    'layers.rename_prompt': '圖層名稱',
+    'media.title': '媒體庫',
+    'media.close': '關閉',
+    'media.upload': '上傳圖片',
+    'media.empty': '尚無媒體',
     'status.none': '未選取',
   },
   en: {
@@ -134,6 +149,21 @@ const i18nMessages = {
     'app.theme_auto': 'Auto',
     'app.theme_light': 'Light',
     'app.theme_dark': 'Dark',
+    'blocks.search_placeholder': 'Search blocks…',
+    'blocks.search_label': 'Search blocks',
+    'blocks.insert': 'Insert',
+    'blocks.default_category': 'General',
+    'blocks.empty': 'No matching blocks',
+    'layers.title': 'Layers',
+    'layers.show': 'Show',
+    'layers.hide': 'Hide',
+    'layers.lock': 'Lock',
+    'layers.unlock': 'Unlock',
+    'layers.rename_prompt': 'Layer name',
+    'media.title': 'Media library',
+    'media.close': 'Close',
+    'media.upload': 'Upload image',
+    'media.empty': 'No media yet',
     'status.none': 'Nothing selected',
   },
 }
@@ -724,10 +754,12 @@ export function createApp(opts: AppOptions): SigilApp {
   const inspector = createInspector(engine, inspectorBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
     assets: opts.assets,
+    i18n,
     fetchJSON,
   })
   const unsubDevice = canvas.subscribeDevice((next) => inspector.setDevice(next))
   const layers = createLayersPanel(engine, layersBox, {
+    i18n,
     ariaLabel: i18n.t('app.layers'),
     onContextMenu: (_id, x, y) => {
       openSelectionMenu(x, y)
@@ -745,7 +777,7 @@ export function createApp(opts: AppOptions): SigilApp {
       : null
 
   const blocksPanel = mergedBlocks
-    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks)
+    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks, { i18n })
     : null
 
   /** 重新從 store 載入範本並合併進面板 */

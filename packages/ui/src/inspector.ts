@@ -1,4 +1,4 @@
-import type { AssetStore, Engine, PropSchema, ResponsiveDevice } from '@cluion/sigil-core'
+import type { AssetStore, Engine, I18n, PropSchema, ResponsiveDevice } from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
 import { openMediaPicker } from './media-picker.js'
@@ -16,6 +16,7 @@ export type InspectorTab = 'content' | 'style' | 'advanced'
 export interface InspectorOptions {
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
   assets?: AssetStore
+  i18n?: I18n
   device?: ResponsiveDevice
   /** select optionsFrom 用的非同步能力 */
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
@@ -149,7 +150,7 @@ function renderContent(
     })
   }
   if (node.type === 'image') {
-    appendImageFields(container, engine, node, opts?.assets)
+    appendImageFields(container, engine, node, opts?.assets, opts?.i18n)
   }
   if (node.shortcode) {
     const h = document.createElement('h4')
@@ -163,6 +164,7 @@ function renderContent(
         node,
         schema,
         assets: opts?.assets,
+        i18n: opts?.i18n,
         fetchJSON: opts?.fetchJSON,
       })
       registerDestroy?.(formHandle.destroy)
@@ -201,6 +203,7 @@ function appendImageFields(
   engine: Engine,
   node: ComponentNode,
   assets?: AssetStore,
+  i18n?: I18n,
 ): void {
   const wrap = document.createElement('div')
   wrap.className = 'sigil-field'
@@ -244,6 +247,7 @@ function appendImageFields(
     pickBtn.addEventListener('click', () => {
       openMediaPicker({
         assets,
+        i18n,
         currentUrl: node.attributes?.src,
         onPick: (item) => {
           engine.update(node.id, {

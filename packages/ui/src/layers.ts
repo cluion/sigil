@@ -1,6 +1,8 @@
-import type { Engine, ComponentNode } from '@cluion/sigil-core'
+import type { Engine, ComponentNode, I18n } from '@cluion/sigil-core'
+import { uiText } from './i18n.js'
 
 export interface LayersPanelOptions {
+  i18n?: I18n
   /** 圖層樹的無障礙名稱 */
   ariaLabel?: string
   /** 右鍵選單命中節點與游標座標 */
@@ -19,7 +21,10 @@ export function createLayersPanel(
 } {
   container.classList.add('sigil-layers-panel')
   container.setAttribute('role', 'tree')
-  container.setAttribute('aria-label', opts?.ariaLabel ?? '圖層')
+  container.setAttribute(
+    'aria-label',
+    opts?.ariaLabel ?? uiText(opts?.i18n, 'layers.title', '圖層'),
+  )
 
   function render(): void {
     const active = document.activeElement
@@ -34,7 +39,7 @@ export function createLayersPanel(
     const tree = engine.getTree()
     const sel = engine.getSelection()
     container.replaceChildren()
-    container.appendChild(renderNode(tree, sel, 0, engine, opts?.onContextMenu))
+    container.appendChild(renderNode(tree, sel, 0, engine, opts?.i18n, opts?.onContextMenu))
 
     const rows = [...container.querySelectorAll<HTMLElement>('.sigil-layer-row[data-layer-id]')]
     const tabStop =
@@ -105,6 +110,7 @@ function renderNode(
   sel: string | null,
   depth: number,
   engine: Engine,
+  i18n?: I18n,
   onContextMenu?: (id: string, x: number, y: number) => void,
 ): HTMLElement {
   const wrap = document.createElement('div')
@@ -150,7 +156,7 @@ function renderNode(
     iconBtn(
       'visibility',
       node.hidden ? '○' : '●',
-      node.hidden ? '顯示' : '隱藏',
+      node.hidden ? uiText(i18n, 'layers.show', '顯示') : uiText(i18n, 'layers.hide', '隱藏'),
       !!node.hidden,
       () => {
         engine.update(node.id, { hidden: !node.hidden })
@@ -159,9 +165,15 @@ function renderNode(
   )
   // 鎖定
   actions.appendChild(
-    iconBtn('lock', node.locked ? '🔒' : '🔓', node.locked ? '解鎖' : '鎖定', !!node.locked, () => {
-      engine.update(node.id, { locked: !node.locked })
-    }),
+    iconBtn(
+      'lock',
+      node.locked ? '🔒' : '🔓',
+      node.locked ? uiText(i18n, 'layers.unlock', '解鎖') : uiText(i18n, 'layers.lock', '鎖定'),
+      !!node.locked,
+      () => {
+        engine.update(node.id, { locked: !node.locked })
+      },
+    ),
   )
 
   row.append(label, actions)
@@ -179,7 +191,7 @@ function renderNode(
   row.addEventListener('dblclick', (e) => {
     e.preventDefault()
     e.stopPropagation()
-    renameNode(engine, node)
+    renameNode(engine, node, i18n)
   })
   row.addEventListener('keydown', (e) => {
     if (e.target !== row) return
@@ -191,7 +203,7 @@ function renderNode(
     }
     if (e.key === 'F2') {
       e.preventDefault()
-      renameNode(engine, node)
+      renameNode(engine, node, i18n)
       return
     }
     if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
@@ -243,15 +255,15 @@ function renderNode(
   wrap.appendChild(row)
 
   for (const c of node.children ?? []) {
-    wrap.appendChild(renderNode(c, sel, depth + 1, engine, onContextMenu))
+    wrap.appendChild(renderNode(c, sel, depth + 1, engine, i18n, onContextMenu))
   }
   return wrap
 }
 
-function renameNode(engine: Engine, node: ComponentNode): void {
+function renameNode(engine: Engine, node: ComponentNode, i18n?: I18n): void {
   // 鎖定時仍可重命名
   const current = node.name ?? ''
-  const next = window.prompt('圖層名稱', current)
+  const next = window.prompt(uiText(i18n, 'layers.rename_prompt', '圖層名稱'), current)
   if (next === null) return
   engine.update(node.id, { name: next })
 }

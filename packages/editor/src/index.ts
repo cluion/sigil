@@ -47,8 +47,46 @@ import {
 import { templateToBlockDef } from '@cluion/sigil-blocks'
 
 const i18nMessages = {
-  zh: { 'canvas.title': '編輯畫布', 'canvas.edit': '✏ 編輯', 'canvas.preview': '👁 預覽' },
-  en: { 'canvas.title': 'Canvas', 'canvas.edit': '✏ Edit', 'canvas.preview': '👁 Preview' },
+  zh: {
+    'canvas.title': '編輯畫布',
+    'canvas.edit': '✏ 編輯',
+    'canvas.preview': '👁 預覽',
+    'blocks.search_placeholder': '搜尋區塊…',
+    'blocks.search_label': '搜尋區塊',
+    'blocks.insert': '插入',
+    'blocks.default_category': '一般',
+    'blocks.empty': '無符合區塊',
+    'layers.title': '圖層',
+    'layers.show': '顯示',
+    'layers.hide': '隱藏',
+    'layers.lock': '鎖定',
+    'layers.unlock': '解鎖',
+    'layers.rename_prompt': '圖層名稱',
+    'media.title': '媒體庫',
+    'media.close': '關閉',
+    'media.upload': '上傳圖片',
+    'media.empty': '尚無媒體',
+  },
+  en: {
+    'canvas.title': 'Canvas',
+    'canvas.edit': '✏ Edit',
+    'canvas.preview': '👁 Preview',
+    'blocks.search_placeholder': 'Search blocks…',
+    'blocks.search_label': 'Search blocks',
+    'blocks.insert': 'Insert',
+    'blocks.default_category': 'General',
+    'blocks.empty': 'No matching blocks',
+    'layers.title': 'Layers',
+    'layers.show': 'Show',
+    'layers.hide': 'Hide',
+    'layers.lock': 'Lock',
+    'layers.unlock': 'Unlock',
+    'layers.rename_prompt': 'Layer name',
+    'media.title': 'Media library',
+    'media.close': 'Close',
+    'media.upload': 'Upload image',
+    'media.empty': 'No media yet',
+  },
 }
 
 export interface EditorOptions {
@@ -247,6 +285,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   })
   const unsubDevice = canvas.subscribeDevice((device) => props.setDevice(device))
   const layers = createLayersPanel(engine, layersBox, {
+    i18n,
     onContextMenu: (_id, x, y) => {
       openSelectionMenu(x, y)
     },
@@ -263,7 +302,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       : null
 
   const blocksPanel = mergedBlocks
-    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks)
+    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks, { i18n })
     : null
 
   function reloadTemplates(): void {

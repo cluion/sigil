@@ -11,6 +11,51 @@ function emptyDoc(): SigilDoc {
 }
 
 describe('createApp', () => {
+  it('英文 locale 套用 Blocks、Layers 與 Media 主要互動字串', async () => {
+    const mount = document.createElement('div')
+    const app = createApp({
+      mount,
+      locale: 'en',
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 'image', type: 'image', attributes: { src: '' } }],
+        },
+      },
+      blocks: {
+        Text: () => ({ id: 'text', type: 'text', content: '' }),
+      },
+      assets: { list: () => [] },
+    })
+
+    const search = mount.querySelector('.sigil-blocks-panel input') as HTMLInputElement
+    expect(search.placeholder).toBe('Search blocks…')
+    expect(search.getAttribute('aria-label')).toBe('Search blocks')
+    expect(mount.querySelector('.sigil-block-item')?.getAttribute('aria-label')).toBe('Insert Text')
+    expect(mount.querySelector('.sigil-layers-panel')?.getAttribute('aria-label')).toBe('Layers')
+    const rootActions = mount.querySelectorAll<HTMLButtonElement>(
+      '.sigil-layer-row[data-layer-id="r"] .sigil-layer-icon-btn',
+    )
+    expect(rootActions[0]?.getAttribute('aria-label')).toBe('Hide')
+    expect(rootActions[1]?.getAttribute('aria-label')).toBe('Lock')
+
+    app.engine.select('image')
+    const pick = mount.querySelector(
+      '.sigil-inspector .sigil-field-row button',
+    ) as HTMLButtonElement
+    pick.click()
+    const dialog = document.querySelector('.sigil-media-backdrop') as HTMLElement
+    expect(dialog.querySelector('h3')?.textContent).toBe('Media library')
+    await vi.waitFor(() =>
+      expect(dialog.querySelector('.sigil-muted')?.textContent).toBe('No media yet'),
+    )
+    ;(dialog.querySelector('.sigil-media-head button') as HTMLButtonElement).click()
+
+    app.destroy()
+  })
+
   it('掛載產品殼並可 toJSON / toHTML', () => {
     const def = defineShortcode({
       name: 'greet',

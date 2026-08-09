@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createEngine } from '@cluion/sigil-core'
+import { createEngine, createI18n } from '@cluion/sigil-core'
 import { createLayersPanel } from '../src/layers.js'
 
 describe('createLayersPanel', () => {
@@ -199,6 +199,47 @@ describe('createLayersPanel', () => {
     expect(engine.getSelection()).toBe('t')
     expect(onContextMenu).toHaveBeenCalledOnce()
     expect(onContextMenu).toHaveBeenCalledWith('t', 18, 24)
+    panel.destroy()
+  })
+
+  it('注入英文 i18n 後翻譯樹名、操作與重命名提示', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 't', type: 'text', content: 'x', hidden: true, locked: true }],
+        },
+      },
+    })
+    const i18n = createI18n(
+      {
+        zh: {},
+        en: {
+          'layers.title': 'Layers',
+          'layers.show': 'Show',
+          'layers.hide': 'Hide',
+          'layers.lock': 'Lock',
+          'layers.unlock': 'Unlock',
+          'layers.rename_prompt': 'Layer name',
+        },
+      },
+      'en',
+    )
+    const box = document.createElement('div')
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue(null)
+    const panel = createLayersPanel(engine, box, { i18n })
+    const row = box.querySelector('.sigil-layer-row[data-layer-id="t"]') as HTMLElement
+    const actions = row.querySelectorAll<HTMLButtonElement>('.sigil-layer-icon-btn')
+
+    expect(box.getAttribute('aria-label')).toBe('Layers')
+    expect(actions[0]?.getAttribute('aria-label')).toBe('Show')
+    expect(actions[1]?.getAttribute('aria-label')).toBe('Unlock')
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true }))
+    expect(prompt).toHaveBeenCalledWith('Layer name', '')
+
+    prompt.mockRestore()
     panel.destroy()
   })
 })

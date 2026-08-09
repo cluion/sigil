@@ -1,4 +1,5 @@
-import { createId, type AssetItem, type AssetStore } from '@cluion/sigil-core'
+import { createId, type AssetItem, type AssetStore, type I18n } from '@cluion/sigil-core'
+import { uiText } from './i18n.js'
 
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
@@ -36,6 +37,7 @@ function trapFocus(event: KeyboardEvent, root: HTMLElement): void {
 
 export interface MediaPickerOptions {
   assets: AssetStore
+  i18n?: I18n
   /** 目前已選 url，可高亮 */
   currentUrl?: string
   onPick: (item: AssetItem) => void
@@ -61,12 +63,12 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
   head.className = 'sigil-media-head'
   const title = document.createElement('h3')
   title.id = `sigil-media-title-${createId()}`
-  title.textContent = '媒體庫'
+  title.textContent = uiText(opts.i18n, 'media.title', '媒體庫')
   backdrop.setAttribute('aria-labelledby', title.id)
   const closeBtn = document.createElement('button')
   closeBtn.type = 'button'
   closeBtn.className = 'sigil-btn sigil-btn--ghost'
-  closeBtn.textContent = '關閉'
+  closeBtn.textContent = uiText(opts.i18n, 'media.close', '關閉')
   closeBtn.addEventListener('click', () => close())
   head.append(title, closeBtn)
 
@@ -84,7 +86,7 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
     const uploadBtn = document.createElement('button')
     uploadBtn.type = 'button'
     uploadBtn.className = 'sigil-btn'
-    uploadBtn.textContent = '上傳圖片'
+    uploadBtn.textContent = uiText(opts.i18n, 'media.upload', '上傳圖片')
     uploadBtn.addEventListener('click', () => fileInput.click())
     fileInput.addEventListener('change', () => {
       const file = fileInput.files?.[0]
@@ -121,7 +123,7 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
     if (!items.length) {
       const empty = document.createElement('p')
       empty.className = 'sigil-muted'
-      empty.textContent = '尚無媒體'
+      empty.textContent = uiText(opts.i18n, 'media.empty', '尚無媒體')
       grid.appendChild(empty)
       return
     }

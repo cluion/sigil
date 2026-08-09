@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createEngine } from '@cluion/sigil-core'
+import { createEngine, createI18n } from '@cluion/sigil-core'
 import { createBlocksPanel } from '../src/blocks-panel.js'
 
 describe('createBlocksPanel', () => {
@@ -109,5 +109,42 @@ describe('createBlocksPanel', () => {
     item.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
     expect(engine.getTree().children?.map((node) => node.id)).toEqual(['text-1', 'text-2'])
     expect(engine.getSelection()).toBe('text-2')
+  })
+
+  it('注入英文 i18n 後翻譯搜尋、預設分類、插入與空狀態', () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    const i18n = createI18n(
+      {
+        zh: {},
+        en: {
+          'blocks.search_placeholder': 'Search blocks…',
+          'blocks.search_label': 'Search blocks',
+          'blocks.insert': 'Insert',
+          'blocks.default_category': 'General',
+          'blocks.empty': 'No matching blocks',
+        },
+      },
+      'en',
+    )
+    createBlocksPanel(
+      engine,
+      box,
+      document.createElement('iframe'),
+      { Text: () => ({ id: 't', type: 'text', content: '' }) },
+      { i18n },
+    )
+
+    const search = box.querySelector('input[type="search"]') as HTMLInputElement
+    expect(search.placeholder).toBe('Search blocks…')
+    expect(search.getAttribute('aria-label')).toBe('Search blocks')
+    expect(box.querySelector('.sigil-blocks-category')?.textContent).toBe('General')
+    expect(box.querySelector('[role="button"]')?.getAttribute('aria-label')).toBe('Insert Text')
+
+    search.value = 'missing'
+    search.dispatchEvent(new Event('input'))
+    expect(box.querySelector('.sigil-muted')?.textContent).toBe('No matching blocks')
   })
 })

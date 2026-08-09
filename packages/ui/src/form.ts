@@ -4,6 +4,7 @@ import {
   type AssetStore,
   type Engine,
   type ComponentNode,
+  type I18n,
   type PropSchema,
 } from '@cluion/sigil-core'
 import { openMediaPicker } from './media-picker.js'
@@ -13,6 +14,7 @@ export interface FormOptions {
   node: ComponentNode
   schema: PropSchema[]
   assets?: AssetStore
+  i18n?: I18n
   /** select optionsFrom 用的非同步能力；未注入時動態 select 顯示「無法載入」 */
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
 }
@@ -28,7 +30,7 @@ export interface PropFormHandle {
  * optionsFrom select 會訂閱 engine，dependsOn prop 變動時重載
  */
 export function createPropForm(opts: FormOptions): PropFormHandle {
-  const { engine, schema, assets, fetchJSON } = opts
+  const { engine, schema, assets, i18n, fetchJSON } = opts
   const nodeId = opts.node.id
   const wrap = document.createElement('div')
   wrap.className = 'sigil-prop-form'
@@ -66,7 +68,7 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
 
     let field: HTMLElement
     if (s.type === 'media') {
-      field = createMediaField(engine, nodeId, s, currentProps()[s.name], assets, () => {
+      field = createMediaField(engine, nodeId, s, currentProps()[s.name], assets, i18n, () => {
         refreshVisibility()
       })
     } else {
@@ -255,6 +257,7 @@ function createMediaField(
   schema: PropSchema,
   value: unknown,
   assets: AssetStore | undefined,
+  i18n: I18n | undefined,
   onChanged: () => void,
 ): HTMLElement {
   const wrap = document.createElement('div')
@@ -300,6 +303,7 @@ function createMediaField(
     pickBtn.addEventListener('click', () => {
       openMediaPicker({
         assets,
+        i18n,
         currentUrl: input.value,
         onPick: (item) => {
           input.value = item.url

@@ -173,3 +173,52 @@ test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) =>
     .toEqual({ page: 0, app: 0, topbar: 0 })
   expect(errors).toEqual([])
 })
+
+test('英文 locale：Blocks、Layers、Media 與 compact 介面', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: '中/EN', exact: true }).click()
+
+  const app = page.locator('.sigil-app')
+  await expect(app).toHaveAttribute('data-layout', 'desktop')
+  const layerTree = page.getByRole('tree', { name: 'Layers', exact: true })
+  await expect(layerTree).toBeVisible()
+  await expect(page.getByRole('searchbox', { name: 'Search blocks', exact: true })).toHaveAttribute(
+    'placeholder',
+    'Search blocks…',
+  )
+  await expect(page.getByRole('button', { name: 'Insert 文字', exact: true })).toBeVisible()
+  await expect(layerTree.getByRole('button', { name: 'Hide', exact: true }).first()).toBeVisible()
+  await expect(layerTree.getByRole('button', { name: 'Lock', exact: true }).first()).toBeVisible()
+
+  await layerTree.getByRole('treeitem', { name: '主圖', exact: true }).click()
+  await page.locator('.sigil-inspector .sigil-field-row button').click()
+  const media = page.getByRole('dialog', { name: 'Media library', exact: true })
+  await expect(media).toBeVisible()
+  await expect(media.getByRole('button', { name: 'Close', exact: true })).toBeFocused()
+  await media.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(media).toHaveCount(0)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(app).toHaveAttribute('data-layout', 'compact')
+  const blocksToggle = page.getByRole('button', { name: 'Blocks', exact: true })
+  await blocksToggle.click()
+  const blocks = page.locator('[data-compact-panel="blocks"]')
+  await expect(blocks).toHaveAttribute('data-open', 'true')
+  await expect(blocks.getByRole('searchbox', { name: 'Search blocks', exact: true })).toBeVisible()
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const root = document.querySelector('.sigil-app')!
+        const topbar = document.querySelector('.sigil-topbar')!
+        return {
+          page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          app: root.scrollWidth - root.clientWidth,
+          topbar: topbar.scrollWidth - topbar.clientWidth,
+        }
+      }),
+    )
+    .toEqual({ page: 0, app: 0, topbar: 0 })
+  expect(errors).toEqual([])
+})

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { openMediaPicker } from '../src/media-picker.js'
-import type { AssetStore } from '@cluion/sigil-core'
+import { createI18n, type AssetStore } from '@cluion/sigil-core'
 
 describe('openMediaPicker', () => {
   it('點選項目觸發 onPick', async () => {
@@ -63,5 +63,39 @@ describe('openMediaPicker', () => {
     expect(document.activeElement).toBe(trigger)
     expect(onClose).toHaveBeenCalledOnce()
     trigger.remove()
+  })
+
+  it('注入英文 i18n 後翻譯對話框、上傳與空狀態', async () => {
+    const i18n = createI18n(
+      {
+        zh: {},
+        en: {
+          'media.title': 'Media library',
+          'media.close': 'Close',
+          'media.upload': 'Upload image',
+          'media.empty': 'No media yet',
+        },
+      },
+      'en',
+    )
+    const close = openMediaPicker({
+      assets: {
+        list: () => [],
+        upload: (file) => ({ id: file.name, url: `https://example.com/${file.name}` }),
+      },
+      i18n,
+      onPick: () => {},
+      onClose: () => {},
+    })
+
+    const dialog = document.querySelector('.sigil-media-backdrop') as HTMLElement
+    expect(dialog.querySelector('h3')?.textContent).toBe('Media library')
+    expect(dialog.querySelector('.sigil-media-head button')?.textContent).toBe('Close')
+    expect(dialog.querySelector('.sigil-media-actions button')?.textContent).toBe('Upload image')
+    await vi.waitFor(() =>
+      expect(dialog.querySelector('.sigil-muted')?.textContent).toBe('No media yet'),
+    )
+
+    close()
   })
 })

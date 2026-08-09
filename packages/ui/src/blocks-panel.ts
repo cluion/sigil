@@ -1,5 +1,6 @@
-import type { Engine, ComponentNode } from '@cluion/sigil-core'
+import type { Engine, ComponentNode, I18n } from '@cluion/sigil-core'
 import { startInsertDrag } from './dnd.js'
+import { uiText } from './i18n.js'
 
 export type BlockFactory = () => ComponentNode
 
@@ -15,14 +16,18 @@ export interface BlockDef {
 
 export type BlocksInput = Record<string, BlockFactory> | BlockDef[]
 
-function normalize(input: BlocksInput): BlockDef[] {
+export interface BlocksPanelOptions {
+  i18n?: I18n
+}
+
+function normalize(input: BlocksInput, defaultCategory: string): BlockDef[] {
   if (Array.isArray(input)) {
-    return input.map((d) => ({ category: '一般', ...d }))
+    return input.map((d) => ({ category: defaultCategory, ...d }))
   }
   return Object.entries(input).map(([label, create]) => ({
     id: label,
     label,
-    category: '一般',
+    category: defaultCategory,
     create,
   }))
 }
@@ -43,6 +48,7 @@ export function createBlocksPanel(
   container: HTMLElement,
   iframe: HTMLIFrameElement,
   blocks: BlocksInput,
+  opts?: BlocksPanelOptions,
 ): { destroy: () => void; reload: (blocks?: BlocksInput) => void } {
   container.replaceChildren()
   container.classList.add('sigil-blocks-panel')
@@ -50,15 +56,16 @@ export function createBlocksPanel(
   const search = document.createElement('input')
   search.type = 'search'
   search.className = 'sigil-input'
-  search.placeholder = '搜尋區塊…'
-  search.setAttribute('aria-label', '搜尋區塊')
+  search.placeholder = uiText(opts?.i18n, 'blocks.search_placeholder', '搜尋區塊…')
+  search.setAttribute('aria-label', uiText(opts?.i18n, 'blocks.search_label', '搜尋區塊'))
   container.appendChild(search)
 
   const list = document.createElement('div')
   list.className = 'sigil-blocks-list'
   container.appendChild(list)
 
-  let defs = normalize(blocks)
+  const defaultCategory = uiText(opts?.i18n, 'blocks.default_category', '一般')
+  let defs = normalize(blocks, defaultCategory)
 
   function renderList(filter: string): void {
     list.replaceChildren()
@@ -69,7 +76,7 @@ export function createBlocksPanel(
     const order: string[] = []
     const groups = new Map<string, BlockDef[]>()
     for (const d of filtered) {
-      const cat = d.category ?? '一般'
+      const cat = d.category ?? defaultCategory
       if (!groups.has(cat)) {
         groups.set(cat, [])
         order.push(cat)
@@ -88,7 +95,10 @@ export function createBlocksPanel(
         const item = document.createElement('div')
         item.className = 'sigil-block-item'
         item.setAttribute('role', 'button')
-        item.setAttribute('aria-label', `插入 ${def.label}`)
+        item.setAttribute(
+          'aria-label',
+          `${uiText(opts?.i18n, 'blocks.insert', '插入')} ${def.label}`,
+        )
         item.tabIndex = 0
 
         if (def.icon) {
@@ -121,7 +131,7 @@ export function createBlocksPanel(
     if (!filtered.length) {
       const empty = document.createElement('p')
       empty.className = 'sigil-muted'
-      empty.textContent = '無符合區塊'
+      empty.textContent = uiText(opts?.i18n, 'blocks.empty', '無符合區塊')
       list.appendChild(empty)
     }
   }
@@ -131,7 +141,7 @@ export function createBlocksPanel(
   return {
     destroy() {},
     reload(next?: BlocksInput) {
-      if (next !== undefined) defs = normalize(next)
+      if (next !== undefined) defs = normalize(next, defaultCategory)
       renderList(search.value)
     },
   }

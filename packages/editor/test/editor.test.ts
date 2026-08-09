@@ -4,6 +4,34 @@ import { createEditor, defineCommand } from '../src/index.js'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 describe('editor — toHTML', () => {
+  it('英文 locale 套用 Blocks 與 Layers 主要互動字串', () => {
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      locale: 'en',
+      doc: {
+        version: 1,
+        root: { id: 'r', type: 'section', children: [{ id: 't', type: 'text', content: '' }] },
+      },
+      blocks: {
+        Text: () => ({ id: 'new-text', type: 'text', content: '' }),
+      },
+    })
+
+    const search = el.querySelector('.sigil-blocks-panel input') as HTMLInputElement
+    expect(search.placeholder).toBe('Search blocks…')
+    expect(search.getAttribute('aria-label')).toBe('Search blocks')
+    expect(el.querySelector('.sigil-block-item')?.getAttribute('aria-label')).toBe('Insert Text')
+    expect(el.querySelector('.sigil-layers-panel')?.getAttribute('aria-label')).toBe('Layers')
+    const rootActions = el.querySelectorAll<HTMLButtonElement>(
+      '.sigil-layer-row[data-layer-id="r"] .sigil-layer-icon-btn',
+    )
+    expect(rootActions[0]?.getAttribute('aria-label')).toBe('Hide')
+    expect(rootActions[1]?.getAttribute('aria-label')).toBe('Lock')
+
+    editor.destroy()
+  })
+
   it('輸出 static HTML,shortcode 用 render 展開', () => {
     const def = defineShortcode({
       name: 'greet',
