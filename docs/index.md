@@ -13,9 +13,9 @@ hero:
       link: /api/
 features:
   - title: 零依賴 core
-    details: "core gzip 硬目標小於 30KB，易於審計"
+    details: 'core gzip 硬目標小於 30KB，易於審計'
   - title: Shortcode DSL
-    details: "defineShortcode，template 加 bind，自動屬性表單"
+    details: 'defineShortcode，template 加 bind，自動屬性表單'
   - title: 可嵌入
-    details: "createEditor 一行掛載，HTML／Vue／React／Laravel 皆有範例"
+    details: 'createEditor 一行掛載，HTML／Vue／React／Laravel 皆有範例'
 ---

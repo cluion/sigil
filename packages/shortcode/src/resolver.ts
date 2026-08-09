@@ -27,8 +27,7 @@ export function createShortcodeResolver(opts: CreateResolverOptions): ShortcodeR
   function getTemplate(def: ShortcodeDefinition): HTMLTemplateElement {
     const cached = templateCache.get(def.name)
     if (cached) return cached
-    const tpl =
-      typeof def.template === 'string' ? document.createElement('template') : def.template
+    const tpl = typeof def.template === 'string' ? document.createElement('template') : def.template
     if (typeof def.template === 'string') opts.policy.setTemplate(tpl, def.template)
     templateCache.set(def.name, tpl)
     return tpl

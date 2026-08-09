@@ -82,12 +82,7 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
     if (s.type === 'select' && s.optionsFrom) {
       const sel = field.querySelector('select') as HTMLSelectElement | null
       if (sel) {
-        const setup = setupOptionsFrom(
-          sel,
-          s,
-          () => currentProps(),
-          fetchJSON,
-        )
+        const setup = setupOptionsFrom(sel, s, () => currentProps(), fetchJSON)
         reloaders.set(s.name, setup.reload)
         disposers.push(setup.destroy)
       }
@@ -459,12 +454,7 @@ function setProp(engine: Engine, nodeId: string, name: string, v: unknown): void
   })
 }
 
-function emit(
-  engine: Engine,
-  nodeId: string,
-  schema: PropSchema,
-  control: HTMLElement,
-): void {
+function emit(engine: Engine, nodeId: string, schema: PropSchema, control: HTMLElement): void {
   let v: unknown
   if (schema.type === 'boolean') {
     v = (control as HTMLInputElement).checked

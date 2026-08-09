@@ -4,7 +4,10 @@ import { createPropForm } from '../src/form.js'
 
 function setup(schema: PropSchema[], props: Record<string, unknown> = {}) {
   const engine = createEngine({
-    doc: { version: 1 as const, root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props } } },
+    doc: {
+      version: 1 as const,
+      root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props } },
+    },
   })
   const handle = createPropForm({ engine, node: engine.getTree(), schema })
   return { engine, form: handle.el, destroy: handle.destroy }
@@ -162,7 +165,12 @@ describe('createPropForm', () => {
           ],
         },
       ],
-      { items: [{ label: 'A', href: '/a' }, { label: 'B', href: '/b' }] },
+      {
+        items: [
+          { label: 'A', href: '/a' },
+          { label: 'B', href: '/b' },
+        ],
+      },
     )
     const inputs = [...form.querySelectorAll('.sigil-repeater-item input')] as HTMLInputElement[]
     expect(inputs.length).toBe(4) // 2 筆 × 2 欄位
@@ -232,13 +240,23 @@ describe('createPropForm', () => {
 
   it('optionsFrom select 初始載入選項', async () => {
     const fetchJSON = vi.fn(async (url: string) => {
-      if (url.startsWith('/sizes')) return { sizes: [{ value: 's', label: 'S' }, { value: 'm', label: 'M' }] }
+      if (url.startsWith('/sizes'))
+        return {
+          sizes: [
+            { value: 's', label: 'S' },
+            { value: 'm', label: 'M' },
+          ],
+        }
       return {}
     })
     const engine = createEngine({
       doc: {
         version: 1 as const,
-        root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props: { color: 'red', size: 'm' } } },
+        root: {
+          id: 'n',
+          type: 'shortcode',
+          shortcode: { name: 'x', props: { color: 'red', size: 'm' } },
+        },
       },
     })
     const handle = createPropForm({
@@ -250,7 +268,9 @@ describe('createPropForm', () => {
           type: 'select',
           dependsOn: { prop: 'color' },
           optionsFrom: async (ctx) => {
-            const d = (await ctx.fetchJSON('/sizes', ctx.signal)) as { sizes: { value: string; label: string }[] }
+            const d = (await ctx.fetchJSON('/sizes', ctx.signal)) as {
+              sizes: { value: string; label: string }[]
+            }
             return d.sizes ?? []
           },
         },
@@ -268,7 +288,10 @@ describe('createPropForm', () => {
   it('dependsOn prop 變動 → optionsFrom 重載', async () => {
     const sizesByColor: Record<string, { value: string; label: string }[]> = {
       red: [{ value: 's', label: 'S' }],
-      blue: [{ value: 'm', label: 'M' }, { value: 'l', label: 'L' }],
+      blue: [
+        { value: 'm', label: 'M' },
+        { value: 'l', label: 'L' },
+      ],
     }
     const fetchJSON = vi.fn(async (url: string) => {
       const params = new URLSearchParams(url.split('?')[1] ?? '')
@@ -277,7 +300,11 @@ describe('createPropForm', () => {
     const engine = createEngine({
       doc: {
         version: 1 as const,
-        root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props: { color: 'red', size: 's' } } },
+        root: {
+          id: 'n',
+          type: 'shortcode',
+          shortcode: { name: 'x', props: { color: 'red', size: 's' } },
+        },
       },
     })
     const handle = createPropForm({
@@ -364,4 +391,3 @@ describe('createPropForm', () => {
     handle.destroy()
   })
 })
-

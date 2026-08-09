@@ -43,7 +43,8 @@ async function main() {
   if (!el) return
 
   const pageKey = el.dataset.pageKey || 'home'
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || undefined
+  const csrf =
+    document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || undefined
   const store = createHttpStore(pageKey, csrf)
 
   const loaded = await store.load()

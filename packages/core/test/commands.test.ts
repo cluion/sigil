@@ -8,7 +8,9 @@ import {
 } from '../src/index.js'
 import type { CommandContext } from '../src/index.js'
 
-function ctxOf(engine = createEngine({ doc: { version: 1, root: { id: 'r', type: 'section', children: [] } } })): CommandContext {
+function ctxOf(
+  engine = createEngine({ doc: { version: 1, root: { id: 'r', type: 'section', children: [] } } }),
+): CommandContext {
   let clip = null as null | { id: string; type: string }
   return {
     engine,
@@ -24,12 +26,12 @@ function ctxOf(engine = createEngine({ doc: { version: 1, root: { id: 'r', type:
 
 describe('matchShortcut', () => {
   it('mod+s 匹配 ctrl/meta + s', () => {
-    expect(
-      matchShortcut('mod+s', new KeyboardEvent('keydown', { key: 's', ctrlKey: true })),
-    ).toBe(true)
-    expect(
-      matchShortcut('mod+s', new KeyboardEvent('keydown', { key: 's', metaKey: true })),
-    ).toBe(true)
+    expect(matchShortcut('mod+s', new KeyboardEvent('keydown', { key: 's', ctrlKey: true }))).toBe(
+      true,
+    )
+    expect(matchShortcut('mod+s', new KeyboardEvent('keydown', { key: 's', metaKey: true }))).toBe(
+      true,
+    )
     expect(matchShortcut('mod+s', new KeyboardEvent('keydown', { key: 's' }))).toBe(false)
   })
 
@@ -56,9 +58,7 @@ describe('matchShortcut', () => {
 describe('createCommandRegistry', () => {
   it('defineCommand + run', async () => {
     const run = vi.fn()
-    const reg = createCommandRegistry([
-      defineCommand({ id: 'ping', label: 'Ping', run }),
-    ])
+    const reg = createCommandRegistry([defineCommand({ id: 'ping', label: 'Ping', run })])
     const ctx = ctxOf()
     expect(await reg.run('ping', ctx)).toBe(true)
     expect(run).toHaveBeenCalledOnce()

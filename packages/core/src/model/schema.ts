@@ -1,13 +1,6 @@
 /** shortcode prop 控制項型別 */
 export type PropType =
-  | 'text'
-  | 'number'
-  | 'boolean'
-  | 'select'
-  | 'color'
-  | 'media'
-  | 'date'
-  | 'repeater'
+  'text' | 'number' | 'boolean' | 'select' | 'color' | 'media' | 'date' | 'repeater'
 
 /** select 型別的選項 */
 export interface SelectOption {
@@ -62,10 +55,7 @@ export interface PropSchema {
 /**
  * 依目前 props 判斷欄位是否應顯示
  */
-export function isPropVisible(
-  schema: PropSchema,
-  props: Record<string, unknown>,
-): boolean {
+export function isPropVisible(schema: PropSchema, props: Record<string, unknown>): boolean {
   const dep = schema.dependsOn
   if (!dep) return true
   const v = props[dep.prop]

@@ -29,4 +29,3 @@ PropSchema：`text`｜`number`｜`boolean`｜`select`｜`color`｜`media`
 ## License
 
 MIT
-

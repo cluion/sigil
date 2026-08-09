@@ -12,7 +12,8 @@ export const loaderDef = defineShortcode({
     ctx.effect(() => {
       const ac = new AbortController()
       out.textContent = `載入 id=${ctx.props.id}...`
-      ctx.fetchJSON(`/data?id=${ctx.props.id}`, ac.signal)
+      ctx
+        .fetchJSON(`/data?id=${ctx.props.id}`, ac.signal)
         .then((d) => {
           out.textContent = `已載入:${JSON.stringify(d)}`
         })

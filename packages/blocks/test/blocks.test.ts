@@ -69,7 +69,11 @@ describe('templateToBlockDef', () => {
     const tpl: TemplateDef = {
       id: 't1',
       label: 'T',
-      node: { id: 'orig', type: 'section', children: [{ id: 'child', type: 'text', content: 'x' }] },
+      node: {
+        id: 'orig',
+        type: 'section',
+        children: [{ id: 'child', type: 'text', content: 'x' }],
+      },
     }
     const def = templateToBlockDef(tpl)
     const a = def.create()

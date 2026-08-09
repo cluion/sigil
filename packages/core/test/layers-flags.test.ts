@@ -4,7 +4,11 @@ import type { ComponentNode } from '../src/index.js'
 
 describe('layer flags — name / locked / hidden', () => {
   it('updateNode 設定與清除 name／locked／hidden', () => {
-    const tree: ComponentNode = { id: 'r', type: 'section', children: [{ id: 't', type: 'text', content: 'x' }] }
+    const tree: ComponentNode = {
+      id: 'r',
+      type: 'section',
+      children: [{ id: 't', type: 'text', content: 'x' }],
+    }
     let next = updateNode(tree, 't', { name: '標題', locked: true, hidden: true })
     expect(next.children?.[0]).toMatchObject({ name: '標題', locked: true, hidden: true })
     next = updateNode(next, 't', { name: '', locked: false, hidden: false })

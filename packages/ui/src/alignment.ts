@@ -129,7 +129,8 @@ export function computeGaps(
         hints.push({
           axis: 'y',
           midY: (anchorY + edgeY) / 2,
-          midX: (Math.max(hitRect.left, neighbor.left) + Math.min(right(hitRect), right(neighbor))) / 2,
+          midX:
+            (Math.max(hitRect.left, neighbor.left) + Math.min(right(hitRect), right(neighbor))) / 2,
           size,
           label: pxLabel(size),
         })
@@ -146,7 +147,8 @@ export function computeGaps(
         hints.push({
           axis: 'x',
           midX: (anchorX + edgeX) / 2,
-          midY: (Math.max(hitRect.top, neighbor.top) + Math.min(bottom(hitRect), bottom(neighbor))) / 2,
+          midY:
+            (Math.max(hitRect.top, neighbor.top) + Math.min(bottom(hitRect), bottom(neighbor))) / 2,
           size,
           label: pxLabel(size),
         })

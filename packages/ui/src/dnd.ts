@@ -552,7 +552,8 @@ export function startMoveDrag(opts: {
         let gaps: GapHint[] = []
         if (target.mode === 'sibling') {
           const hit = rectOf(doc, target.hitId)
-          if (hit) gaps = computeGaps(hit, target.side, target.orient, neighborsOf(doc, root, target, id))
+          if (hit)
+            gaps = computeGaps(hit, target.side, target.orient, neighborsOf(doc, root, target, id))
         }
         guides.show({ lines, gaps })
       } else {

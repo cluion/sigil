@@ -6,6 +6,4 @@ declare const __SIGIL_SHORTCODE_VERSION__: string | undefined
 
 /** 與 package.json version 對齊 */
 export const SIGIL_SHORTCODE_VERSION: string =
-  typeof __SIGIL_SHORTCODE_VERSION__ !== 'undefined'
-    ? __SIGIL_SHORTCODE_VERSION__
-    : '0.0.0-dev'
+  typeof __SIGIL_SHORTCODE_VERSION__ !== 'undefined' ? __SIGIL_SHORTCODE_VERSION__ : '0.0.0-dev'

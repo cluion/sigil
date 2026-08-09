@@ -9,10 +9,10 @@
 
 ## 契約對照
 
-| TypeScript `ProjectStore` | Laravel |
-|---|---|
+| TypeScript `ProjectStore`        | Laravel                                   |
+| -------------------------------- | ----------------------------------------- |
 | `load` 回傳 `SigilDoc` 或 `null` | `GET /api/pages/{key}` → JSON body 或 404 |
-| `save` 寫入文件 | `PUT /api/pages/{key}` body 為 `SigilDoc` |
+| `save` 寫入文件                  | `PUT /api/pages/{key}` body 為 `SigilDoc` |
 
 `SigilDoc` 形狀：
 
@@ -28,13 +28,13 @@
 
 1. 複製或改編本目錄檔案
 
-   | 檔案 | 建議路徑 |
-   |---|---|
-   | `migration_create_sigil_pages.php` | `database/migrations/…_create_sigil_pages_table.php` |
-   | `Models/SigilPage.php` | `app/Models/SigilPage.php` |
-   | `Http/Controllers/SigilPageController.php` | `app/Http/Controllers/…` |
-   | `routes-api.php` | 合併進 `routes/api.php` |
-   | `resources/views/sigil-editor.blade.php` | Blade 編輯頁・可選 |
+   | 檔案                                       | 建議路徑                                             |
+   | ------------------------------------------ | ---------------------------------------------------- |
+   | `migration_create_sigil_pages.php`         | `database/migrations/…_create_sigil_pages_table.php` |
+   | `Models/SigilPage.php`                     | `app/Models/SigilPage.php`                           |
+   | `Http/Controllers/SigilPageController.php` | `app/Http/Controllers/…`                             |
+   | `routes-api.php`                           | 合併進 `routes/api.php`                              |
+   | `resources/views/sigil-editor.blade.php`   | Blade 編輯頁・可選                                   |
 
 2. 執行 migration
 
@@ -78,7 +78,10 @@ function createHttpStore(pageKey: string, csrf?: string): ProjectStore {
 }
 
 // 首次載入
-const store = createHttpStore('home', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? undefined)
+const store = createHttpStore(
+  'home',
+  document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? undefined,
+)
 const doc = (await store.load()) ?? { version: 1, root: { id: 'r', type: 'section', children: [] } }
 
 const editor = createEditor({

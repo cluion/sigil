@@ -102,7 +102,8 @@ function renderNode(
 
   const label = document.createElement('span')
   label.className = 'sigil-layer-label'
-  label.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0'
+  label.style.cssText =
+    'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0'
   label.textContent = typeLabel(node)
   label.title = `${typeLabel(node)} · ${node.id}`
 
@@ -145,8 +146,7 @@ function renderNode(
     if (node.id !== sel) row.style.background = 'rgba(15,23,42,0.04)'
   })
   row.addEventListener('mouseleave', () => {
-    row.style.background =
-      node.id === sel ? 'rgba(79,70,229,0.12)' : 'transparent'
+    row.style.background = node.id === sel ? 'rgba(79,70,229,0.12)' : 'transparent'
   })
 
   wrap.appendChild(row)

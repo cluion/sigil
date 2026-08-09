@@ -25,9 +25,7 @@ function stubResolver() {
 const treeWithShortcode = {
   id: 'root',
   type: 'section',
-  children: [
-    { id: 's1', type: 'shortcode', shortcode: { name: 'counter', props: { count: 0 } } },
-  ],
+  children: [{ id: 's1', type: 'shortcode', shortcode: { name: 'counter', props: { count: 0 } } }],
 }
 
 describe('renderer — shortcode', () => {

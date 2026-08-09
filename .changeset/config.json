@@ -17,10 +17,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [
-    "sigil-demo",
-    "sigil-example-html",
-    "sigil-example-vue",
-    "sigil-example-react"
-  ]
+  "ignore": ["sigil-demo", "sigil-example-html", "sigil-example-vue", "sigil-example-react"]
 }

@@ -16,6 +16,7 @@ test-results/
 
 # Cache
 .cache/
+.pnpm-store/
 .turbo/
 .vite/
 

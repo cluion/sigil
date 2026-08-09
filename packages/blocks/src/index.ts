@@ -61,10 +61,7 @@ export function blockColumn(): ComponentNode {
   return { id: createId(), type: 'column', children: [] }
 }
 
-export function blockShortcode(
-  name: string,
-  props: Record<string, unknown> = {},
-): ComponentNode {
+export function blockShortcode(name: string, props: Record<string, unknown> = {}): ComponentNode {
   return { id: createId(), type: 'shortcode', shortcode: { name, props } }
 }
 

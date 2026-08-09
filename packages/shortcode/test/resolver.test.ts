@@ -112,7 +112,9 @@ describe('resolver — renderStatic', () => {
     const registry = createShortcodeRegistry([def])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
     const html = resolver.renderStatic!({
-      id: 'x', type: 'shortcode', shortcode: { name: 'greet', props: { name: 'sam' } },
+      id: 'x',
+      type: 'shortcode',
+      shortcode: { name: 'greet', props: { name: 'sam' } },
     })
     expect(html).toBe('<b>hi sam</b>')
   })
@@ -127,7 +129,9 @@ describe('resolver — renderStatic', () => {
     const registry = createShortcodeRegistry([def])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
     const html = resolver.renderStatic!({
-      id: 'x', type: 'shortcode', shortcode: { name: 'greet', props: { name: '<script>' } },
+      id: 'x',
+      type: 'shortcode',
+      shortcode: { name: 'greet', props: { name: '<script>' } },
     })
     expect(html).toBe('<b>&lt;script&gt;</b>')
   })
@@ -137,7 +141,9 @@ describe('resolver — renderStatic', () => {
     const registry = createShortcodeRegistry([def])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
     const html = resolver.renderStatic!({
-      id: 'x', type: 'shortcode', shortcode: { name: 'plain', props: {} },
+      id: 'x',
+      type: 'shortcode',
+      shortcode: { name: 'plain', props: {} },
     })
     expect(html).toBe('<div>static</div>')
   })
@@ -146,7 +152,9 @@ describe('resolver — renderStatic', () => {
     const registry = createShortcodeRegistry([])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })
     const html = resolver.renderStatic!({
-      id: 'x', type: 'shortcode', shortcode: { name: 'missing', props: {} },
+      id: 'x',
+      type: 'shortcode',
+      shortcode: { name: 'missing', props: {} },
     })
     expect(html).toBeNull()
   })
@@ -168,17 +176,31 @@ describe('resolver — emit/on', () => {
     const bus = createEventBus()
     const received: unknown[] = []
     const defB = defineShortcode({
-      name: 'b', template: '<i></i>',
-      bind: (_el, ctx) => { ctx.on('hi', (d) => received.push(d)) },
+      name: 'b',
+      template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.on('hi', (d) => received.push(d))
+      },
     })
     const defA = defineShortcode({
-      name: 'a', template: '<i></i>',
-      bind: (_el, ctx) => { ctx.emit('hi', 1) },
+      name: 'a',
+      template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.emit('hi', 1)
+      },
     })
     const registry = createShortcodeRegistry([defA, defB])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy(), bus })
-    resolver.resolve({ id: 'b', type: 'shortcode', shortcode: { name: 'b', props: {} } }, document.createElement('div'), 'edit')
-    resolver.resolve({ id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } }, document.createElement('div'), 'edit')
+    resolver.resolve(
+      { id: 'b', type: 'shortcode', shortcode: { name: 'b', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )
+    resolver.resolve(
+      { id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )
     expect(received).toEqual([1])
   })
 
@@ -186,8 +208,11 @@ describe('resolver — emit/on', () => {
     const bus = createEventBus()
     let received = 0
     const def = defineShortcode({
-      name: 'b', template: '<i></i>',
-      bind: (_el, ctx) => { ctx.on('hi', () => received++) },
+      name: 'b',
+      template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.on('hi', () => received++)
+      },
     })
     const registry = createShortcodeRegistry([def])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy(), bus })
@@ -204,7 +229,8 @@ describe('resolver — emit/on', () => {
 
   it('無 bus 時 emit/on noop', () => {
     const def = defineShortcode({
-      name: 'a', template: '<i></i>',
+      name: 'a',
+      template: '<i></i>',
       bind: (_el, ctx) => {
         ctx.emit('hi', 1)
         const off = ctx.on('hi', () => undefined)
@@ -227,13 +253,24 @@ describe('resolver — fetchJSON', () => {
     let received: unknown
     const fetchJSON = async (url: string) => ({ url })
     const def = defineShortcode({
-      name: 'a', template: '<i></i>',
-      bind: (_el, ctx) => { ctx.fetchJSON('/x').then((d) => { received = d }) },
+      name: 'a',
+      template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.fetchJSON('/x').then((d) => {
+          received = d
+        })
+      },
     })
     const resolver = createShortcodeResolver({
-      registry: createShortcodeRegistry([def]), policy: createDefaultPolicy(), fetchJSON,
+      registry: createShortcodeRegistry([def]),
+      policy: createDefaultPolicy(),
+      fetchJSON,
     })
-    resolver.resolve({ id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } }, document.createElement('div'), 'edit')
+    resolver.resolve(
+      { id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )
     await new Promise((r) => setTimeout(r, 0))
     expect(received).toEqual({ url: '/x' })
   })
@@ -241,11 +278,23 @@ describe('resolver — fetchJSON', () => {
   it('未注入:fetchJSON reject', async () => {
     let err: unknown
     const def = defineShortcode({
-      name: 'a', template: '<i></i>',
-      bind: (_el, ctx) => { ctx.fetchJSON('/x').catch((e) => { err = e }) },
+      name: 'a',
+      template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.fetchJSON('/x').catch((e) => {
+          err = e
+        })
+      },
     })
-    const resolver = createShortcodeResolver({ registry: createShortcodeRegistry([def]), policy: createDefaultPolicy() })
-    resolver.resolve({ id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } }, document.createElement('div'), 'edit')
+    const resolver = createShortcodeResolver({
+      registry: createShortcodeRegistry([def]),
+      policy: createDefaultPolicy(),
+    })
+    resolver.resolve(
+      { id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )
     await new Promise((r) => setTimeout(r, 0))
     expect(err).toBeInstanceOf(Error)
   })
@@ -254,10 +303,14 @@ describe('resolver — fetchJSON', () => {
     let aborted = false
     const fetchJSON = (_url: string, signal?: AbortSignal) =>
       new Promise<void>((_resolve, reject) => {
-        signal?.addEventListener('abort', () => { aborted = true; reject(new Error('abort')) })
+        signal?.addEventListener('abort', () => {
+          aborted = true
+          reject(new Error('abort'))
+        })
       })
     const def = defineShortcode({
-      name: 'a', template: '<i></i>',
+      name: 'a',
+      template: '<i></i>',
       bind: (_el, ctx) => {
         const ac = new AbortController()
         ctx.fetchJSON('/x', ac.signal).catch(() => {})
@@ -265,7 +318,9 @@ describe('resolver — fetchJSON', () => {
       },
     })
     const resolver = createShortcodeResolver({
-      registry: createShortcodeRegistry([def]), policy: createDefaultPolicy(), fetchJSON,
+      registry: createShortcodeRegistry([def]),
+      policy: createDefaultPolicy(),
+      fetchJSON,
     })
     const inst = resolver.resolve(
       { id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } },
@@ -283,24 +338,43 @@ describe('resolver — store', () => {
     const store = createStore()
     let val: number | undefined
     const defB = defineShortcode({
-      name: 'b', template: '<i></i>',
-      bind: (_el, ctx) => { ctx.effect(() => { val = ctx.store.get<number>('n') }) },
+      name: 'b',
+      template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.effect(() => {
+          val = ctx.store.get<number>('n')
+        })
+      },
     })
     const defA = defineShortcode({
-      name: 'a', template: '<i></i>',
-      bind: (_el, ctx) => { ctx.store.set('n', 7) },
+      name: 'a',
+      template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.store.set('n', 7)
+      },
     })
     const registry = createShortcodeRegistry([defA, defB])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy(), store })
-    resolver.resolve({ id: 'b', type: 'shortcode', shortcode: { name: 'b', props: {} } }, document.createElement('div'), 'edit')
-    resolver.resolve({ id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } }, document.createElement('div'), 'edit')
+    resolver.resolve(
+      { id: 'b', type: 'shortcode', shortcode: { name: 'b', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )
+    resolver.resolve(
+      { id: 'a', type: 'shortcode', shortcode: { name: 'a', props: {} } },
+      document.createElement('div'),
+      'edit',
+    )
     expect(val).toBe(7)
   })
 
   it('未注入 store:fallback 不拋錯', () => {
     const def = defineShortcode({
-      name: 'a', template: '<i></i>',
-      bind: (_el, ctx) => { ctx.store.set('x', 1) },
+      name: 'a',
+      template: '<i></i>',
+      bind: (_el, ctx) => {
+        ctx.store.set('x', 1)
+      },
     })
     const registry = createShortcodeRegistry([def])
     const resolver = createShortcodeResolver({ registry, policy: createDefaultPolicy() })

@@ -1,4 +1,11 @@
-import type { AssetItem, AssetStore, ProjectStore, SigilDoc, TemplateDef, TemplateStore } from '@cluion/sigil-core'
+import type {
+  AssetItem,
+  AssetStore,
+  ProjectStore,
+  SigilDoc,
+  TemplateDef,
+  TemplateStore,
+} from '@cluion/sigil-core'
 import { createId, migrate } from '@cluion/sigil-core'
 
 /**

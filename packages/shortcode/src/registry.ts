@@ -12,9 +12,7 @@ export interface ShortcodeRegistry {
 /**
  * 建立 registry，可傳入初始定義集
  */
-export function createShortcodeRegistry(
-  defs: ShortcodeDefinition[] = [],
-): ShortcodeRegistry {
+export function createShortcodeRegistry(defs: ShortcodeDefinition[] = []): ShortcodeRegistry {
   const map = new Map<string, ShortcodeDefinition>()
   for (const d of defs) map.set(d.name, d)
   return {

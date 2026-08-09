@@ -76,7 +76,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div style="font-family: system-ui, sans-serif; height: 100%; display: flex; flex-direction: column; margin: 0; padding: 12px; box-sizing: border-box">
+  <div
+    style="
+      font-family: system-ui, sans-serif;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      padding: 12px;
+      box-sizing: border-box;
+    "
+  >
     <h1 style="margin: 0 0 8px; font-size: 18px">Sigil · Vue 3 · createApp</h1>
     <div style="margin-bottom: 8px">
       <button type="button" @click="save">存 JSON</button>

@@ -41,14 +41,14 @@ app.isDirty()
 
 ## Commands
 
-| 欄位 | 說明 |
-|------|------|
-| `id` | 唯一 id；同 id 可覆寫預設 |
-| `shortcut` | 如 `mod+s`、`mod+shift+z`（`mod` = Ctrl／Cmd） |
-| `toolbar` | `true` 或 `'primary'` → createApp Topbar 顯示 |
-| `toolbarGroup` | `history`／`main`／`end` |
-| `when` | 回傳 false 則不可執行（按鈕 disabled） |
-| `run` | 執行體，參數為 `CommandContext` |
+| 欄位           | 說明                                           |
+| -------------- | ---------------------------------------------- |
+| `id`           | 唯一 id；同 id 可覆寫預設                      |
+| `shortcut`     | 如 `mod+s`、`mod+shift+z`（`mod` = Ctrl／Cmd） |
+| `toolbar`      | `true` 或 `'primary'` → createApp Topbar 顯示  |
+| `toolbarGroup` | `history`／`main`／`end`                       |
+| `when`         | 回傳 false 則不可執行（按鈕 disabled）         |
+| `run`          | 執行體，參數為 `CommandContext`                |
 
 預設命令：`undo`／`redo`／`delete`／`copy`／`paste`／`save`（app 另註冊 `export`）。
 
@@ -63,13 +63,13 @@ await __sigil.runCommand('demo-ping')
 
 ## Hooks
 
-| Hook | 時機 |
-|------|------|
-| `onSelect` | 選取變更 |
-| `beforeSave` | 寫入 ProjectStore 前；可回傳新 doc |
-| `afterSave` | 寫入後 |
-| `afterLoad` | 殼掛載完成 |
-| `beforeDestroy` | destroy 前 |
+| Hook            | 時機                               |
+| --------------- | ---------------------------------- |
+| `onSelect`      | 選取變更                           |
+| `beforeSave`    | 寫入 ProjectStore 前；可回傳新 doc |
+| `afterSave`     | 寫入後                             |
+| `afterLoad`     | 殼掛載完成                         |
+| `beforeDestroy` | destroy 前                         |
 
 宿主錯誤在多數 hook 會被隔離，避免拖垮編輯器。
 
@@ -92,9 +92,9 @@ await __sigil.runCommand('demo-ping')
 
 圖層面板：
 
-- **雙擊**列 → 重命名  
-- **●／○** → 隱藏  
-- **🔓／🔒** → 鎖定  
+- **雙擊**列 → 重命名
+- **●／○** → 隱藏
+- **🔓／🔒** → 鎖定
 
 ---
 
@@ -140,10 +140,10 @@ pnpm dev
 
 建議路徑：
 
-1. 頂欄 **Ping**（或 Cmd/Ctrl+Shift+P）→ 上方 hook 狀態列  
-2. 點畫布元件 → `hook:onSelect`  
-3. 頂欄 **存檔** → `beforeSave`／`afterSave`  
-4. 右側圖層：雙擊改名、鎖、隱  
-5. 選「提示 callout」→ 屬性把類型改成「行動呼籲」→ 出現按鈕文字欄位  
+1. 頂欄 **Ping**（或 Cmd/Ctrl+Shift+P）→ 上方 hook 狀態列
+2. 點畫布元件 → `hook:onSelect`
+3. 頂欄 **存檔** → `beforeSave`／`afterSave`
+4. 右側圖層：雙擊改名、鎖、隱
+5. 選「提示 callout」→ 屬性把類型改成「行動呼籲」→ 出現按鈕文字欄位
 
 另見 [範例](/guide/examples)、[Getting Started](/guide/getting-started)。

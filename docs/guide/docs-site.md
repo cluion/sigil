@@ -13,13 +13,13 @@ pnpm docs:preview  # 預覽 build 產物
 
 ## 結構
 
-| 路徑 | 說明 |
-|---|---|
+| 路徑                        | 說明                             |
+| --------------------------- | -------------------------------- |
 | `docs/.vitepress/config.ts` | VitePress 設定，API 側欄自動掃描 |
-| `docs/guide/` | 上手與範例指南 |
-| `docs/api/` | TypeDoc 產出，已 gitignore |
-| `typedoc.json` | TypeDoc 設定 |
-| `scripts/fix-api-md.mjs` | 修正泛型轉義以免 Vue 編譯失敗 |
+| `docs/guide/`               | 上手與範例指南                   |
+| `docs/api/`                 | TypeDoc 產出，已 gitignore       |
+| `typedoc.json`              | TypeDoc 設定                     |
+| `scripts/fix-api-md.mjs`    | 修正泛型轉義以免 Vue 編譯失敗    |
 
 ## 備註
 

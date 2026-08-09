@@ -14,7 +14,12 @@ describe('registry', () => {
       defineShortcode({ name: 'a', template: '<b></b>' }),
       defineShortcode({ name: 'b', template: '<i></i>' }),
     ])
-    expect(reg.all().map((d) => d.name).sort()).toEqual(['a', 'b'])
+    expect(
+      reg
+        .all()
+        .map((d) => d.name)
+        .sort(),
+    ).toEqual(['a', 'b'])
   })
 
   it('defineShortcode 傳入 registry 一併註冊', () => {

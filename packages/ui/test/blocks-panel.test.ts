@@ -74,7 +74,12 @@ describe('createBlocksPanel', () => {
     // 另存後注入新範本
     panel.reload([
       { id: 'a', label: 'A', create: () => ({ id: 'a', type: 'text', content: '' }) },
-      { id: 'b', label: 'B', category: '範本', create: () => ({ id: 'b', type: 'text', content: '' }) },
+      {
+        id: 'b',
+        label: 'B',
+        category: '範本',
+        create: () => ({ id: 'b', type: 'text', content: '' }),
+      },
     ])
     labels = [...box.querySelectorAll('.sigil-block-label')].map((el) => el.textContent)
     expect(labels).toContain('B')

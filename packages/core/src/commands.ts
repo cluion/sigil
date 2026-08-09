@@ -54,9 +54,7 @@ export interface CommandRegistry {
   run(id: string, ctx: CommandContext): Promise<boolean>
 }
 
-export function createCommandRegistry(
-  commands: CommandDefinition[] = [],
-): CommandRegistry {
+export function createCommandRegistry(commands: CommandDefinition[] = []): CommandRegistry {
   const map = new Map<string, CommandDefinition>()
   for (const c of commands) map.set(c.id, c)
 
@@ -105,8 +103,7 @@ export function matchShortcut(shortcut: string, e: KeyboardEvent): boolean {
   const keyToken = parts[parts.length - 1]!
   const mods = new Set(parts.slice(0, -1))
 
-  const wantMod =
-    mods.has('mod') || mods.has('cmd') || mods.has('meta') || mods.has('ctrl')
+  const wantMod = mods.has('mod') || mods.has('cmd') || mods.has('meta') || mods.has('ctrl')
   const wantShift = mods.has('shift')
   const wantAlt = mods.has('alt')
   const isMod = e.ctrlKey || e.metaKey

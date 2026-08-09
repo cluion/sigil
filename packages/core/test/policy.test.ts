@@ -10,9 +10,7 @@ describe('escapeHtml', () => {
   })
 
   it('escape onerror payload，使其無法成為屬性', () => {
-    expect(escapeHtml('<img src=x onerror=alert(1)>')).toBe(
-      '&lt;img src=x onerror=alert(1)&gt;',
-    )
+    expect(escapeHtml('<img src=x onerror=alert(1)>')).toBe('&lt;img src=x onerror=alert(1)&gt;')
   })
 })
 

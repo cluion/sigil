@@ -54,11 +54,7 @@ export function runOnSelect(
   }
 }
 
-export function runAfterLoad(
-  hooks: EditorHooks | undefined,
-  doc: SigilDoc,
-  engine: Engine,
-): void {
+export function runAfterLoad(hooks: EditorHooks | undefined, doc: SigilDoc, engine: Engine): void {
   if (!hooks?.afterLoad) return
   try {
     void Promise.resolve(hooks.afterLoad(doc, { engine })).catch(() => {})

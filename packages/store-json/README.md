@@ -10,9 +10,7 @@ pnpm add @cluion/sigil-store-json
 ```ts
 import { MemoryAssetStore } from '@cluion/sigil-store-json'
 
-const assets = new MemoryAssetStore([
-  { id: '1', url: 'https://placehold.co/120', name: 'demo' },
-])
+const assets = new MemoryAssetStore([{ id: '1', url: 'https://placehold.co/120', name: 'demo' }])
 
 createApp({ mount: '#app', assets })
 ```
@@ -20,4 +18,3 @@ createApp({ mount: '#app', assets })
 ## License
 
 MIT
-

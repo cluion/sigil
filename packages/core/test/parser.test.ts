@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { parse, stringify } from '../src/index.js'
 import type { ComponentNode } from '../src/index.js'
 
-const sc = (name: string, props: Record<string, unknown> = {}): ComponentNode =>
-  ({ id: 'x', type: 'shortcode', shortcode: { name, props } })
+const sc = (name: string, props: Record<string, unknown> = {}): ComponentNode => ({
+  id: 'x',
+  type: 'shortcode',
+  shortcode: { name, props },
+})
 
 describe('stringify', () => {
   it('基本 shortcode(number 值)', () => {
@@ -83,7 +86,9 @@ describe('round-trip', () => {
       { name: 'on', type: 'boolean' as const },
     ]
     const orig: ComponentNode = {
-      id: 'x', type: 'shortcode', shortcode: { name: 'c', props: { step: 5, on: true } },
+      id: 'x',
+      type: 'shortcode',
+      shortcode: { name: 'c', props: { step: 5, on: true } },
     }
     const nodes = parse(stringify(orig), { getSchema: () => schema })
     expect(nodes[0]!.shortcode).toEqual({ name: 'c', props: { step: 5, on: true } })

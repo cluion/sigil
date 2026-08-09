@@ -327,7 +327,6 @@ const note = document.createElement('span')
 note.style.marginLeft = '12px'
 note.style.color = '#64748b'
 note.style.fontSize = '13px'
-note.textContent =
-  '試：頂欄 Ping · 圖層雙擊改名／鎖／隱 · 選提示框改類型 · 存檔看 hook'
+note.textContent = '試：頂欄 Ping · 圖層雙擊改名／鎖／隱 · 選提示框改類型 · 存檔看 hook'
 
 toolbar.append(persistBtn, loadBtn, localeBtn, status, hookLog, note)

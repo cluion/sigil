@@ -37,15 +37,15 @@ app.destroy()
 
 ## 套件
 
-| 套件 | 用途 |
-|---|---|
-| `@cluion/sigil-app` | `createApp` |
-| `@cluion/sigil` | `createEditor` |
-| `@cluion/sigil-core` | 引擎 |
-| `@cluion/sigil-shortcode` | shortcode |
-| `@cluion/sigil-ui` | 畫布／面板 |
-| `@cluion/sigil-blocks` | 預設區塊 |
-| `@cluion/sigil-store-json` | JSON store |
+| 套件                       | 用途           |
+| -------------------------- | -------------- |
+| `@cluion/sigil-app`        | `createApp`    |
+| `@cluion/sigil`            | `createEditor` |
+| `@cluion/sigil-core`       | 引擎           |
+| `@cluion/sigil-shortcode`  | shortcode      |
+| `@cluion/sigil-ui`         | 畫布／面板     |
+| `@cluion/sigil-blocks`     | 預設區塊       |
+| `@cluion/sigil-store-json` | JSON store     |
 
 ## 開發
 

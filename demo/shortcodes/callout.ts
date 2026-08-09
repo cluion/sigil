@@ -56,9 +56,7 @@ export const calloutDef = defineShortcode({
   },
   render: (p, { escape }) => {
     const cta =
-      p.kind === 'cta'
-        ? `<button type="button">${escape(String(p.ctaLabel ?? ''))}</button>`
-        : ''
+      p.kind === 'cta' ? `<button type="button">${escape(String(p.ctaLabel ?? ''))}</button>` : ''
     return (
       `<div><strong>${escape(String(p.title ?? ''))}</strong>` +
       `<p>${escape(String(p.body ?? ''))}</p>${cta}</div>`
