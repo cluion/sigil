@@ -142,6 +142,7 @@ describe('createApp', () => {
 
   it('匯出開啟對話框並顯示 HTML', () => {
     const mount = document.createElement('div')
+    document.body.appendChild(mount)
     const app = createApp({
       mount,
       doc: {
@@ -150,17 +151,37 @@ describe('createApp', () => {
       },
     })
     const exportBtn = mount.querySelector('button[data-command-id="export"]') as HTMLButtonElement
+    exportBtn.focus()
     exportBtn.click()
-    const dialog = document.querySelector('.sigil-dialog-backdrop')
+    const dialog = document.querySelector('.sigil-dialog-backdrop') as HTMLElement
     expect(dialog).toBeTruthy()
-    const ta = dialog?.querySelector('textarea') as HTMLTextAreaElement
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(dialog.getAttribute('aria-labelledby')).toBe(dialog.querySelector('h3')?.id)
+    const ta = dialog.querySelector('textarea') as HTMLTextAreaElement
     expect(ta?.value).toContain('hi')
-    const closeBtn = [...(dialog?.querySelectorAll('button') ?? [])].find((b) =>
-      /關閉|Close/.test(b.textContent ?? ''),
+    expect(document.activeElement).toBe(ta)
+
+    const closeBtns = [...dialog.querySelectorAll<HTMLButtonElement>('button')].filter((button) =>
+      /關閉|Close/.test(button.textContent ?? ''),
     )
-    closeBtn?.click()
+    closeBtns[0]?.focus()
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    )
+    expect(document.activeElement).toBe(closeBtns.at(-1))
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    )
     expect(document.querySelector('.sigil-dialog-backdrop')).toBeNull()
+    expect(document.activeElement).toBe(exportBtn)
     app.destroy()
+    mount.remove()
   })
 
   it('未選取時 Inspector 顯示引導', () => {

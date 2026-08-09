@@ -83,7 +83,8 @@ const i18nMessages = {
     'app.download': '下載 .html',
     'app.close': '關閉',
     'app.empty_title': '從左側拖入區塊開始',
-    'app.empty_body': '拖放「區塊」到畫布，或點區塊加入。選取後可在右側改內容與樣式。',
+    'app.empty_body':
+      '拖放「區塊」到畫布，或聚焦區塊後按 Enter／Space 加入。選取後可在右側改內容與樣式。',
     'app.empty_tip': '快捷鍵 Ctrl/Cmd+S 存檔 · 匯出可下載 HTML',
     'app.save_as_template': '存為範本',
     'app.template_name': '範本名稱',
@@ -125,7 +126,7 @@ const i18nMessages = {
     'app.close': 'Close',
     'app.empty_title': 'Drag a block from the left',
     'app.empty_body':
-      'Drop blocks onto the canvas. Select one to edit content and styles on the right.',
+      'Drop blocks onto the canvas, or focus one and press Enter or Space. Select it to edit content and styles on the right.',
     'app.empty_tip': 'Ctrl/Cmd+S to save · Export downloads HTML',
     'app.save_as_template': 'Save as Template',
     'app.template_name': 'Template name',
@@ -816,12 +817,14 @@ export function createApp(opts: AppOptions): SigilApp {
   function openExportDialog(): void {
     closeExportDialog?.()
     const html = toHTML(engine.toJSON(), { shortcodeResolver })
+    const previousFocus = document.activeElement
+    let closed = false
 
     const backdrop = document.createElement('div')
     backdrop.className = 'sigil-dialog-backdrop'
     backdrop.setAttribute('role', 'dialog')
     backdrop.setAttribute('aria-modal', 'true')
-    backdrop.setAttribute('aria-label', i18n.t('app.export_title'))
+    backdrop.tabIndex = -1
 
     const panel = document.createElement('div')
     panel.className = 'sigil-dialog-panel sigil-dialog-panel--wide'
@@ -829,7 +832,9 @@ export function createApp(opts: AppOptions): SigilApp {
     const head = document.createElement('div')
     head.className = 'sigil-dialog-head'
     const title = document.createElement('h3')
+    title.id = `sigil-export-title-${createId()}`
     title.textContent = i18n.t('app.export_title')
+    backdrop.setAttribute('aria-labelledby', title.id)
     const closeBtn = btn(i18n.t('app.close'), () => close(), true)
     head.append(title, closeBtn)
 
@@ -868,18 +873,23 @@ export function createApp(opts: AppOptions): SigilApp {
     ta.focus()
     ta.select()
 
-    function onEsc(e: KeyboardEvent): void {
+    function onDialogKeyDown(e: KeyboardEvent): void {
       if (e.key === 'Escape') {
         e.preventDefault()
         close()
+        return
       }
+      trapFocus(e, backdrop)
     }
-    document.addEventListener('keydown', onEsc)
+    document.addEventListener('keydown', onDialogKeyDown)
 
     function close(): void {
-      document.removeEventListener('keydown', onEsc)
+      if (closed) return
+      closed = true
+      document.removeEventListener('keydown', onDialogKeyDown)
       backdrop.remove()
       closeExportDialog = null
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus()
     }
     closeExportDialog = close
 
@@ -970,6 +980,40 @@ function btn(label: string, onClick: () => void, ghost = false): HTMLButtonEleme
   b.textContent = label
   b.addEventListener('click', onClick)
   return b
+}
+
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'a[href]',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function focusableElements(root: HTMLElement): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
+    (element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
+  )
+}
+
+function trapFocus(event: KeyboardEvent, root: HTMLElement): void {
+  if (event.key !== 'Tab') return
+  const focusable = focusableElements(root)
+  if (!focusable.length) {
+    event.preventDefault()
+    root.focus()
+    return
+  }
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 async function copyText(text: string): Promise<boolean> {

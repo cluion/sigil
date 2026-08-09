@@ -33,6 +33,13 @@ test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async
   await expect(layerLabels.nth(1)).toHaveText('標題文字')
   await expect(layerLabels.nth(2)).toHaveText('主按鈕')
 
+  const layerCount = await layerLabels.count()
+  const textBlock = page.getByRole('button', { name: '插入 文字', exact: true })
+  await textBlock.focus()
+  await textBlock.press('Enter')
+  await expect(layerLabels).toHaveCount(layerCount + 1)
+  await expect(page.locator('.sigil-layer-row--active .sigil-layer-label')).toHaveText('text')
+
   await page.getByText('主按鈕', { exact: true }).click({ button: 'right' })
   await page.getByRole('menuitem', { name: '上移', exact: true }).click()
   await expect(layerLabels.nth(1)).toHaveText('主按鈕')
@@ -69,6 +76,18 @@ test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async
   ).toBeVisible()
   await expect(inlineEditor).toHaveCount(0)
 
+  const exportButton = page.getByRole('button', { name: '匯出', exact: true })
+  await exportButton.click()
+  const exportDialog = page.getByRole('dialog', { name: '匯出 HTML', exact: true })
+  await expect(exportDialog).toHaveAttribute('aria-modal', 'true')
+  const closeButtons = exportDialog.getByRole('button', { name: '關閉', exact: true })
+  await closeButtons.first().focus()
+  await page.keyboard.press('Shift+Tab')
+  await expect(closeButtons.last()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(exportDialog).toHaveCount(0)
+  await expect(exportButton).toBeFocused()
+
   await expect
     .poll(() =>
       page.evaluate(() => ({
@@ -103,7 +122,7 @@ test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) =>
   await expect(blocks).toHaveAttribute('aria-hidden', 'false')
   await expect(settings).toHaveAttribute('data-open', 'false')
   await blocks.getByRole('searchbox', { name: '搜尋區塊', exact: true }).fill('文字')
-  await expect(blocks.getByRole('button', { name: '拖入 文字', exact: true })).toBeVisible()
+  await expect(blocks.getByRole('button', { name: '插入 文字', exact: true })).toBeVisible()
 
   const backdropBox = await backdrop.boundingBox()
   expect(backdropBox).not.toBeNull()

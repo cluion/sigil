@@ -84,4 +84,30 @@ describe('createBlocksPanel', () => {
     labels = [...box.querySelectorAll('.sigil-block-label')].map((el) => el.textContent)
     expect(labels).toContain('B')
   })
+
+  it('Enter／Space 將區塊插入 root 並選取新節點', () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    const iframe = document.createElement('iframe')
+    let nextId = 0
+    createBlocksPanel(engine, box, iframe, [
+      {
+        id: 'text',
+        label: '文字',
+        create: () => ({ id: `text-${++nextId}`, type: 'text', content: '' }),
+      },
+    ])
+    const item = box.querySelector('[role="button"]') as HTMLElement
+    expect(item.getAttribute('aria-label')).toBe('插入 文字')
+
+    item.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(engine.getTree().children?.map((node) => node.id)).toEqual(['text-1'])
+    expect(engine.getSelection()).toBe('text-1')
+
+    item.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+    expect(engine.getTree().children?.map((node) => node.id)).toEqual(['text-1', 'text-2'])
+    expect(engine.getSelection()).toBe('text-2')
+  })
 })

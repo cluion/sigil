@@ -22,4 +22,46 @@ describe('openMediaPicker', () => {
     )
     expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
   })
+
+  it('限制焦點、Escape 關閉並還原觸發按鈕焦點', async () => {
+    const trigger = document.createElement('button')
+    document.body.appendChild(trigger)
+    trigger.focus()
+    const onClose = vi.fn()
+    openMediaPicker({
+      assets: {
+        list: () => [{ id: '1', url: 'https://example.com/a.png', name: 'A' }],
+      },
+      onPick: () => {},
+      onClose,
+    })
+
+    const dialog = document.querySelector('.sigil-media-backdrop') as HTMLElement
+    const close = dialog.querySelector('.sigil-media-head button') as HTMLButtonElement
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(dialog.getAttribute('aria-labelledby')).toBe(
+      dialog.querySelector('h3')?.getAttribute('id'),
+    )
+    expect(document.activeElement).toBe(close)
+
+    await vi.waitFor(() => expect(dialog.querySelector('.sigil-media-card')).toBeTruthy())
+    const card = dialog.querySelector('.sigil-media-card') as HTMLButtonElement
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    )
+    expect(document.activeElement).toBe(card)
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    )
+    expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    expect(onClose).toHaveBeenCalledOnce()
+    trigger.remove()
+  })
 })

@@ -88,7 +88,7 @@ export function createBlocksPanel(
         const item = document.createElement('div')
         item.className = 'sigil-block-item'
         item.setAttribute('role', 'button')
-        item.setAttribute('aria-label', `拖入 ${def.label}`)
+        item.setAttribute('aria-label', `插入 ${def.label}`)
         item.tabIndex = 0
 
         if (def.icon) {
@@ -106,6 +106,13 @@ export function createBlocksPanel(
         item.addEventListener('pointerdown', (e: PointerEvent) => {
           e.preventDefault()
           startInsertDrag({ engine, iframe, node: def.create(), pointerId: e.pointerId })
+        })
+        item.addEventListener('keydown', (e: KeyboardEvent) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return
+          e.preventDefault()
+          const node = def.create()
+          engine.insert(engine.getTree().id, node)
+          engine.select(node.id)
         })
         list.appendChild(item)
       }
