@@ -1,5 +1,24 @@
 # @cluion/sigil-app
 
+## 0.15.0
+
+### Minor Changes
+
+- aa1dc1c: Localize the primary Blocks, Layers, and Media interactions through the existing i18n adapter.
+- 9ded309: Localize Inspector, PropsPanel, PropForm, and responsive style controls through the shared i18n adapter.
+- db33b1a: Localize remaining App, Editor, and Canvas shell strings, including keyboard help, template prompts, context menus, and empty containers.
+
+### Patch Changes
+
+- Updated dependencies [aa1dc1c]
+- Updated dependencies [9ded309]
+- Updated dependencies [db33b1a]
+  - @cluion/sigil-ui@0.15.0
+  - @cluion/sigil-blocks@0.15.0
+  - @cluion/sigil-core@0.15.0
+  - @cluion/sigil-shortcode@0.15.0
+  - @cluion/sigil-store-json@0.15.0
+
 ## 0.14.0
 
 ### Minor Changes
