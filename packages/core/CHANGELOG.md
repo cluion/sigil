@@ -1,5 +1,11 @@
 # @cluion/sigil-core
 
+## 0.16.0
+
+### Minor Changes
+
+- e007805: Add `TemplateStore.remove?` and memory JSON template store deletion support to enable template rename/delete flows.
+
 ## 0.15.0
 
 ## 0.14.0

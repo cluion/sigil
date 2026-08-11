@@ -1,5 +1,17 @@
 # @cluion/sigil-ui
 
+## 0.16.0
+
+### Minor Changes
+
+- ba7a5a0: Connect template rename and delete actions in App and Editor with shared loading, failure, retry, and reload behavior.
+- 246fdcb: Add accessible block item management actions with rename and delete callbacks, confirmation, pending state, and error reporting.
+
+### Patch Changes
+
+- Updated dependencies [e007805]
+  - @cluion/sigil-core@0.16.0
+
 ## 0.15.0
 
 ### Minor Changes

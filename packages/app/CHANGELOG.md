@@ -1,5 +1,22 @@
 # @cluion/sigil-app
 
+## 0.16.0
+
+### Minor Changes
+
+- ba7a5a0: Connect template rename and delete actions in App and Editor with shared loading, failure, retry, and reload behavior.
+
+### Patch Changes
+
+- Updated dependencies [ba7a5a0]
+- Updated dependencies [246fdcb]
+- Updated dependencies [e007805]
+  - @cluion/sigil-ui@0.16.0
+  - @cluion/sigil-core@0.16.0
+  - @cluion/sigil-store-json@0.16.0
+  - @cluion/sigil-blocks@0.16.0
+  - @cluion/sigil-shortcode@0.16.0
+
 ## 0.15.0
 
 ### Minor Changes
