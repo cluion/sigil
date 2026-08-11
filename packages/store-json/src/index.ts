@@ -83,6 +83,10 @@ export class MemoryTemplateStore implements TemplateStore {
     if (idx >= 0) this.items[idx] = template
     else this.items = [...this.items, template]
   }
+
+  remove(id: string): void {
+    this.items = this.items.filter((template) => template.id !== id)
+  }
 }
 
 /**

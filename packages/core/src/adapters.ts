@@ -51,4 +51,6 @@ export interface TemplateDef {
 export interface TemplateStore {
   list(): TemplateDef[] | Promise<TemplateDef[]>
   save(template: TemplateDef): void | Promise<void>
+  /** 刪除範本；若宿主不支援可不實作 */
+  remove?(id: string): void | Promise<void>
 }
