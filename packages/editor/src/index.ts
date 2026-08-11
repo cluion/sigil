@@ -32,11 +32,13 @@ import {
   createPropsPanel,
   createBlocksPanel,
   createLayersPanel,
+  createTemplateLibraryController,
   applyTheme,
   openContextMenu,
   type BlocksInput,
   type ThemeChoice,
   type MenuItem,
+  type TemplateLibraryController,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -64,6 +66,13 @@ const i18nMessages = {
     'blocks.remove_confirm_before': '確定刪除範本「',
     'blocks.remove_confirm_after': '」？',
     'blocks.pending': '處理中',
+    'blocks.templates_loading': '正在載入範本…',
+    'blocks.template_saving': '正在儲存範本…',
+    'blocks.template_removing': '正在刪除範本…',
+    'blocks.templates_load_failed': '範本載入失敗',
+    'blocks.template_save_failed': '範本儲存失敗',
+    'blocks.template_remove_failed': '範本刪除失敗',
+    'blocks.retry': '重試',
     'layers.title': '圖層',
     'layers.show': '顯示',
     'layers.hide': '隱藏',
@@ -134,6 +143,13 @@ const i18nMessages = {
     'blocks.remove_confirm_before': 'Delete template “',
     'blocks.remove_confirm_after': '”?',
     'blocks.pending': 'Working on',
+    'blocks.templates_loading': 'Loading templates…',
+    'blocks.template_saving': 'Saving template…',
+    'blocks.template_removing': 'Deleting template…',
+    'blocks.templates_load_failed': 'Failed to load templates',
+    'blocks.template_save_failed': 'Failed to save template',
+    'blocks.template_remove_failed': 'Failed to delete template',
+    'blocks.retry': 'Retry',
     'layers.title': 'Layers',
     'layers.show': 'Show',
     'layers.hide': 'Hide',
@@ -257,6 +273,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   const hooks = opts.hooks
 
   let clipboard: ComponentNode | null = null
+  let templateLibrary: TemplateLibraryController | null = null
 
   async function persist(): Promise<SigilDoc> {
     let doc = engine.toJSON()
@@ -268,7 +285,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
 
   const commandMap = new Map<string, CommandDefinition>()
   for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
-  // 範本：另存為範本命令（閉包捕獲 templateStore 與 blocksPanel）
+  // 範本：另存為範本命令
   if (opts.templates) {
     commandMap.set(
       'save-as-template',
@@ -284,13 +301,11 @@ export function createEditor(opts: EditorOptions): SigilEditor {
           if (!id) return
           const node = findNode(c.engine.getTree(), id)
           if (!node) return
-          const label = window.prompt(
-            i18n.t('editor.template_name'),
-            node.name?.trim() || node.type,
-          )
+          const label = window
+            .prompt(i18n.t('editor.template_name'), node.name?.trim() || node.type)
+            ?.trim()
           if (!label) return
-          await Promise.resolve(opts.templates!.save({ id: createId(), label, node }))
-          reloadTemplates()
+          await templateLibrary?.save({ id: createId(), label, node })
         },
       }),
     )
@@ -420,23 +435,22 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       : null
 
   const blocksPanel = mergedBlocks
-    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks, { i18n })
+    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks, {
+        i18n,
+        itemActions: (block) => templateLibrary?.itemActions(block),
+      })
     : null
 
-  function reloadTemplates(): void {
-    if (!templateStore || !blocksPanel) return
-    void Promise.resolve(templateStore.list()).then((templates) => {
-      const tplBlocks = templates.map(templateToBlockDef)
-      const base = opts.blocks
-        ? Array.isArray(opts.blocks)
-          ? [...opts.blocks]
-          : { ...opts.blocks }
-        : []
-      const merged = Array.isArray(base) ? [...base, ...tplBlocks] : { ...base }
-      blocksPanel.reload(merged)
+  if (templateStore && blocksPanel) {
+    templateLibrary = createTemplateLibraryController({
+      store: templateStore,
+      blocks: opts.blocks,
+      panel: blocksPanel,
+      mapTemplate: templateToBlockDef,
+      i18n,
     })
+    void templateLibrary.reload()
   }
-  if (hasTemplates) reloadTemplates()
 
   const unsubSel = engine.subscribe((ev) => {
     if (ev.type === 'selection') runOnSelect(hooks, ev.id, engine)
@@ -475,6 +489,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       document.removeEventListener('keydown', onKeyDown)
       unsubSel()
       unsubDevice()
+      templateLibrary?.destroy()
       blocksPanel?.destroy()
       layers.destroy()
       props.destroy()

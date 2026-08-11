@@ -1,9 +1,48 @@
 import { describe, it, expect, vi } from 'vitest'
-import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
+import type { ProjectStore, SigilDoc, TemplateDef } from '@cluion/sigil-core'
 import { createEditor, defineCommand } from '../src/index.js'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 describe('editor — toHTML', () => {
+  it('範本載入失敗顯示英文 retry，重試後恢復項目', async () => {
+    const value: TemplateDef = {
+      id: 'hero',
+      label: 'Hero',
+      node: { id: 'hero-node', type: 'section', children: [] },
+    }
+    let attempts = 0
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      locale: 'en',
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+      templates: {
+        list: async () => {
+          attempts += 1
+          if (attempts === 1) throw new Error('load failed')
+          return [value]
+        },
+        save: vi.fn(),
+      },
+    })
+
+    await vi.waitFor(() =>
+      expect(el.querySelector('.sigil-blocks-status')?.textContent).toContain(
+        'Failed to load templates',
+      ),
+    )
+    const retry = el.querySelector('.sigil-blocks-retry') as HTMLButtonElement
+    expect(retry.textContent).toBe('Retry')
+    retry.click()
+    await vi.waitFor(() =>
+      expect(el.querySelector('[aria-label="Hero Template actions"]')).toBeTruthy(),
+    )
+    expect(attempts).toBe(2)
+    expect((el.querySelector('.sigil-blocks-status') as HTMLElement).hidden).toBe(true)
+
+    editor.destroy()
+  })
+
   it('英文 locale 套用 Blocks 與 Layers 主要互動字串', () => {
     const el = document.createElement('div')
     const editor = createEditor({

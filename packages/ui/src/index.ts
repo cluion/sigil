@@ -16,8 +16,12 @@ export type {
   BlocksInput,
   BlockItemActionKind,
   BlockItemActions,
+  BlocksPanelHandle,
   BlocksPanelOptions,
+  BlocksPanelStatus,
 } from './blocks-panel.js'
+export { createTemplateLibraryController } from './template-library.js'
+export type { TemplateLibraryController, TemplateLibraryOptions } from './template-library.js'
 export type { LayersPanelOptions } from './layers.js'
 export {
   startInsertDrag,

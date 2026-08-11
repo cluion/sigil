@@ -291,6 +291,32 @@ describe('createBlocksPanel', () => {
     expect(trigger.getAttribute('aria-busy')).toBe('false')
   })
 
+  it('setStatus 顯示 loading 與可重試 error', () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    const panel = createBlocksPanel(engine, box, document.createElement('iframe'), {
+      Text: () => ({ id: 't', type: 'text', content: '' }),
+    })
+
+    panel.setStatus({ kind: 'loading', message: '正在載入範本…' })
+    const status = box.querySelector('.sigil-blocks-status') as HTMLElement
+    expect(status.hidden).toBe(false)
+    expect(status.getAttribute('role')).toBe('status')
+    expect(status.textContent).toBe('正在載入範本…')
+
+    const retry = vi.fn()
+    panel.setStatus({ kind: 'error', message: '範本載入失敗', retryLabel: '重試', retry })
+    expect(status.getAttribute('role')).toBe('alert')
+    expect(status.dataset.kind).toBe('error')
+    ;(status.querySelector('button') as HTMLButtonElement).click()
+    expect(retry).toHaveBeenCalledOnce()
+
+    panel.setStatus(null)
+    expect(status.hidden).toBe(true)
+  })
+
   it('注入英文 i18n 後翻譯搜尋、預設分類、插入與空狀態', () => {
     const engine = createEngine({
       doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },

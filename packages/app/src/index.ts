@@ -33,6 +33,7 @@ import {
   createBlocksPanel,
   createLayersPanel,
   createInspector,
+  createTemplateLibraryController,
   applyTheme,
   nextTheme,
   openContextMenu,
@@ -41,6 +42,7 @@ import {
   type CanvasMode,
   type ThemeChoice,
   type MenuItem,
+  type TemplateLibraryController,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -111,6 +113,13 @@ const i18nMessages = {
     'blocks.remove_confirm_before': '確定刪除範本「',
     'blocks.remove_confirm_after': '」？',
     'blocks.pending': '處理中',
+    'blocks.templates_loading': '正在載入範本…',
+    'blocks.template_saving': '正在儲存範本…',
+    'blocks.template_removing': '正在刪除範本…',
+    'blocks.templates_load_failed': '範本載入失敗',
+    'blocks.template_save_failed': '範本儲存失敗',
+    'blocks.template_remove_failed': '範本刪除失敗',
+    'blocks.retry': '重試',
     'layers.title': '圖層',
     'layers.show': '顯示',
     'layers.hide': '隱藏',
@@ -216,6 +225,13 @@ const i18nMessages = {
     'blocks.remove_confirm_before': 'Delete template “',
     'blocks.remove_confirm_after': '”?',
     'blocks.pending': 'Working on',
+    'blocks.templates_loading': 'Loading templates…',
+    'blocks.template_saving': 'Saving template…',
+    'blocks.template_removing': 'Deleting template…',
+    'blocks.templates_load_failed': 'Failed to load templates',
+    'blocks.template_save_failed': 'Failed to save template',
+    'blocks.template_remove_failed': 'Failed to delete template',
+    'blocks.retry': 'Retry',
     'layers.title': 'Layers',
     'layers.show': 'Show',
     'layers.hide': 'Hide',
@@ -348,6 +364,7 @@ export function createApp(opts: AppOptions): SigilApp {
   let activePanel: CompactPanel | null = null
   let clipboard: ComponentNode | null = null
   let closeExportDialog: (() => void) | null = null
+  let templateLibrary: TemplateLibraryController | null = null
   const hooks = opts.hooks
 
   async function doSave(): Promise<SigilDoc> {
@@ -382,7 +399,7 @@ export function createApp(opts: AppOptions): SigilApp {
       },
     }),
   )
-  // 範本：另存為範本命令（閉包捕獲 templateStore 與 blocksPanel）
+  // 範本：另存為範本命令
   if (opts.templates) {
     commandMap.set(
       'save-as-template',
@@ -400,10 +417,11 @@ export function createApp(opts: AppOptions): SigilApp {
           if (!id) return
           const node = findNode(c.engine.getTree(), id)
           if (!node) return
-          const label = window.prompt(i18n.t('app.template_name'), node.name?.trim() || node.type)
+          const label = window
+            .prompt(i18n.t('app.template_name'), node.name?.trim() || node.type)
+            ?.trim()
           if (!label) return
-          await Promise.resolve(opts.templates!.save({ id: createId(), label, node }))
-          reloadTemplates()
+          await templateLibrary?.save({ id: createId(), label, node })
         },
       }),
     )
@@ -874,24 +892,22 @@ export function createApp(opts: AppOptions): SigilApp {
       : null
 
   const blocksPanel = mergedBlocks
-    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks, { i18n })
+    ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks, {
+        i18n,
+        itemActions: (block) => templateLibrary?.itemActions(block),
+      })
     : null
 
-  /** 重新從 store 載入範本並合併進面板 */
-  function reloadTemplates(): void {
-    if (!templateStore || !blocksPanel) return
-    void Promise.resolve(templateStore.list()).then((templates) => {
-      const tplBlocks = templates.map(templateToBlockDef)
-      const base = opts.blocks
-        ? Array.isArray(opts.blocks)
-          ? [...opts.blocks]
-          : { ...opts.blocks }
-        : []
-      const merged = Array.isArray(base) ? [...base, ...tplBlocks] : { ...base }
-      blocksPanel.reload(merged)
+  if (templateStore && blocksPanel) {
+    templateLibrary = createTemplateLibraryController({
+      store: templateStore,
+      blocks: opts.blocks,
+      panel: blocksPanel,
+      mapTemplate: templateToBlockDef,
+      i18n,
     })
+    void templateLibrary.reload()
   }
-  if (hasTemplates) reloadTemplates()
 
   function setDevice(next: CanvasDevice): void {
     device = next
@@ -1088,6 +1104,7 @@ export function createApp(opts: AppOptions): SigilApp {
       document.removeEventListener('keydown', onKeyDown)
       unsub()
       unsubDevice()
+      templateLibrary?.destroy()
       blocksPanel?.destroy()
       layers.destroy()
       inspector.destroy()

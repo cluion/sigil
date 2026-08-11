@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createApp, defineCommand } from '../src/index.js'
 import { defineShortcode } from '@cluion/sigil-shortcode'
-import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
+import type { ProjectStore, SigilDoc, TemplateDef } from '@cluion/sigil-core'
 
 function emptyDoc(): SigilDoc {
   return {
@@ -11,6 +11,60 @@ function emptyDoc(): SigilDoc {
 }
 
 describe('createApp', () => {
+  it('範本可重命名與刪除，reload 保留搜尋字串', async () => {
+    let templates: TemplateDef[] = [
+      {
+        id: 'hero',
+        label: 'Hero',
+        node: { id: 'hero-node', type: 'section', children: [] },
+      },
+    ]
+    const save = vi.fn((next: TemplateDef) => {
+      templates = templates.map((value) => (value.id === next.id ? next : value))
+    })
+    const remove = vi.fn((id: string) => {
+      templates = templates.filter((value) => value.id !== id)
+    })
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('Hero 新版')
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const mount = document.createElement('div')
+    const app = createApp({
+      mount,
+      doc: emptyDoc(),
+      blocks: { Text: () => ({ id: 'text', type: 'text', content: '' }) },
+      templates: { list: () => templates, save, remove },
+    })
+
+    await vi.waitFor(() =>
+      expect(mount.querySelector('[aria-label="Hero 範本操作"]')).toBeInstanceOf(HTMLButtonElement),
+    )
+    expect(mount.querySelector('[aria-label="插入 Text"]')).toBeTruthy()
+    const search = mount.querySelector('.sigil-blocks-panel input') as HTMLInputElement
+    search.value = 'hero'
+    search.dispatchEvent(new Event('input'))
+
+    ;(mount.querySelector('[aria-label="Hero 範本操作"]') as HTMLButtonElement).click()
+    ;(document.querySelector('[data-menu-item-id="rename"]') as HTMLButtonElement).click()
+    await vi.waitFor(() =>
+      expect(mount.querySelector('[aria-label="Hero 新版 範本操作"]')).toBeTruthy(),
+    )
+    expect(prompt).toHaveBeenCalledWith('範本名稱', 'Hero')
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 'hero', label: 'Hero 新版' }))
+    expect(search.value).toBe('hero')
+
+    ;(mount.querySelector('[aria-label="Hero 新版 範本操作"]') as HTMLButtonElement).click()
+    ;(document.querySelector('[data-menu-item-id="remove"]') as HTMLButtonElement).click()
+    await vi.waitFor(() =>
+      expect(mount.querySelector('[aria-label="Hero 新版 範本操作"]')).toBeNull(),
+    )
+    expect(confirm).toHaveBeenCalledWith('確定刪除範本「Hero 新版」？')
+    expect(remove).toHaveBeenCalledWith('hero')
+
+    prompt.mockRestore()
+    confirm.mockRestore()
+    app.destroy()
+  })
+
   it('英文 locale 套用 Blocks、Layers 與 Media 主要互動字串', async () => {
     const mount = document.createElement('div')
     const app = createApp({

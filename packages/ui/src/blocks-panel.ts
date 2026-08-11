@@ -31,6 +31,19 @@ export interface BlocksPanelOptions {
   onItemActionError?: (error: unknown, action: BlockItemActionKind, block: BlockDef) => void
 }
 
+export interface BlocksPanelStatus {
+  kind: 'loading' | 'error'
+  message: string
+  retryLabel?: string
+  retry?: () => void
+}
+
+export interface BlocksPanelHandle {
+  destroy: () => void
+  reload: (blocks?: BlocksInput) => void
+  setStatus: (status: BlocksPanelStatus | null) => void
+}
+
 function normalize(input: BlocksInput, defaultCategory: string): BlockDef[] {
   if (Array.isArray(input)) {
     return input.map((d) => ({ category: defaultCategory, ...d }))
@@ -60,7 +73,7 @@ export function createBlocksPanel(
   iframe: HTMLIFrameElement,
   blocks: BlocksInput,
   opts?: BlocksPanelOptions,
-): { destroy: () => void; reload: (blocks?: BlocksInput) => void } {
+): BlocksPanelHandle {
   container.replaceChildren()
   container.classList.add('sigil-blocks-panel')
 
@@ -70,6 +83,11 @@ export function createBlocksPanel(
   search.placeholder = uiText(opts?.i18n, 'blocks.search_placeholder', '搜尋區塊…')
   search.setAttribute('aria-label', uiText(opts?.i18n, 'blocks.search_label', '搜尋區塊'))
   container.appendChild(search)
+
+  const status = document.createElement('div')
+  status.className = 'sigil-blocks-status'
+  status.hidden = true
+  container.appendChild(status)
 
   const list = document.createElement('div')
   list.className = 'sigil-blocks-list'
@@ -291,10 +309,35 @@ export function createBlocksPanel(
     destroy() {
       closeActionsMenu?.()
       closeActionsMenu = null
+      status.replaceChildren()
     },
     reload(next?: BlocksInput) {
       if (next !== undefined) defs = normalize(next, defaultCategory)
       renderList(search.value)
+    },
+    setStatus(next) {
+      status.replaceChildren()
+      if (!next) {
+        status.hidden = true
+        status.removeAttribute('role')
+        delete status.dataset.kind
+        return
+      }
+
+      status.hidden = false
+      status.dataset.kind = next.kind
+      status.setAttribute('role', next.kind === 'error' ? 'alert' : 'status')
+      const message = document.createElement('span')
+      message.textContent = next.message
+      status.appendChild(message)
+      if (next.retry) {
+        const retry = document.createElement('button')
+        retry.type = 'button'
+        retry.className = 'sigil-blocks-retry'
+        retry.textContent = next.retryLabel ?? uiText(opts?.i18n, 'blocks.retry', '重試')
+        retry.addEventListener('click', next.retry)
+        status.appendChild(retry)
+      }
     },
   }
 }

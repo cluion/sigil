@@ -544,6 +544,44 @@
   overflow: auto;
 }
 
+.sigil-blocks-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--sigil-radius-sm);
+  color: var(--sigil-color-muted);
+  background: var(--sigil-color-surface-2);
+  font-size: var(--sigil-font-size-sm);
+}
+
+.sigil-blocks-status[hidden] {
+  display: none;
+}
+
+.sigil-blocks-status[data-kind='error'] {
+  color: var(--sigil-color-danger);
+}
+
+.sigil-blocks-retry {
+  appearance: none;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--sigil-radius-sm);
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.sigil-blocks-retry:focus-visible {
+  outline: 2px solid var(--sigil-color-focus);
+  outline-offset: 1px;
+}
+
 .sigil-blocks-category {
   font-size: 11px;
   font-weight: 600;

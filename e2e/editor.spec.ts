@@ -113,6 +113,49 @@ test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async
   expect(errors).toEqual([])
 })
 
+test('範本流程：另存、重命名、再插入與刪除', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+
+  await expect(page.getByRole('button', { name: 'Hero 組合 範本操作', exact: true })).toBeVisible()
+  await page.getByRole('treeitem', { name: '主按鈕', exact: true }).click()
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('prompt')
+    await dialog.accept('E2E 範本')
+  })
+  await page.getByRole('button', { name: '存為範本', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'E2E 範本 範本操作', exact: true })).toBeVisible()
+
+  const search = page.getByRole('searchbox', { name: '搜尋區塊', exact: true })
+  await search.fill('E2E')
+  await page.getByRole('button', { name: 'E2E 範本 範本操作', exact: true }).click()
+  page.once('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('prompt')
+    await dialog.accept('E2E 已改名')
+  })
+  await page.getByRole('menuitem', { name: '重新命名', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'E2E 已改名 範本操作', exact: true })).toBeVisible()
+  await expect(search).toHaveValue('E2E')
+
+  const layerRows = page.getByRole('tree', { name: '圖層', exact: true }).getByRole('treeitem')
+  const layerCount = await layerRows.count()
+  await page.getByRole('button', { name: '插入 E2E 已改名', exact: true }).press('Enter')
+  await expect(layerRows).toHaveCount(layerCount + 1)
+
+  await page.getByRole('button', { name: 'E2E 已改名 範本操作', exact: true }).click()
+  page.once('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('confirm')
+    await dialog.accept()
+  })
+  await page.getByRole('menuitem', { name: '刪除', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'E2E 已改名 範本操作', exact: true })).toHaveCount(
+    0,
+  )
+  await expect(layerRows).toHaveCount(layerCount + 1)
+  expect(errors).toEqual([])
+})
+
 test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.setViewportSize({ width: 390, height: 844 })
