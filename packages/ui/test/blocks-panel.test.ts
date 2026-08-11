@@ -1,8 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { createEngine, createI18n } from '@cluion/sigil-core'
 import { createBlocksPanel } from '../src/blocks-panel.js'
 
 describe('createBlocksPanel', () => {
+  afterEach(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    document.body.replaceChildren()
+    vi.restoreAllMocks()
+  })
+
   it('BlockDef 陣列顯示分類與圖示', () => {
     const engine = createEngine({
       doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
@@ -111,6 +117,180 @@ describe('createBlocksPanel', () => {
     expect(engine.getSelection()).toBe('text-2')
   })
 
+  it('只為有 actions 的項目顯示操作入口並執行重命名', async () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    const rename = vi.fn()
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue(' 新名稱 ')
+    createBlocksPanel(
+      engine,
+      box,
+      document.createElement('iframe'),
+      [
+        { id: 'static', label: '靜態', create: () => ({ id: 's', type: 'text' }) },
+        {
+          id: 'template:hero',
+          label: 'Hero',
+          create: () => ({ id: 'h', type: 'section', children: [] }),
+        },
+      ],
+      {
+        itemActions: (block) =>
+          block.id.startsWith('template:') ? { rename, remove: vi.fn() } : undefined,
+      },
+    )
+
+    const triggers = box.querySelectorAll<HTMLButtonElement>('.sigil-block-actions-trigger')
+    expect(triggers).toHaveLength(1)
+    const trigger = triggers[0]!
+    expect(trigger.closest('.sigil-block-row')?.getAttribute('data-block-id')).toBe('template:hero')
+    trigger.focus()
+    trigger.click()
+
+    const menu = document.querySelector('.sigil-context-menu') as HTMLElement
+    expect(menu.getAttribute('aria-label')).toBe('Hero 範本操作')
+    const actions = menu.querySelectorAll<HTMLButtonElement>('.sigil-context-menu-item')
+    expect([...actions].map((button) => button.textContent)).toEqual(['重新命名', '刪除'])
+    actions[0]!.click()
+
+    expect(prompt).toHaveBeenCalledWith('範本名稱', 'Hero')
+    expect(rename).toHaveBeenCalledWith('新名稱')
+    expect(trigger.getAttribute('aria-busy')).toBe('true')
+    await Promise.resolve()
+    expect(trigger.getAttribute('aria-busy')).toBe('false')
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('刪除先確認名稱，pending 時避免重複開啟', async () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    let resolveRemove!: () => void
+    const remove = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRemove = resolve
+        }),
+    )
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    createBlocksPanel(
+      engine,
+      box,
+      document.createElement('iframe'),
+      [
+        {
+          id: 'template:hero',
+          label: 'Hero',
+          create: () => ({ id: 'h', type: 'section', children: [] }),
+        },
+      ],
+      { itemActions: () => ({ remove }) },
+    )
+
+    const trigger = box.querySelector('.sigil-block-actions-trigger') as HTMLButtonElement
+    trigger.click()
+    ;(document.querySelector('[data-menu-item-id="remove"]') as HTMLButtonElement).click()
+    expect(confirm).toHaveBeenLastCalledWith('確定刪除範本「Hero」？')
+    expect(remove).not.toHaveBeenCalled()
+
+    trigger.click()
+    ;(document.querySelector('[data-menu-item-id="remove"]') as HTMLButtonElement).click()
+    expect(remove).toHaveBeenCalledOnce()
+    expect(trigger.getAttribute('aria-busy')).toBe('true')
+    expect(trigger.getAttribute('aria-disabled')).toBe('true')
+
+    trigger.click()
+    expect(document.querySelector('.sigil-context-menu')).toBeNull()
+    expect(remove).toHaveBeenCalledOnce()
+
+    resolveRemove()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(trigger.getAttribute('aria-busy')).toBe('false')
+    expect(trigger.getAttribute('aria-disabled')).toBe('false')
+  })
+
+  it('鍵盤開啟操作選單，Escape 關閉後還原焦點', () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    createBlocksPanel(
+      engine,
+      box,
+      document.createElement('iframe'),
+      [
+        {
+          id: 'template:hero',
+          label: 'Hero',
+          create: () => ({ id: 'h', type: 'section', children: [] }),
+        },
+      ],
+      { itemActions: () => ({ rename: vi.fn() }) },
+    )
+
+    const item = box.querySelector('.sigil-block-item') as HTMLElement
+    item.focus()
+    item.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }))
+    expect(document.querySelector('.sigil-context-menu')).toBeTruthy()
+    expect(document.activeElement).toBe(
+      document.querySelector<HTMLButtonElement>('[data-menu-item-id="rename"]'),
+    )
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(document.querySelector('.sigil-context-menu')).toBeNull()
+    expect(document.activeElement).toBe(item)
+  })
+
+  it('action rejection 回報宿主並解除 pending', async () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    const error = new Error('remove failed')
+    const onItemActionError = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createBlocksPanel(
+      engine,
+      box,
+      document.createElement('iframe'),
+      [
+        {
+          id: 'template:hero',
+          label: 'Hero',
+          create: () => ({ id: 'h', type: 'section', children: [] }),
+        },
+      ],
+      {
+        itemActions: () => ({
+          remove: async () => {
+            throw error
+          },
+        }),
+        onItemActionError,
+      },
+    )
+
+    const trigger = box.querySelector('.sigil-block-actions-trigger') as HTMLButtonElement
+    trigger.click()
+    ;(document.querySelector('[data-menu-item-id="remove"]') as HTMLButtonElement).click()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onItemActionError).toHaveBeenCalledWith(
+      error,
+      'remove',
+      expect.objectContaining({ id: 'template:hero' }),
+    )
+    expect(trigger.getAttribute('aria-busy')).toBe('false')
+  })
+
   it('注入英文 i18n 後翻譯搜尋、預設分類、插入與空狀態', () => {
     const engine = createEngine({
       doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
@@ -125,6 +305,13 @@ describe('createBlocksPanel', () => {
           'blocks.insert': 'Insert',
           'blocks.default_category': 'General',
           'blocks.empty': 'No matching blocks',
+          'blocks.actions': 'Template actions',
+          'blocks.rename': 'Rename',
+          'blocks.rename_prompt': 'Template name',
+          'blocks.remove': 'Delete',
+          'blocks.remove_confirm_before': 'Delete template “',
+          'blocks.remove_confirm_after': '”?',
+          'blocks.pending': 'Working on',
         },
       },
       'en',
@@ -134,7 +321,7 @@ describe('createBlocksPanel', () => {
       box,
       document.createElement('iframe'),
       { Text: () => ({ id: 't', type: 'text', content: '' }) },
-      { i18n },
+      { i18n, itemActions: () => ({ rename: vi.fn(), remove: vi.fn() }) },
     )
 
     const search = box.querySelector('input[type="search"]') as HTMLInputElement
@@ -142,6 +329,16 @@ describe('createBlocksPanel', () => {
     expect(search.getAttribute('aria-label')).toBe('Search blocks')
     expect(box.querySelector('.sigil-blocks-category')?.textContent).toBe('General')
     expect(box.querySelector('[role="button"]')?.getAttribute('aria-label')).toBe('Insert Text')
+    const trigger = box.querySelector('.sigil-block-actions-trigger') as HTMLButtonElement
+    expect(trigger.getAttribute('aria-label')).toBe('Text Template actions')
+    trigger.click()
+    expect(document.querySelector('.sigil-context-menu')?.getAttribute('aria-label')).toBe(
+      'Text Template actions',
+    )
+    expect(
+      [...document.querySelectorAll('.sigil-context-menu-item')].map((item) => item.textContent),
+    ).toEqual(['Rename', 'Delete'])
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
 
     search.value = 'missing'
     search.dispatchEvent(new Event('input'))

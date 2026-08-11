@@ -553,7 +553,16 @@
   margin: 8px 0 4px;
 }
 
+.sigil-block-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
 .sigil-block-item {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -594,9 +603,41 @@
 
 .sigil-block-label {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sigil-block-actions-trigger {
+  appearance: none;
+  flex-shrink: 0;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--sigil-radius-sm);
+  color: var(--sigil-color-muted);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+
+.sigil-block-actions-trigger:hover,
+.sigil-block-actions-trigger:focus-visible {
+  border-color: var(--sigil-color-border);
+  color: var(--sigil-color-text);
+  background: var(--sigil-color-surface);
+  outline: none;
+}
+
+.sigil-block-actions-trigger[aria-disabled='true'] {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 /* —— Dialog / help —— */

@@ -1,4 +1,5 @@
 import type { Engine, ComponentNode, I18n } from '@cluion/sigil-core'
+import { openContextMenu } from './context-menu.js'
 import { startInsertDrag } from './dnd.js'
 import { uiText } from './i18n.js'
 
@@ -16,8 +17,18 @@ export interface BlockDef {
 
 export type BlocksInput = Record<string, BlockFactory> | BlockDef[]
 
+export type BlockItemActionKind = 'rename' | 'remove'
+
+export interface BlockItemActions {
+  rename?: (label: string) => void | Promise<void>
+  remove?: () => void | Promise<void>
+}
+
 export interface BlocksPanelOptions {
   i18n?: I18n
+  /** 回傳指定區塊可用的管理動作；未回傳時不顯示操作入口 */
+  itemActions?: (block: BlockDef) => BlockItemActions | undefined
+  onItemActionError?: (error: unknown, action: BlockItemActionKind, block: BlockDef) => void
 }
 
 function normalize(input: BlocksInput, defaultCategory: string): BlockDef[] {
@@ -66,8 +77,11 @@ export function createBlocksPanel(
 
   const defaultCategory = uiText(opts?.i18n, 'blocks.default_category', '一般')
   let defs = normalize(blocks, defaultCategory)
+  let closeActionsMenu: (() => void) | null = null
 
   function renderList(filter: string): void {
+    closeActionsMenu?.()
+    closeActionsMenu = null
     list.replaceChildren()
     const q = filter.trim().toLowerCase()
     const filtered = defs.filter((d) => matches(d, q))
@@ -92,14 +106,19 @@ export function createBlocksPanel(
       list.appendChild(heading)
 
       for (const def of items) {
+        const row = document.createElement('div')
+        row.className = 'sigil-block-row'
+        row.dataset.blockId = def.id
         const item = document.createElement('div')
         item.className = 'sigil-block-item'
+        item.dataset.blockId = def.id
         item.setAttribute('role', 'button')
         item.setAttribute(
           'aria-label',
           `${uiText(opts?.i18n, 'blocks.insert', '插入')} ${def.label}`,
         )
         item.tabIndex = 0
+        row.appendChild(item)
 
         if (def.icon) {
           const icon = document.createElement('span')
@@ -113,18 +132,148 @@ export function createBlocksPanel(
         text.textContent = def.label
         item.appendChild(text)
 
+        const actions = opts?.itemActions?.(def)
+        let openItemActions: ((x: number, y: number, focusTarget?: HTMLElement) => void) | undefined
+        if (actions?.rename || actions?.remove) {
+          const rename = actions.rename
+          const remove = actions.remove
+          const trigger = document.createElement('button')
+          trigger.type = 'button'
+          trigger.className = 'sigil-block-actions-trigger'
+          trigger.dataset.blockActions = def.id
+          trigger.textContent = '⋯'
+          const actionsLabel = uiText(opts?.i18n, 'blocks.actions', '範本操作')
+          const idleLabel = `${def.label} ${actionsLabel}`
+          trigger.title = idleLabel
+          trigger.setAttribute('aria-label', idleLabel)
+          trigger.setAttribute('aria-haspopup', 'menu')
+          trigger.setAttribute('aria-expanded', 'false')
+          trigger.setAttribute('aria-busy', 'false')
+          trigger.setAttribute('aria-disabled', 'false')
+          let pending = false
+
+          function setPending(next: boolean): void {
+            pending = next
+            item.setAttribute('aria-busy', String(next))
+            trigger.setAttribute('aria-busy', String(next))
+            trigger.setAttribute('aria-disabled', String(next))
+            trigger.textContent = next ? '…' : '⋯'
+            const label = next
+              ? `${uiText(opts?.i18n, 'blocks.pending', '處理中')} ${def.label}`
+              : idleLabel
+            trigger.title = label
+            trigger.setAttribute('aria-label', label)
+          }
+
+          async function runAction(
+            kind: BlockItemActionKind,
+            run: () => void | Promise<void>,
+          ): Promise<void> {
+            if (pending) return
+            setPending(true)
+            try {
+              await run()
+            } catch (error) {
+              opts?.onItemActionError?.(error, kind, def)
+            } finally {
+              setPending(false)
+            }
+          }
+
+          openItemActions = (x, y, focusTarget?: HTMLElement) => {
+            if (pending) return
+            closeActionsMenu?.()
+            focusTarget?.focus()
+            trigger.setAttribute('aria-expanded', 'true')
+            closeActionsMenu = openContextMenu({
+              items: [
+                ...(rename
+                  ? [
+                      {
+                        id: 'rename',
+                        label: uiText(opts?.i18n, 'blocks.rename', '重新命名'),
+                        run: () => {
+                          const next = window
+                            .prompt(
+                              uiText(opts?.i18n, 'blocks.rename_prompt', '範本名稱'),
+                              def.label,
+                            )
+                            ?.trim()
+                          if (!next || next === def.label) return
+                          void runAction('rename', () => rename(next))
+                        },
+                      },
+                    ]
+                  : []),
+                ...(remove
+                  ? [
+                      {
+                        id: 'remove',
+                        label: uiText(opts?.i18n, 'blocks.remove', '刪除'),
+                        run: () => {
+                          const message = `${uiText(
+                            opts?.i18n,
+                            'blocks.remove_confirm_before',
+                            '確定刪除範本「',
+                          )}${def.label}${uiText(
+                            opts?.i18n,
+                            'blocks.remove_confirm_after',
+                            '」？',
+                          )}`
+                          if (!window.confirm(message)) return
+                          void runAction('remove', remove)
+                        },
+                      },
+                    ]
+                  : []),
+              ],
+              x,
+              y,
+              theme: container.closest('.sigil-theme-dark') ? 'dark' : 'light',
+              ariaLabel: idleLabel,
+              onClose: () => {
+                trigger.setAttribute('aria-expanded', 'false')
+                closeActionsMenu = null
+              },
+            })
+          }
+
+          trigger.addEventListener('pointerdown', (e) => {
+            e.stopPropagation()
+          })
+          trigger.addEventListener('click', (e) => {
+            e.stopPropagation()
+            const rect = trigger.getBoundingClientRect()
+            openItemActions?.(rect.left, rect.bottom, trigger)
+          })
+          row.appendChild(trigger)
+        }
+
         item.addEventListener('pointerdown', (e: PointerEvent) => {
           e.preventDefault()
           startInsertDrag({ engine, iframe, node: def.create(), pointerId: e.pointerId })
         })
+        item.addEventListener('contextmenu', (e) => {
+          if (!openItemActions) return
+          e.preventDefault()
+          openItemActions(e.clientX, e.clientY, item)
+        })
         item.addEventListener('keydown', (e: KeyboardEvent) => {
+          if (e.target !== item) return
+          if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+            if (!openItemActions) return
+            e.preventDefault()
+            const rect = item.getBoundingClientRect()
+            openItemActions(rect.left, rect.bottom, item)
+            return
+          }
           if (e.key !== 'Enter' && e.key !== ' ') return
           e.preventDefault()
           const node = def.create()
           engine.insert(engine.getTree().id, node)
           engine.select(node.id)
         })
-        list.appendChild(item)
+        list.appendChild(row)
       }
     }
 
@@ -139,7 +288,10 @@ export function createBlocksPanel(
   search.addEventListener('input', () => renderList(search.value))
   renderList('')
   return {
-    destroy() {},
+    destroy() {
+      closeActionsMenu?.()
+      closeActionsMenu = null
+    },
     reload(next?: BlocksInput) {
       if (next !== undefined) defs = normalize(next, defaultCategory)
       renderList(search.value)
