@@ -253,6 +253,51 @@ test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', 
   expect(errors).toEqual([])
 })
 
+test('Marketing Hero：鍵盤插入、語意輸出與 responsive 預設', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+
+  const insertHero = page.getByRole('button', { name: '插入 Hero 主視覺', exact: true })
+  await insertHero.focus()
+  await insertHero.press('Enter')
+
+  const frame = page.frameLocator('iframe[title="編輯畫布"]')
+  const hero = frame.locator('section[aria-label="主視覺"]')
+  await expect(hero).toHaveCount(1)
+  await expect(hero.locator('h1')).toHaveText('讓每個想法，都能快速成為漂亮頁面')
+  await expect(hero.locator('p')).toContainText('適合各種裝置')
+  await expect(hero.locator('button[type="button"]')).toHaveText('立即開始')
+  await expect(hero.locator('h1')).toHaveCSS('font-size', '56px')
+
+  await page.getByRole('button', { name: 'Mobile', exact: true }).click()
+  await expect(hero.locator('h1')).toHaveCSS('font-size', '36px')
+  await expect(hero).toHaveCSS('min-height', '416px')
+
+  await page.getByRole('button', { name: '匯出', exact: true }).click()
+  const exported = page.getByRole('dialog', { name: '匯出 HTML', exact: true }).locator('textarea')
+  await expect(exported).toHaveValue(/<section aria-label="主視覺"/)
+  await expect(exported).toHaveValue(/<h1[^>]*>讓每個想法，都能快速成為漂亮頁面<\/h1>/)
+  await expect(exported).toHaveValue(/@media \(max-width:480px\)/)
+  await page.keyboard.press('Escape')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.locator('.sigil-app')).toHaveAttribute('data-layout', 'compact')
+  await expect
+    .poll(async () => ({
+      page: await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+      app: await page
+        .locator('.sigil-app')
+        .evaluate((element) => Math.max(0, element.scrollWidth - element.clientWidth)),
+      canvas: await frame
+        .locator('html')
+        .evaluate((element) => Math.max(0, element.scrollWidth - element.clientWidth)),
+    }))
+    .toEqual({ page: 0, app: 0, canvas: 0 })
+  expect(errors).toEqual([])
+})
+
 test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.setViewportSize({ width: 390, height: 844 })

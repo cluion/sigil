@@ -58,6 +58,7 @@ export default defineConfig({
           text: '指南',
           items: [
             { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: '官方行銷區塊', link: '/guide/marketing-blocks' },
             { text: '可選富文字 Adapter', link: '/guide/rich-text' },
             { text: '響應式樣式', link: '/guide/responsive-styles' },
             { text: '擴充（Commands／Hooks）', link: '/guide/extensibility' },

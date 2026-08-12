@@ -1,5 +1,7 @@
 import { createId, cloneWithNewIds, type ComponentNode, type TemplateDef } from '@cluion/sigil-core'
 
+export { blockHero, heroBlockDef, marketingBlockDefs, type HeroBlockOptions } from './marketing.js'
+
 /**
  * 區塊定義 — 圖示、分類、搜尋關鍵字 + create 工廠
  */

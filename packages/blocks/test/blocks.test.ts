@@ -8,8 +8,11 @@ import {
   basicBlockDefs,
   basicBlocks,
   templateToBlockDef,
+  blockHero,
+  heroBlockDef,
+  marketingBlockDefs,
 } from '../src/index.js'
-import type { TemplateDef } from '@cluion/sigil-core'
+import { toHTML, type ComponentNode, type TemplateDef } from '@cluion/sigil-core'
 
 describe('blocks', () => {
   it('blockShortcode 產生 shortcode 節點', () => {
@@ -124,3 +127,86 @@ describe('templateToBlockDef', () => {
     expect(def.icon).toBe('★')
   })
 })
+
+describe('marketing Hero', () => {
+  it('建立可拆解的語意節點樹與產品級預設', () => {
+    const hero = blockHero()
+
+    expect(hero.type).toBe('section')
+    expect(hero.name).toBe('主視覺')
+    expect(hero.attributes).toEqual({ 'aria-label': '主視覺' })
+    expect(hero.style).toMatchObject({
+      display: 'flex',
+      width: '100%',
+      'min-height': '34rem',
+      background: expect.stringContaining('linear-gradient'),
+    })
+    expect(hero.responsiveStyles).toMatchObject({
+      tablet: { padding: '4.5rem 2rem' },
+      mobile: { padding: '3.5rem 1.25rem' },
+    })
+
+    expect(hero.children).toHaveLength(4)
+    expect(hero.children?.map((node) => node.tagName ?? node.type)).toEqual([
+      'span',
+      'h1',
+      'p',
+      'button',
+    ])
+    expect(hero.children?.map((node) => node.name)).toEqual(['眉標', '主標題', '說明', '主要行動'])
+    expect(hero.children?.[3]?.attributes).toEqual({ type: 'button' })
+  })
+
+  it('接受文案與 accessibility label 覆寫', () => {
+    const hero = blockHero({
+      eyebrow: '新功能',
+      title: '產品標題',
+      description: '產品說明',
+      ctaLabel: '免費試用',
+      ariaLabel: '產品介紹',
+    })
+
+    expect(hero.attributes?.['aria-label']).toBe('產品介紹')
+    expect(hero.children?.map((node) => node.content)).toEqual([
+      '新功能',
+      '產品標題',
+      '產品說明',
+      '免費試用',
+    ])
+  })
+
+  it('每次建立整棵 Hero 都使用唯一 id', () => {
+    const first = collectIds(blockHero())
+    const second = collectIds(blockHero())
+
+    expect(new Set(first).size).toBe(first.length)
+    expect(new Set(second).size).toBe(second.length)
+    expect(first.some((id) => second.includes(id))).toBe(false)
+  })
+
+  it('輸出語意 HTML 與 responsive media rules', () => {
+    const html = toHTML({ version: 1, root: blockHero({ title: '安全 Hero' }) })
+
+    expect(html).toContain('<style data-sigil-responsive>')
+    expect(html).toContain('@media (max-width:768px)')
+    expect(html).toContain('@media (max-width:480px)')
+    expect(html).toContain('<section aria-label="主視覺"')
+    expect(html).toContain('<h1')
+    expect(html).toContain('>安全 Hero</h1>')
+    expect(html).toContain('<button type="button"')
+  })
+
+  it('公開 Hero definition 與 marketing definitions', () => {
+    expect(heroBlockDef).toMatchObject({
+      id: 'marketing-hero',
+      label: 'Hero 主視覺',
+      category: '行銷',
+    })
+    expect(heroBlockDef.create().type).toBe('section')
+    expect(marketingBlockDefs).toEqual([heroBlockDef])
+  })
+})
+
+function collectIds(node: ComponentNode): string[] {
+  return [node.id, ...(node.children ?? []).flatMap(collectIds)]
+}

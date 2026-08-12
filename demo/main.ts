@@ -7,6 +7,7 @@ import {
   blockButton,
   blockImage,
   blockShortcode,
+  marketingBlockDefs,
 } from '@cluion/sigil-blocks'
 import { JsonProjectStore, MemoryAssetStore, MemoryTemplateStore } from '@cluion/sigil-store-json'
 import { createId, type ComponentNode, type SigilDoc } from '@cluion/sigil-core'
@@ -124,6 +125,7 @@ const doc: SigilDoc = { version: 1, root: section }
 
 const blocks = [
   ...basicBlockDefs,
+  ...marketingBlockDefs,
   defineBlock({
     id: 'rich-text',
     label: '富文字',
