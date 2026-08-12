@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createApp, defineCommand } from '../src/index.js'
+import { createApp, defineCommand, type RichTextAdapter } from '../src/index.js'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 import type { ProjectStore, SigilDoc, TemplateDef } from '@cluion/sigil-core'
 
@@ -10,7 +10,95 @@ function emptyDoc(): SigilDoc {
   }
 }
 
+const richTextAdapter: RichTextAdapter = {
+  resolver: {
+    supports: (node) => node.type === 'rich-text',
+    read: (node) => node.content ?? '',
+  },
+  start: () => ({
+    focus: () => {},
+    getValue: () => '',
+    destroy: () => {},
+  }),
+}
+
+function sanitizeRichText(input: string): string {
+  return input
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/\son\w+=(['"])[\s\S]*?\1/gi, '')
+    .replace(/javascript:/gi, '')
+}
+
 describe('createApp', () => {
+  it('richText 缺少 sanitizer 時 fail fast', () => {
+    const mount = document.createElement('div')
+    expect(() => createApp({ mount, richText: richTextAdapter })).toThrow(
+      'createApp：richText 必須搭配 sanitize',
+    )
+    expect(mount.childNodes).toHaveLength(0)
+  })
+
+  it('richText 對稱接到 Canvas、Inspector、copy/paste 與 HTML 輸出', async () => {
+    const mount = document.createElement('div')
+    document.body.appendChild(mount)
+    const app = createApp({
+      mount,
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            {
+              id: 'rt',
+              type: 'rich-text',
+              content:
+                '<p onclick="evil()"><strong>Hello</strong><script>bad()</script><a href="javascript:evil()">link</a></p>',
+            },
+          ],
+        },
+      },
+      richText: richTextAdapter,
+      sanitize: sanitizeRichText,
+    })
+
+    const iframe = mount.querySelector('iframe') as HTMLIFrameElement
+    await vi.waitFor(() => {
+      const rich = iframe.contentDocument?.querySelector('[data-sigil-id="rt"]')
+      expect(rich?.querySelector('strong')?.textContent).toBe('Hello')
+      expect(rich?.querySelector('script')).toBeNull()
+      expect(rich?.getAttribute('onclick')).toBeNull()
+    })
+
+    app.engine.select('rt')
+    expect(mount.querySelector('.sigil-rich-text-summary')?.textContent).toContain('Hello')
+    expect(mount.querySelector('.sigil-rich-text-hint')?.textContent).toBe('請在畫布編輯富文字')
+    expect(mount.querySelector('.sigil-inspector input')).toBeNull()
+
+    await app.runCommand('copy')
+    await app.runCommand('paste')
+    expect(app.engine.getTree().children).toHaveLength(2)
+    expect(app.engine.getTree().children?.[1]?.content).toBe(
+      app.engine.getTree().children?.[0]?.content,
+    )
+
+    for (const html of [app.toHTML(), app.toHTML('hydrated')]) {
+      expect(html).toContain('<strong>Hello</strong>')
+      expect(html).not.toContain('<script')
+      expect(html).not.toContain('onclick')
+      expect(html).not.toContain('javascript:')
+    }
+
+    ;(mount.querySelector('button[data-command-id="export"]') as HTMLButtonElement).click()
+    const exported = document.querySelector('.sigil-export-out') as HTMLTextAreaElement
+    expect(exported.value).toContain('<strong>Hello</strong>')
+    expect(exported.value).not.toContain('<script')
+    ;(document.querySelector('.sigil-dialog-head button') as HTMLButtonElement).click()
+
+    app.destroy()
+    mount.remove()
+  })
+
   it('範本可重命名與刪除，reload 保留搜尋字串', async () => {
     let templates: TemplateDef[] = [
       {

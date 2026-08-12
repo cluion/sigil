@@ -9,7 +9,8 @@ import {
   blockShortcode,
 } from '@cluion/sigil-blocks'
 import { JsonProjectStore, MemoryAssetStore, MemoryTemplateStore } from '@cluion/sigil-store-json'
-import type { SigilDoc } from '@cluion/sigil-core'
+import { createId, type ComponentNode, type SigilDoc } from '@cluion/sigil-core'
+import { demoRichTextAdapter, sanitizeDemoRichText } from './rich-text'
 import { counterDef } from './shortcodes/counter'
 import { cardDef } from './shortcodes/card'
 import { pingDef } from './shortcodes/ping'
@@ -105,13 +106,32 @@ const tip = blockShortcode('callout', {
 })
 tip.name = '提示 callout'
 
+function richTextNode(
+  content = '<p>可編輯 <strong>粗體</strong>、<em>斜體</em>與安全連結</p>',
+): ComponentNode {
+  return { id: createId(), type: 'rich-text', name: '富文字', content }
+}
+
+const richText = richTextNode(
+  '<p>這是 <strong>粗體</strong>、<em>斜體</em>與<a href="https://example.com/">安全連結</a></p>',
+)
+richText.id = 'rich-demo'
+
 const section = blockSection()
 section.name = '首區'
-section.children = [title, cta, hero, tip]
+section.children = [title, cta, richText, hero, tip]
 const doc: SigilDoc = { version: 1, root: section }
 
 const blocks = [
   ...basicBlockDefs,
+  defineBlock({
+    id: 'rich-text',
+    label: '富文字',
+    category: '內容',
+    icon: '¶',
+    keywords: ['rich text', 'strong', 'em'],
+    create: () => richTextNode(),
+  }),
   defineBlock({
     id: 'counter',
     label: '計數器',
@@ -246,6 +266,8 @@ function mountApp(d: SigilDoc): SigilApp {
     blocks,
     templates,
     shortcodes,
+    richText: demoRichTextAdapter,
+    sanitize: sanitizeDemoRichText,
     fetchJSON: mockFetchJSON,
     locale,
     commands: [
@@ -327,6 +349,7 @@ const note = document.createElement('span')
 note.style.marginLeft = '12px'
 note.style.color = '#64748b'
 note.style.fontSize = '13px'
-note.textContent = '試：頂欄 Ping · 圖層雙擊改名／鎖／隱 · 選提示框改類型 · 存檔看 hook'
+note.textContent =
+  '試：雙擊富文字 · 頂欄 Ping · 圖層雙擊改名／鎖／隱 · 選提示框改類型 · 存檔看 hook'
 
 toolbar.append(persistBtn, loadBtn, localeBtn, status, hookLog, note)

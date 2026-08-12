@@ -35,6 +35,8 @@ editor.destroy()
 
 預設命令：`undo`／`redo`／`delete`／`copy`／`paste`／`move-up`／`move-down`／`save`。畫布與圖層的右鍵選單會依目前選取狀態顯示可執行命令。
 
+`createEditor()` 可注入 `RichTextAdapter`；啟用時必須同時提供 `sanitize`。完整契約見 [富文字指南](../../docs/guide/rich-text.md)。
+
 產品殼：`@cluion/sigil-app`（同樣支援 `commands`／`hooks`）。
 
 ## License

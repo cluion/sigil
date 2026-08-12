@@ -458,6 +458,8 @@ describe('createCanvas — 富文字編輯 session', () => {
     expect(canvas.getEditingId()).toBeNull()
     expect(canvas.iframe.style.pointerEvents).toBe('none')
     expect(restoreFocus).toHaveBeenCalledOnce()
+    expect(canvas.iframe.contentDocument?.activeElement).toBe(element)
+    expect(element.getAttribute('tabindex')).toBe('-1')
 
     engine.undo()
     expect(engine.getTree().children?.[0]?.content).toBe('<p><strong>hello</strong></p>')

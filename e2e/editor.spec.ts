@@ -22,6 +22,19 @@ async function prepareDemo(page: Page): Promise<string[]> {
   return errors
 }
 
+interface DemoNode {
+  id: string
+  content?: string
+  children?: DemoNode[]
+}
+
+interface DemoApp {
+  engine: {
+    update(id: string, patch: { content: string }): void
+  }
+  toJSON(): { root: DemoNode }
+}
+
 test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.goto('/')
@@ -153,6 +166,90 @@ test('範本流程：另存、重命名、再插入與刪除', async ({ page }) 
     0,
   )
   await expect(layerRows).toHaveCount(layerCount + 1)
+  expect(errors).toEqual([])
+})
+
+test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+
+  const frame = page.frameLocator('iframe[title="編輯畫布"]')
+  const rich = frame.locator('[data-sigil-id="rich-demo"]')
+  await expect(rich.locator('strong')).toHaveText('粗體')
+  await expect(rich.locator('em')).toHaveText('斜體')
+  await expect(rich.locator('a')).toHaveAttribute('href', 'https://example.com/')
+
+  const richBox = await rich.boundingBox()
+  expect(richBox).not.toBeNull()
+  if (!richBox) throw new Error('找不到富文字位置')
+  await page.mouse.dblclick(richBox.x + richBox.width / 2, richBox.y + richBox.height / 2)
+
+  await expect(rich).toHaveAttribute('contenteditable', 'true')
+  await expect(rich).toHaveAttribute('aria-label', '富文字內容')
+  await rich.fill('富文字 E2E')
+  await rich.locator('p').selectText()
+  await frame.getByRole('button', { name: '粗體', exact: true }).click()
+  await frame.getByRole('button', { name: '斜體', exact: true }).click()
+  await frame.getByRole('button', { name: '安全連結', exact: true }).click()
+  await frame.getByRole('button', { name: '完成', exact: true }).click()
+
+  await expect(rich).not.toHaveAttribute('contenteditable', 'true')
+  await expect(rich.locator('strong em a[href="https://example.com/"]')).toHaveText('富文字 E2E')
+  await expect(rich).toBeFocused()
+
+  const undo = page.getByRole('button', { name: '復原', exact: true })
+  const redo = page.getByRole('button', { name: '重做', exact: true })
+  await undo.click()
+  await expect(rich).toContainText('這是 粗體、斜體與安全連結')
+  await redo.click()
+  await expect(rich.locator('strong em a')).toHaveText('富文字 E2E')
+
+  page.once('dialog', async (dialog) => dialog.accept('富文字範本'))
+  await page.getByRole('button', { name: '存為範本', exact: true }).click()
+  await expect(page.getByRole('button', { name: '富文字範本 範本操作', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '插入 富文字範本', exact: true }).press('Enter')
+  await expect(frame.getByText('富文字 E2E', { exact: true })).toHaveCount(2)
+
+  await page.getByRole('button', { name: '寫入 localStorage', exact: true }).click()
+  await page.getByRole('button', { name: '讀 localStorage', exact: true }).click()
+  await expect(frame.locator('[data-sigil-id="rich-demo"] strong em a')).toHaveText('富文字 E2E')
+  await expect(frame.getByText('富文字 E2E', { exact: true })).toHaveCount(2)
+
+  await page.evaluate(() => {
+    const app = (window as unknown as { __sigil: DemoApp }).__sigil
+    const richNode = app.toJSON().root.children?.find((node) => node.id === 'rich-demo')
+    app.engine.update('rich-demo', {
+      content: `${richNode?.content ?? ''}<script>window.__sigilRichTextXss = true</script>`,
+    })
+  })
+  await expect(frame.locator('[data-sigil-id="rich-demo"] script')).toHaveCount(0)
+  expect(await page.evaluate(() => Reflect.get(window, '__sigilRichTextXss'))).toBeUndefined()
+
+  await page.getByRole('button', { name: '匯出', exact: true }).click()
+  const exported = page.getByRole('dialog', { name: '匯出 HTML', exact: true }).locator('textarea')
+  await expect(exported).toHaveValue(
+    /<p><strong><em><a href="https:\/\/example\.com\/">富文字 E2E<\/a><\/em><\/strong><\/p>/,
+  )
+  await expect(exported).not.toHaveValue(/<script/)
+  await page.keyboard.press('Escape')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const app = page.locator('.sigil-app')
+  await expect(app).toHaveAttribute('data-layout', 'compact')
+  await page.getByRole('button', { name: '圖層／設定', exact: true }).click()
+  const settings = page.locator('[data-compact-panel="settings"]')
+  await settings.getByRole('treeitem', { name: '富文字', exact: true }).first().click()
+  await expect(settings.locator('.sigil-rich-text-hint')).toHaveText('請在畫布編輯富文字')
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        app:
+          document.querySelector('.sigil-app')!.scrollWidth -
+          document.querySelector('.sigil-app')!.clientWidth,
+      })),
+    )
+    .toEqual({ page: 0, app: 0 })
   expect(errors).toEqual([])
 })
 

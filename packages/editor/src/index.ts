@@ -39,6 +39,7 @@ import {
   type ThemeChoice,
   type MenuItem,
   type TemplateLibraryController,
+  type RichTextAdapter,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -117,6 +118,9 @@ const i18nMessages = {
     'style.use_inheritance': '使用繼承',
     'style.clear': '清除',
     'style.clear_desktop': '清除 Desktop 樣式',
+    'rich_text.summary': '富文字摘要',
+    'rich_text.empty': '空白富文字',
+    'rich_text.canvas_hint': '請在畫布編輯富文字',
     'editor.save_as_template': '存為範本',
     'editor.template_name': '範本名稱',
     'editor.copy': '複製',
@@ -195,6 +199,9 @@ const i18nMessages = {
     'style.use_inheritance': 'Use inherited',
     'style.clear': 'Clear',
     'style.clear_desktop': 'Clear Desktop styles',
+    'rich_text.summary': 'Rich text summary',
+    'rich_text.empty': 'Empty rich text',
+    'rich_text.canvas_hint': 'Edit rich text on the canvas',
     'editor.save_as_template': 'Save as Template',
     'editor.template_name': 'Template name',
     'editor.copy': 'Copy',
@@ -217,6 +224,8 @@ export interface EditorOptions {
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
   sanitize?: SanitizeFn
+  /** 可選富文字 editor adapter，必須搭配 sanitize */
+  richText?: RichTextAdapter
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
   locale?: Locale
   /** 主題：light／dark／auto；預設 auto。SDK 無切換按鈕，宿主自理 */
@@ -237,13 +246,16 @@ export interface SigilEditor {
 }
 
 export { defineCommand, createDefaultEditingCommands }
-export type { CommandDefinition, CommandContext, EditorHooks }
+export type { CommandDefinition, CommandContext, EditorHooks, RichTextAdapter }
 
 /**
  * 建立 editor — SDK 級組合
  * 開箱產品殼請用 `@cluion/sigil-app` 的 createApp
  */
 export function createEditor(opts: EditorOptions): SigilEditor {
+  if (opts.richText && !opts.sanitize) {
+    throw new Error('createEditor：richText 必須搭配 sanitize')
+  }
   const mountEl =
     typeof opts.mount === 'string' ? document.querySelector<HTMLElement>(opts.mount) : opts.mount
   if (!mountEl) throw new Error('createEditor：mount 目標不存在')
@@ -407,12 +419,14 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   }
 
   const canvas = createCanvas(engine, canvasBox, {
-    rendererOptions: { shortcodeResolver },
+    rendererOptions: { shortcodeResolver, htmlPolicy: policy },
+    richText: opts.richText,
     i18n,
     onContextMenu: (_id, x, y) => openSelectionMenu(x, y),
   })
   const props = createPropsPanel(engine, propsBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
+    richText: opts.richText?.resolver,
     i18n,
     fetchJSON,
   })
@@ -477,7 +491,12 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       return doc
     },
     toHTML(mode?: HtmlMode) {
-      return toHTML(engine.toJSON(), { shortcodeResolver, mode })
+      return toHTML(engine.toJSON(), {
+        shortcodeResolver,
+        richTextResolver: opts.richText?.resolver,
+        sanitize: opts.sanitize,
+        mode,
+      })
     },
     runCommand(id: string) {
       return commands.run(id, makeCtx())

@@ -43,6 +43,7 @@ import {
   type ThemeChoice,
   type MenuItem,
   type TemplateLibraryController,
+  type RichTextAdapter,
 } from '@cluion/sigil-ui'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
 import {
@@ -164,6 +165,9 @@ const i18nMessages = {
     'style.use_inheritance': '使用繼承',
     'style.clear': '清除',
     'style.clear_desktop': '清除 Desktop 樣式',
+    'rich_text.summary': '富文字摘要',
+    'rich_text.empty': '空白富文字',
+    'rich_text.canvas_hint': '請在畫布編輯富文字',
     'status.none': '未選取',
   },
   en: {
@@ -277,6 +281,9 @@ const i18nMessages = {
     'style.use_inheritance': 'Use inherited',
     'style.clear': 'Clear',
     'style.clear_desktop': 'Clear Desktop styles',
+    'rich_text.summary': 'Rich text summary',
+    'rich_text.empty': 'Empty rich text',
+    'rich_text.canvas_hint': 'Edit rich text on the canvas',
     'status.none': 'Nothing selected',
   },
 }
@@ -294,6 +301,8 @@ export interface AppOptions {
   shortcodes?: ShortcodeDefinition[]
   trustedTypesPolicyName?: string
   sanitize?: SanitizeFn
+  /** 可選富文字 editor adapter，必須搭配 sanitize */
+  richText?: RichTextAdapter
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
   locale?: Locale
   /** 主題：light／dark／auto；未傳時讀 localStorage，預設 auto */
@@ -316,7 +325,7 @@ export interface SigilApp {
 }
 
 export { defineCommand, createDefaultEditingCommands }
-export type { CommandDefinition, CommandContext, EditorHooks }
+export type { CommandDefinition, CommandContext, EditorHooks, RichTextAdapter }
 
 type CompactPanel = 'blocks' | 'settings'
 
@@ -326,6 +335,9 @@ const COMPACT_LAYOUT_BREAKPOINT = 900
  * 開箱即用產品殼 — Design tokens + Topbar + 三欄 + Inspector 分頁
  */
 export function createApp(opts: AppOptions): SigilApp {
+  if (opts.richText && !opts.sanitize) {
+    throw new Error('createApp：richText 必須搭配 sanitize')
+  }
   ensureTokens()
   const mountTarget =
     typeof opts.mount === 'string' ? document.querySelector<HTMLElement>(opts.mount) : opts.mount
@@ -859,7 +871,8 @@ export function createApp(opts: AppOptions): SigilApp {
   }
 
   const canvas = createCanvas(engine, canvasBox, {
-    rendererOptions: { shortcodeResolver },
+    rendererOptions: { shortcodeResolver, htmlPolicy: policy },
+    richText: opts.richText,
     i18n,
     chrome: false,
     onContextMenu: (_id, x, y) => openSelectionMenu(x, y),
@@ -868,6 +881,7 @@ export function createApp(opts: AppOptions): SigilApp {
   emptyGuide.style.pointerEvents = 'none'
   const inspector = createInspector(engine, inspectorBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
+    richText: opts.richText?.resolver,
     assets: opts.assets,
     i18n,
     fetchJSON,
@@ -962,7 +976,11 @@ export function createApp(opts: AppOptions): SigilApp {
 
   function openExportDialog(): void {
     closeExportDialog?.()
-    const html = toHTML(engine.toJSON(), { shortcodeResolver })
+    const html = toHTML(engine.toJSON(), {
+      shortcodeResolver,
+      richTextResolver: opts.richText?.resolver,
+      sanitize: opts.sanitize,
+    })
     const previousFocus = document.activeElement
     let closed = false
 
@@ -1084,7 +1102,12 @@ export function createApp(opts: AppOptions): SigilApp {
       return doc
     },
     toHTML(htmlMode?: HtmlMode) {
-      return toHTML(engine.toJSON(), { shortcodeResolver, mode: htmlMode })
+      return toHTML(engine.toJSON(), {
+        shortcodeResolver,
+        richTextResolver: opts.richText?.resolver,
+        sanitize: opts.sanitize,
+        mode: htmlMode,
+      })
     },
     isDirty() {
       return dirty

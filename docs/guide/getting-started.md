@@ -50,6 +50,7 @@ app.toHTML()
 
 - `createEditor`：`@cluion/sigil`
 - `createEngine`：`@cluion/sigil-core`
+- 可選富文字：[RichTextAdapter 與安全輸出](/guide/rich-text)
 - 響應式樣式：見 [Desktop／Tablet／Mobile 覆寫](/guide/responsive-styles)
 - 擴充（commands／hooks／圖層／dependsOn）：見 [擴充指南](/guide/extensibility)
 - 本機完整 demo：`pnpm dev`

@@ -1,9 +1,79 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { ProjectStore, SigilDoc, TemplateDef } from '@cluion/sigil-core'
-import { createEditor, defineCommand } from '../src/index.js'
+import { createEditor, defineCommand, type RichTextAdapter } from '../src/index.js'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
+const richTextAdapter: RichTextAdapter = {
+  resolver: {
+    supports: (node) => node.type === 'rich-text',
+    read: (node) => node.content ?? '',
+  },
+  start: () => ({
+    focus: () => {},
+    getValue: () => '',
+    destroy: () => {},
+  }),
+}
+
+function sanitizeRichText(input: string): string {
+  return input.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+}
+
 describe('editor — toHTML', () => {
+  it('richText 缺少 sanitizer 時 fail fast', () => {
+    const mount = document.createElement('div')
+    expect(() => createEditor({ mount, richText: richTextAdapter })).toThrow(
+      'createEditor：richText 必須搭配 sanitize',
+    )
+    expect(mount.childNodes).toHaveLength(0)
+  })
+
+  it('richText 對稱接到 Canvas、Props 與 static／hydrated 輸出', async () => {
+    const mount = document.createElement('div')
+    document.body.appendChild(mount)
+    const editor = createEditor({
+      mount,
+      locale: 'en',
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            {
+              id: 'rt',
+              type: 'rich-text',
+              content: '<p><em>Editor</em><script>bad()</script></p>',
+            },
+          ],
+        },
+      },
+      richText: richTextAdapter,
+      sanitize: sanitizeRichText,
+    })
+
+    const iframe = mount.querySelector('iframe') as HTMLIFrameElement
+    await vi.waitFor(() => {
+      const rich = iframe.contentDocument?.querySelector('[data-sigil-id="rt"]')
+      expect(rich?.querySelector('em')?.textContent).toBe('Editor')
+      expect(rich?.querySelector('script')).toBeNull()
+    })
+
+    editor.engine.select('rt')
+    expect(mount.querySelector('.sigil-rich-text-summary')?.textContent).toContain('Editor')
+    expect(mount.querySelector('.sigil-rich-text-hint')?.textContent).toBe(
+      'Edit rich text on the canvas',
+    )
+    expect(mount.querySelector('.sigil-rich-text-field input')).toBeNull()
+
+    expect(editor.toHTML()).toContain('<em>Editor</em>')
+    expect(editor.toHTML()).not.toContain('<script')
+    expect(editor.toHTML('hydrated')).toContain('<em>Editor</em>')
+
+    editor.destroy()
+    mount.remove()
+  })
+
   it('範本載入失敗顯示英文 retry，重試後恢復項目', async () => {
     const value: TemplateDef = {
       id: 'hero',

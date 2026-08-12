@@ -385,7 +385,11 @@ export function createCanvas(
   function restoreEditingChrome(el: HTMLElement, restoreFocus: boolean): void {
     iframe.style.pointerEvents = mode === 'preview' ? 'auto' : 'none'
     overlay.style.display = mode === 'preview' ? 'none' : ''
-    if (restoreFocus && el.isConnected) el.focus({ preventScroll: true })
+    if (restoreFocus && el.isConnected) {
+      const tabindex = el.getAttribute('tabindex')
+      if (tabindex === null) el.setAttribute('tabindex', '-1')
+      el.focus({ preventScroll: true })
+    }
   }
 
   function reportEditingError(error: unknown): void {
