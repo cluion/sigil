@@ -2,12 +2,16 @@ import type { ComponentNode, ResponsiveDevice, ResponsiveStyles, Style } from '.
 import type { TypeRegistry } from '../model/registry.js'
 import { createTypeRegistry } from '../model/registry.js'
 import { getEffectiveStyle, mergeResponsiveStyles, mergeStyle } from '../model/responsive-style.js'
+import type { HtmlPolicy } from '../policy/html-policy.js'
 import type { Patch } from '../engine/types.js'
 import type { ShortcodeResolver, ShortcodeInstance } from './shortcode-resolver.js'
+import type { RichTextResolver } from './rich-text-resolver.js'
 
 export interface RendererOptions {
   registry?: TypeRegistry
   shortcodeResolver?: ShortcodeResolver
+  richTextResolver?: RichTextResolver
+  htmlPolicy?: HtmlPolicy
   device?: ResponsiveDevice
 }
 
@@ -37,7 +41,11 @@ interface PresentationState {
 export function createRenderer(opts: RendererOptions = {}): Renderer {
   const registry = opts.registry ?? createTypeRegistry()
   const shortcodeResolver = opts.shortcodeResolver
+  const richTextResolver = opts.richTextResolver
+  const htmlPolicy = opts.htmlPolicy
   const map = new Map<string, HTMLElement>()
+  const nodes = new Map<string, ComponentNode>()
+  const richTextMarkup = new Map<string, string>()
   const shortcodeInstances = new Map<string, ShortcodeInstance>()
   const presentation = new Map<string, PresentationState>()
   const appliedStyleKeys = new Map<string, Set<string>>()
@@ -55,11 +63,78 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
       : [id]
     for (const childId of ids) {
       map.delete(childId)
+      nodes.delete(childId)
+      richTextMarkup.delete(childId)
       presentation.delete(childId)
       appliedStyleKeys.delete(childId)
       shortcodeInstances.get(childId)?.destroy()
       shortcodeInstances.delete(childId)
     }
+  }
+
+  function resolveRichText(node: ComponentNode): string | null {
+    if (!richTextResolver?.supports(node)) return null
+    return richTextResolver.read(node)
+  }
+
+  function setRichText(el: HTMLElement, markup: string): void {
+    if (htmlPolicy) htmlPolicy.setSanitized(el, markup)
+    else el.textContent = markup
+  }
+
+  function applyInitialContent(node: ComponentNode, el: HTMLElement): void {
+    const markup = resolveRichText(node)
+    if (markup !== null) {
+      richTextMarkup.set(node.id, markup)
+      setRichText(el, markup)
+    } else if (node.content !== undefined) {
+      el.textContent = node.content
+    }
+  }
+
+  function updateTrackedNode(
+    node: ComponentNode,
+    patch: Extract<Patch, { type: 'update' }>,
+  ): ComponentNode {
+    const next: ComponentNode = { ...node }
+    if (patch.attrs) next.attributes = { ...node.attributes, ...patch.attrs }
+    if (patch.style !== undefined) {
+      const merged = mergeStyle(node.style, patch.style)
+      if (Object.keys(merged).length) next.style = merged
+      else delete next.style
+    }
+    if (patch.responsiveStyles !== undefined) {
+      const merged = mergeResponsiveStyles(node.responsiveStyles, patch.responsiveStyles)
+      if (Object.keys(merged).length) next.responsiveStyles = merged
+      else delete next.responsiveStyles
+    }
+    if (patch.content !== undefined) next.content = patch.content
+    if (patch.className !== undefined) next.className = patch.className
+    if (patch.shortcode !== undefined) next.shortcode = patch.shortcode
+    if (patch.name !== undefined) next.name = patch.name
+    if (patch.locked !== undefined) next.locked = patch.locked
+    if (patch.hidden !== undefined) next.hidden = patch.hidden
+    return next
+  }
+
+  function applyUpdatedContent(
+    node: ComponentNode,
+    el: HTMLElement,
+    contentChanged: boolean,
+  ): void {
+    const previousMarkup = richTextMarkup.get(node.id)
+    const wasRichText = richTextMarkup.has(node.id)
+    const nextMarkup = resolveRichText(node)
+
+    if (nextMarkup !== null) {
+      richTextMarkup.set(node.id, nextMarkup)
+      if (!wasRichText || previousMarkup !== nextMarkup) setRichText(el, nextMarkup)
+      return
+    }
+
+    richTextMarkup.delete(node.id)
+    if (wasRichText) el.textContent = node.content ?? ''
+    else if (contentChanged) el.textContent = node.content ?? ''
   }
 
   function applyPresentation(id: string): void {
@@ -96,6 +171,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
     const tag = node.tagName ?? registry.get(node.type)?.tagName ?? 'div'
     const el = document.createElement(tag)
     map.set(node.id, el)
+    nodes.set(node.id, node)
     presentation.set(node.id, {
       style: node.style,
       responsiveStyles: node.responsiveStyles,
@@ -107,7 +183,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
       for (const [k, v] of Object.entries(node.attributes)) el.setAttribute(k, v)
     }
     if (node.className) el.className = node.className
-    if (node.content !== undefined) el.textContent = node.content
+    applyInitialContent(node, el)
     applyPresentation(node.id)
     if (node.shortcode) {
       el.setAttribute('data-shortcode', node.shortcode.name)
@@ -131,6 +207,8 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
   return {
     mount(root, container) {
       map.clear()
+      nodes.clear()
+      richTextMarkup.clear()
       presentation.clear()
       appliedStyleKeys.clear()
       rootEl = renderNode(root)
@@ -161,6 +239,9 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
         case 'update': {
           const el = map.get(patch.id)
           if (!el) break
+          const currentNode = nodes.get(patch.id)
+          const nextNode = currentNode ? updateTrackedNode(currentNode, patch) : null
+          if (nextNode) nodes.set(patch.id, nextNode)
           if (patch.shortcode) {
             shortcodeInstances.get(patch.id)?.setProps(patch.shortcode.props)
           }
@@ -186,7 +267,8 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
           ) {
             applyPresentation(patch.id)
           }
-          if (patch.content !== undefined) el.textContent = patch.content
+          if (nextNode) applyUpdatedContent(nextNode, el, patch.content !== undefined)
+          else if (patch.content !== undefined) el.textContent = patch.content
           if (patch.className !== undefined) el.className = patch.className
           break
         }
@@ -205,6 +287,8 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
       for (const inst of shortcodeInstances.values()) inst.destroy()
       shortcodeInstances.clear()
       map.clear()
+      nodes.clear()
+      richTextMarkup.clear()
       presentation.clear()
       appliedStyleKeys.clear()
       rootEl = renderNode(tree)
@@ -219,6 +303,8 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
       for (const inst of shortcodeInstances.values()) inst.destroy()
       shortcodeInstances.clear()
       map.clear()
+      nodes.clear()
+      richTextMarkup.clear()
       presentation.clear()
       appliedStyleKeys.clear()
       rootEl = null

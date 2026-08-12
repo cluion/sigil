@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { toHTML } from '../src/index.js'
-import type { SigilDoc, ComponentNode, ShortcodeResolver } from '../src/index.js'
+import type { SigilDoc, ComponentNode, RichTextResolver, ShortcodeResolver } from '../src/index.js'
+
+const richTextResolver: RichTextResolver = {
+  supports: (node) => node.type === 'rich-text',
+  read: (node) => node.content ?? '',
+}
 
 describe('toHTML — 基本節點', () => {
   it('section + text 子節點', () => {
@@ -68,6 +73,49 @@ describe('toHTML — escape 動態值', () => {
       },
     }
     expect(toHTML(doc)).toBe('<section style="color:red"></section>')
+  })
+})
+
+describe('toHTML — rich text', () => {
+  const doc: SigilDoc = {
+    version: 1,
+    root: {
+      id: 'rich',
+      type: 'rich-text',
+      content: '<strong>安全</strong><script>alert(1)</script>',
+    },
+  }
+
+  it('sanitize 後輸出 markup，static／hydrated 行為一致', () => {
+    const sanitize = (input: string): string => input.replace(/<script[\s\S]*?<\/script>/gi, '')
+    const options = { richTextResolver, sanitize }
+
+    expect(toHTML(doc, options)).toBe('<div><strong>安全</strong></div>')
+    expect(toHTML(doc, { ...options, mode: 'hydrated' })).toBe('<div><strong>安全</strong></div>')
+  })
+
+  it('沒有 sanitize 時 escape markup', () => {
+    expect(toHTML(doc, { richTextResolver })).toBe(
+      '<div>&lt;strong&gt;安全&lt;/strong&gt;&lt;script&gt;alert(1)&lt;/script&gt;</div>',
+    )
+  })
+
+  it('未命中 resolver 的節點不交給 sanitize', () => {
+    let sanitized = false
+    const plain: SigilDoc = {
+      version: 1,
+      root: { id: 'plain', type: 'text', content: '<strong>純文字</strong>' },
+    }
+    const html = toHTML(plain, {
+      richTextResolver,
+      sanitize: (input) => {
+        sanitized = true
+        return input
+      },
+    })
+
+    expect(sanitized).toBe(false)
+    expect(html).toBe('<span>&lt;strong&gt;純文字&lt;/strong&gt;</span>')
   })
 })
 

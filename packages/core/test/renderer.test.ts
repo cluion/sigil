@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { createRenderer, type ShortcodeResolver } from '../src/index.js'
+import {
+  createDefaultPolicy,
+  createRenderer,
+  type RichTextResolver,
+  type ShortcodeResolver,
+} from '../src/index.js'
+
+const richTextResolver: RichTextResolver = {
+  supports: (node) => node.type === 'rich-text',
+  read: (node) => node.content ?? '',
+}
 
 describe('renderer — mount', () => {
   it('渲染樹', () => {
@@ -144,6 +154,70 @@ describe('renderer — reconcile', () => {
       children: [{ id: 'a', type: 'text', content: 'X' }],
     })
     expect(container.textContent).toBe('X')
+  })
+})
+
+describe('renderer — rich text', () => {
+  it('透過 HtmlPolicy render，patch／reconcile 共用安全路徑', () => {
+    const inputs: string[] = []
+    const htmlPolicy = createDefaultPolicy({
+      sanitize: (input) => {
+        inputs.push(input)
+        return input.replace(/<script[\s\S]*?<\/script>/gi, '')
+      },
+    })
+    const r = createRenderer({ richTextResolver, htmlPolicy })
+    const container = document.createElement('div')
+
+    r.mount(
+      {
+        id: 'rich',
+        type: 'rich-text',
+        content: '<strong>初始</strong><script>alert(1)</script>',
+      },
+      container,
+    )
+    expect(container.querySelector('strong')?.textContent).toBe('初始')
+    expect(container.querySelector('script')).toBeNull()
+
+    r.applyPatch({ type: 'update', id: 'rich', content: '<strong>更新</strong>' })
+    expect(container.querySelector('strong')?.textContent).toBe('更新')
+
+    r.reconcile({ id: 'rich', type: 'rich-text', content: '<em>重建</em>' })
+    expect(container.querySelector('em')?.textContent).toBe('重建')
+    expect(inputs).toEqual([
+      '<strong>初始</strong><script>alert(1)</script>',
+      '<strong>更新</strong>',
+      '<em>重建</em>',
+    ])
+  })
+
+  it('沒有 HtmlPolicy 時把 markup 當純文字，不建立元素', () => {
+    const r = createRenderer({ richTextResolver })
+    const container = document.createElement('div')
+    r.mount({ id: 'rich', type: 'rich-text', content: '<strong>安全降級</strong>' }, container)
+
+    expect(container.textContent).toBe('<strong>安全降級</strong>')
+    expect(container.querySelector('strong')).toBeNull()
+  })
+
+  it('未命中 resolver 的既有節點維持純文字語意', () => {
+    let sanitized = false
+    const r = createRenderer({
+      richTextResolver,
+      htmlPolicy: createDefaultPolicy({
+        sanitize: (input) => {
+          sanitized = true
+          return input
+        },
+      }),
+    })
+    const container = document.createElement('div')
+    r.mount({ id: 'plain', type: 'text', content: '<strong>純文字</strong>' }, container)
+
+    expect(sanitized).toBe(false)
+    expect(container.textContent).toBe('<strong>純文字</strong>')
+    expect(container.querySelector('strong')).toBeNull()
   })
 })
 

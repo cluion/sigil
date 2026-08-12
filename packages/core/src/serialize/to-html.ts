@@ -3,13 +3,17 @@ import type { TypeRegistry } from '../model/registry.js'
 import { createTypeRegistry } from '../model/registry.js'
 import { RESPONSIVE_BREAKPOINT_WIDTHS } from '../model/responsive-style.js'
 import { escapeHtml } from '../policy/index.js'
+import type { SanitizeFn } from '../policy/index.js'
 import type { ShortcodeResolver } from '../renderer/shortcode-resolver.js'
+import type { RichTextResolver } from '../renderer/rich-text-resolver.js'
 
 export type HtmlMode = 'static' | 'hydrated'
 
 export interface ToHtmlOptions {
   registry?: TypeRegistry
   shortcodeResolver?: ShortcodeResolver
+  richTextResolver?: RichTextResolver
+  sanitize?: SanitizeFn
   mode?: HtmlMode
 }
 
@@ -50,23 +54,43 @@ export function toHTML(doc: SigilDoc, opts: ToHtmlOptions = {}): string {
   const registry = opts.registry ?? createTypeRegistry()
   const mode = opts.mode ?? 'static'
   const responsive = createResponsiveOutput(doc.root)
-  const html = renderNode(doc.root, registry, opts.shortcodeResolver, mode, responsive.keys)
+  const html = renderNode(
+    doc.root,
+    registry,
+    opts.shortcodeResolver,
+    opts.richTextResolver,
+    opts.sanitize,
+    mode,
+    responsive.keys,
+  )
   return responsive.css ? `<style data-sigil-responsive>${responsive.css}</style>${html}` : html
 }
 
 function renderNode(
   node: ComponentNode,
   registry: TypeRegistry,
-  resolver: ShortcodeResolver | undefined,
+  shortcodeResolver: ShortcodeResolver | undefined,
+  richTextResolver: RichTextResolver | undefined,
+  sanitize: SanitizeFn | undefined,
   mode: HtmlMode,
   responsiveKeys: Map<ComponentNode, string>,
 ): string {
   if (node.shortcode) {
-    const tmpl = resolver?.renderStatic?.(node) ?? ''
+    const tmpl = shortcodeResolver?.renderStatic?.(node) ?? ''
     let inner = tmpl
     if (node.children?.length) {
       const childrenHtml = node.children
-        .map((c) => renderNode(c, registry, resolver, mode, responsiveKeys))
+        .map((c) =>
+          renderNode(
+            c,
+            registry,
+            shortcodeResolver,
+            richTextResolver,
+            sanitize,
+            mode,
+            responsiveKeys,
+          ),
+        )
         .join('')
       inner = tmpl.replace(/<slot\b[^>]*>[\s\S]*?<\/slot>|<slot\b[^>]*\/>/, childrenHtml)
     }
@@ -100,10 +124,25 @@ function renderNode(
   }
 
   parts.push('>')
-  if (node.content !== undefined) parts.push(escapeHtml(node.content))
+  if (richTextResolver?.supports(node)) {
+    const markup = richTextResolver.read(node)
+    parts.push(sanitize ? sanitize(markup) : escapeHtml(markup))
+  } else if (node.content !== undefined) {
+    parts.push(escapeHtml(node.content))
+  }
   if (node.children) {
     for (const c of node.children) {
-      parts.push(renderNode(c, registry, resolver, mode, responsiveKeys))
+      parts.push(
+        renderNode(
+          c,
+          registry,
+          shortcodeResolver,
+          richTextResolver,
+          sanitize,
+          mode,
+          responsiveKeys,
+        ),
+      )
     }
   }
   parts.push('</', tag, '>')
