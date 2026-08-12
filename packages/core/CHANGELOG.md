@@ -1,5 +1,11 @@
 # @cluion/sigil-core
 
+## 0.17.0
+
+### Minor Changes
+
+- ca2bbd1: Add an optional rich-text resolver with policy-backed DOM rendering and sanitized or escaped HTML export.
+
 ## 0.16.0
 
 ### Minor Changes

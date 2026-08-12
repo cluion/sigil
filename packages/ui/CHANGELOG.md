@@ -1,5 +1,17 @@
 # @cluion/sigil-ui
 
+## 0.17.0
+
+### Minor Changes
+
+- a660a4e: Wire rich-text adapters through App and Editor with required sanitizers, safe exports, demo integration, and documentation.
+- 1697b10: Add rich-text adapter editing sessions and read-only rich-text summaries to Canvas, PropsPanel, and Inspector.
+
+### Patch Changes
+
+- Updated dependencies [ca2bbd1]
+  - @cluion/sigil-core@0.17.0
+
 ## 0.16.0
 
 ### Minor Changes
