@@ -71,6 +71,34 @@ describe('createPropsPanel — shortcode props', () => {
     expect(box.textContent).not.toContain('shortcode props')
   })
 
+  it('富文字節點只顯示安全摘要與畫布編輯提示', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'n',
+          type: 'rich-text',
+          content: '<p><strong>Hello</strong> world</p><script>alert(1)</script>',
+        },
+      },
+    })
+    engine.select('n')
+    const box = document.createElement('div')
+    createPropsPanel(engine, box, {
+      richText: {
+        supports: (node) => node.type === 'rich-text',
+        read: (node) => node.content ?? '',
+      },
+    })
+
+    expect(box.querySelector('.sigil-rich-text-summary')?.textContent).toBe('Hello world alert(1)')
+    expect(box.querySelector('.sigil-rich-text-hint')?.textContent).toBe('請在畫布編輯富文字')
+    expect(box.textContent).not.toContain('<strong>')
+    expect([...box.querySelectorAll('input')].some((input) => input.value.includes('<p>'))).toBe(
+      false,
+    )
+  })
+
   it('樣式:color 改值 → engine.update style', () => {
     const engine = createEngine({
       doc: { version: 1 as const, root: { id: 'n', type: 'section' } },

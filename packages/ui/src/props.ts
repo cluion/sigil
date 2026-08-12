@@ -1,7 +1,14 @@
-import type { Engine, I18n, PropSchema, ResponsiveDevice } from '@cluion/sigil-core'
+import type {
+  Engine,
+  I18n,
+  PropSchema,
+  ResponsiveDevice,
+  RichTextResolver,
+} from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
 import { uiText } from './i18n.js'
+import { richTextSummary } from './rich-text.js'
 import {
   clearDeviceStyles,
   decorateStyleControl,
@@ -18,6 +25,7 @@ import {
  */
 export interface PropsPanelOptions {
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
+  richText?: RichTextResolver
   i18n?: I18n
   device?: ResponsiveDevice
   /** select optionsFrom 用的非同步能力 */
@@ -56,7 +64,7 @@ export function createPropsPanel(
     title.textContent = `${node.name?.trim() || node.type}${uiText(opts?.i18n, 'props.node_id_open', '（')}${node.id}${uiText(opts?.i18n, 'props.node_id_close', '）')}`
     container.appendChild(title)
 
-    appendContentField(container, engine, node, opts?.i18n)
+    appendContentField(container, engine, node, opts?.richText, opts?.i18n)
     appendClassField(container, engine, node, opts?.i18n)
     appendShortcodePropsField(
       container,
@@ -97,8 +105,25 @@ function appendContentField(
   container: HTMLElement,
   engine: Engine,
   node: ComponentNode,
+  richText?: RichTextResolver,
   i18n?: I18n,
 ): void {
+  if (richText?.supports(node)) {
+    const wrap = document.createElement('div')
+    wrap.className = 'sigil-rich-text-field'
+    const label = document.createElement('strong')
+    label.textContent = uiText(i18n, 'rich_text.summary', '富文字摘要')
+    const summary = document.createElement('p')
+    summary.className = 'sigil-rich-text-summary'
+    summary.textContent =
+      richTextSummary(richText.read(node)) || uiText(i18n, 'rich_text.empty', '空白富文字')
+    const hint = document.createElement('p')
+    hint.className = 'sigil-muted sigil-rich-text-hint'
+    hint.textContent = uiText(i18n, 'rich_text.canvas_hint', '請在畫布編輯富文字')
+    wrap.append(label, summary, hint)
+    container.appendChild(wrap)
+    return
+  }
   if (node.type !== 'text' && node.type !== 'button') return
   const label = document.createElement('label')
   label.textContent = `${uiText(i18n, 'props.content', '內容')}${uiText(i18n, 'form.label_separator', '：')}`

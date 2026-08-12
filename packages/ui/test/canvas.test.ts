@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createEngine, createI18n } from '@cluion/sigil-core'
 import { createCanvas } from '../src/canvas.js'
+import type { RichTextAdapter, RichTextEditContext } from '../src/index.js'
 
 const doc = { version: 1 as const, root: { id: 'r', type: 'section', children: [] } }
 const docWithText = {
@@ -10,6 +11,42 @@ const docWithText = {
     type: 'section',
     children: [{ id: 't1', type: 'text', content: 'hello' }],
   },
+}
+const docWithRichText = {
+  version: 1 as const,
+  root: {
+    id: 'r',
+    type: 'section',
+    children: [{ id: 'rt1', type: 'rich-text', content: '<p><strong>hello</strong></p>' }],
+  },
+}
+
+function richTextHarness() {
+  let value = '<p><em>next</em></p>'
+  let context: RichTextEditContext | null = null
+  const focus = vi.fn()
+  const getValue = vi.fn(() => value)
+  const destroy = vi.fn()
+  const adapter: RichTextAdapter = {
+    resolver: {
+      supports: (node) => node.type === 'rich-text',
+      read: (node) => node.content ?? '',
+    },
+    start: vi.fn((nextContext) => {
+      context = nextContext
+      return { focus, getValue, destroy }
+    }),
+  }
+  return {
+    adapter,
+    focus,
+    getValue,
+    destroy,
+    getContext: () => context,
+    setValue: (next: string) => {
+      value = next
+    },
+  }
 }
 
 function waitIframeLoad(iframe: HTMLIFrameElement): Promise<void> {
@@ -387,5 +424,232 @@ describe('createCanvas — inline 文字編輯', () => {
     expect(getEditingId()).toBeNull()
     destroy()
     container.remove()
+  })
+})
+
+describe('createCanvas — 富文字編輯 session', () => {
+  it('啟動 adapter 並以單次 update commit，可 undo／redo', async () => {
+    const engine = createEngine({ doc: docWithRichText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const harness = richTextHarness()
+    const canvas = createCanvas(engine, container, { richText: harness.adapter })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    canvas.startEditing('rt1')
+    const context = harness.getContext()
+    const element = canvas.iframe.contentDocument?.querySelector(
+      '[data-sigil-id="rt1"]',
+    ) as HTMLElement
+    expect(context?.node.id).toBe('rt1')
+    expect(context?.element).toBe(element)
+    expect(context?.document).toBe(canvas.iframe.contentDocument)
+    expect(context?.value).toBe('<p><strong>hello</strong></p>')
+    expect(harness.focus).toHaveBeenCalledOnce()
+    expect(element.getAttribute('contenteditable')).toBeNull()
+    expect(canvas.iframe.style.pointerEvents).toBe('auto')
+
+    const restoreFocus = vi.spyOn(element, 'focus')
+    canvas.commitEditing()
+    expect(engine.getTree().children?.[0]?.content).toBe('<p><em>next</em></p>')
+    expect(harness.getValue).toHaveBeenCalledOnce()
+    expect(harness.destroy).toHaveBeenCalledOnce()
+    expect(canvas.getEditingId()).toBeNull()
+    expect(canvas.iframe.style.pointerEvents).toBe('none')
+    expect(restoreFocus).toHaveBeenCalledOnce()
+
+    engine.undo()
+    expect(engine.getTree().children?.[0]?.content).toBe('<p><strong>hello</strong></p>')
+    engine.redo()
+    expect(engine.getTree().children?.[0]?.content).toBe('<p><em>next</em></p>')
+    canvas.destroy()
+    container.remove()
+  })
+
+  it('adapter 可請求 commit 或 cancel', async () => {
+    const engine = createEngine({ doc: docWithRichText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const harness = richTextHarness()
+    const canvas = createCanvas(engine, container, { richText: harness.adapter })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    canvas.startEditing('rt1')
+    harness.getContext()?.requestCancel()
+    expect(engine.getTree().children?.[0]?.content).toBe('<p><strong>hello</strong></p>')
+    expect(harness.getValue).not.toHaveBeenCalled()
+
+    canvas.startEditing('rt1')
+    harness.getContext()?.requestCommit()
+    expect(engine.getTree().children?.[0]?.content).toBe('<p><em>next</em></p>')
+    expect(harness.destroy).toHaveBeenCalledTimes(2)
+    canvas.destroy()
+    container.remove()
+  })
+
+  it('Escape 與 destroy 取消且不寫回', async () => {
+    const engine = createEngine({ doc: docWithRichText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const harness = richTextHarness()
+    const canvas = createCanvas(engine, container, { richText: harness.adapter })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    canvas.startEditing('rt1')
+    const element = canvas.iframe.contentDocument?.querySelector(
+      '[data-sigil-id="rt1"]',
+    ) as HTMLElement
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(canvas.getEditingId()).toBeNull()
+    expect(engine.getTree().children?.[0]?.content).toBe('<p><strong>hello</strong></p>')
+
+    canvas.startEditing('rt1')
+    canvas.destroy()
+    expect(engine.getTree().children?.[0]?.content).toBe('<p><strong>hello</strong></p>')
+    expect(harness.destroy).toHaveBeenCalledTimes(2)
+    container.remove()
+  })
+
+  it('模式與裝置切換前 commit', async () => {
+    const engine = createEngine({ doc: docWithRichText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const harness = richTextHarness()
+    const canvas = createCanvas(engine, container, { richText: harness.adapter })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    canvas.startEditing('rt1')
+    canvas.setMode('preview')
+    expect(engine.getTree().children?.[0]?.content).toBe('<p><em>next</em></p>')
+    expect(canvas.iframe.style.pointerEvents).toBe('auto')
+
+    canvas.setMode('edit')
+    harness.setValue('<p>mobile</p>')
+    canvas.startEditing('rt1')
+    canvas.setDevice('mobile')
+    expect(engine.getTree().children?.[0]?.content).toBe('<p>mobile</p>')
+    expect(canvas.getDevice()).toBe('mobile')
+    expect(harness.destroy).toHaveBeenCalledTimes(2)
+    canvas.destroy()
+    container.remove()
+  })
+
+  it('節點移除或外部 content patch 時取消 session', async () => {
+    const engine = createEngine({ doc: docWithRichText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const harness = richTextHarness()
+    const canvas = createCanvas(engine, container, { richText: harness.adapter })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    canvas.startEditing('rt1')
+    engine.update('rt1', { content: '<p>external</p>' })
+    expect(canvas.getEditingId()).toBeNull()
+    expect(engine.getTree().children?.[0]?.content).toBe('<p>external</p>')
+
+    canvas.startEditing('rt1')
+    engine.remove('rt1')
+    expect(canvas.getEditingId()).toBeNull()
+    expect(engine.getTree().children).toEqual([])
+    expect(harness.destroy).toHaveBeenCalledTimes(2)
+    canvas.destroy()
+    container.remove()
+  })
+
+  it('start／focus／getValue／destroy 例外會復原畫布並回報', async () => {
+    const engine = createEngine({ doc: docWithRichText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const errors: unknown[] = []
+    const startError = new Error('start failed')
+    const startAdapter: RichTextAdapter = {
+      resolver: {
+        supports: (node) => node.type === 'rich-text',
+        read: (node) => node.content ?? '',
+      },
+      start: () => {
+        throw startError
+      },
+    }
+    const canvas = createCanvas(engine, container, {
+      richText: startAdapter,
+      onEditingError: (error) => errors.push(error),
+    })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    canvas.startEditing('rt1')
+    expect(errors).toEqual([startError])
+    expect(canvas.getEditingId()).toBeNull()
+    expect(canvas.iframe.style.pointerEvents).toBe('none')
+    canvas.destroy()
+    container.remove()
+
+    const focusEngine = createEngine({ doc: docWithRichText })
+    const focusContainer = document.createElement('div')
+    document.body.appendChild(focusContainer)
+    const focusError = new Error('focus failed')
+    const focusDestroy = vi.fn()
+    const focusCanvas = createCanvas(focusEngine, focusContainer, {
+      richText: {
+        resolver: startAdapter.resolver,
+        start: () => ({
+          focus: () => {
+            throw focusError
+          },
+          getValue: () => '<p>unused</p>',
+          destroy: focusDestroy,
+        }),
+      },
+      onEditingError: (error) => errors.push(error),
+    })
+    await waitIframeLoad(focusCanvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    focusCanvas.startEditing('rt1')
+    expect(errors).toEqual([startError, focusError])
+    expect(focusDestroy).toHaveBeenCalledOnce()
+    expect(focusCanvas.getEditingId()).toBeNull()
+    expect(focusCanvas.iframe.style.pointerEvents).toBe('none')
+    focusCanvas.destroy()
+    focusContainer.remove()
+
+    const nextEngine = createEngine({ doc: docWithRichText })
+    const nextContainer = document.createElement('div')
+    document.body.appendChild(nextContainer)
+    const getValueError = new Error('getValue failed')
+    const destroyError = new Error('destroy failed')
+    const destroy = vi.fn(() => {
+      throw destroyError
+    })
+    const nextCanvas = createCanvas(nextEngine, nextContainer, {
+      richText: {
+        resolver: startAdapter.resolver,
+        start: () => ({
+          focus: () => {},
+          getValue: () => {
+            throw getValueError
+          },
+          destroy,
+        }),
+      },
+      onEditingError: (error) => errors.push(error),
+    })
+    await waitIframeLoad(nextCanvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    nextCanvas.startEditing('rt1')
+    nextCanvas.commitEditing()
+    expect(errors).toEqual([startError, focusError, getValueError, destroyError])
+    expect(destroy).toHaveBeenCalledOnce()
+    expect(nextEngine.getTree().children?.[0]?.content).toBe('<p><strong>hello</strong></p>')
+    expect(nextCanvas.getEditingId()).toBeNull()
+    nextCanvas.destroy()
+    nextContainer.remove()
   })
 })

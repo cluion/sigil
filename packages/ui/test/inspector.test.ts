@@ -89,4 +89,27 @@ describe('createInspector — responsive style', () => {
     expect(margin.placeholder).toBe('繼承：16px')
     inspector.destroy()
   })
+
+  it('resolver 支援既有文字型別時改為富文字唯讀摘要', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: { id: 'n', type: 'text', content: '<p><em>Hello</em> inspector</p>' },
+      },
+    })
+    engine.select('n')
+    const box = document.createElement('div')
+    const inspector = createInspector(engine, box, {
+      richText: {
+        supports: (node) => node.id === 'n',
+        read: (node) => node.content ?? '',
+      },
+    })
+
+    expect(box.querySelector('.sigil-rich-text-summary')?.textContent).toBe('Hello inspector')
+    expect(box.querySelector('.sigil-rich-text-hint')?.textContent).toBe('請在畫布編輯富文字')
+    expect(box.querySelector('.sigil-field input')).toBeNull()
+    expect(box.textContent).not.toContain('此節點無可編輯內容欄位')
+    inspector.destroy()
+  })
 })

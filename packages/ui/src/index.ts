@@ -1,5 +1,6 @@
 export { createCanvas } from './canvas.js'
 export type { CanvasHandle, CanvasOptions, CanvasDevice, CanvasMode } from './canvas.js'
+export type { RichTextAdapter, RichTextEditContext, RichTextSession } from './rich-text.js'
 export { createPropsPanel } from './props.js'
 export type { PropsPanelHandle, PropsPanelOptions } from './props.js'
 export { createInspector } from './inspector.js'

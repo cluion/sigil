@@ -9,6 +9,7 @@ import { createRenderer, findNode } from '@cluion/sigil-core'
 // findNode 用於鎖定檢查
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
 import { uiText } from './i18n.js'
+import type { RichTextAdapter, RichTextSession } from './rich-text.js'
 
 export type CanvasMode = 'edit' | 'preview'
 export type CanvasDevice = ResponsiveDevice
@@ -19,7 +20,7 @@ export interface CanvasHandle {
   setDevice: (device: CanvasDevice) => void
   getDevice: () => CanvasDevice
   subscribeDevice: (listener: (device: CanvasDevice) => void) => () => void
-  /** 進入 inline 文字編輯（text／button 節點）；非可編輯型別無反應 */
+  /** 進入 inline 文字編輯；非可編輯型別無反應 */
   startEditing: (id: string) => void
   /** 結束編輯並寫回 engine */
   commitEditing: () => void
@@ -37,12 +38,34 @@ export interface CanvasHandle {
  */
 export interface CanvasOptions {
   rendererOptions?: RendererOptions
+  richText?: RichTextAdapter
   i18n?: I18n
   /** false 時隱藏內建裝置／編輯切換，改由產品殼 Topbar 控制 */
   chrome?: boolean
   /** 右鍵選單命中節點與游標座標 */
   onContextMenu?: (id: string | null, x: number, y: number) => void
+  /** 富文字 session 生命週期錯誤 */
+  onEditingError?: (error: unknown) => void
 }
+
+interface PlainEditingState {
+  kind: 'plain'
+  id: string
+  element: HTMLElement
+  cancelledByKey: boolean
+}
+
+interface RichEditingState {
+  kind: 'rich'
+  id: string
+  element: HTMLElement
+  document: Document
+  session: RichTextSession | null
+  starting: boolean
+  pendingEnd: boolean | null
+}
+
+type EditingState = PlainEditingState | RichEditingState
 
 export function createCanvas(
   engine: Engine,
@@ -79,15 +102,13 @@ export function createCanvas(
   let device: CanvasDevice = 'desktop'
   let hoverId: string | null = null
   // —— inline 文字編輯狀態 ——
-  let editingId: string | null = null
-  let editingEl: HTMLElement | null = null
-  let editingCommitted = false
+  let editing: EditingState | null = null
   const deviceListeners = new Set<(device: CanvasDevice) => void>()
   /** iframe 類型標籤 */
   let typeBadge: HTMLElement | null = null
 
   function setMode(next: CanvasMode): void {
-    if (editingId) endEditing(true)
+    if (editing) endEditing(true)
     mode = next
     iframe.style.pointerEvents = next === 'preview' ? 'auto' : 'none'
     overlay.style.display = next === 'preview' ? 'none' : ''
@@ -108,7 +129,11 @@ export function createCanvas(
   }
   toggle.addEventListener('click', () => setMode(mode === 'edit' ? 'preview' : 'edit'))
 
-  const renderer = createRenderer({ ...opts?.rendererOptions, device })
+  const renderer = createRenderer({
+    ...opts?.rendererOptions,
+    richTextResolver: opts?.richText?.resolver ?? opts?.rendererOptions?.richTextResolver,
+    device,
+  })
 
   // 裝置寬度與響應式樣式切換
   const deviceWidths: Record<CanvasDevice, string> = {
@@ -133,7 +158,7 @@ export function createCanvas(
   if (showChrome) container.appendChild(deviceBar)
 
   function setDevice(next: CanvasDevice): void {
-    if (editingId) endEditing(true)
+    if (editing) endEditing(true)
     device = next
     iframe.style.width = deviceWidths[next]
     iframe.style.margin = next === 'desktop' ? '' : '0 auto'
@@ -201,21 +226,25 @@ export function createCanvas(
     paintTypeBadge()
   }
 
-  // —— 雙擊 inline 編輯文字（text／button 節點）——
+  // —— 雙擊 inline 編輯文字 ——
   function setEditing(id: string | null): void {
-    if (editingId) endEditing(true)
+    if (editing) endEditing(true)
     if (!id) return
     const doc = iframe.contentDocument
     if (!doc || mode !== 'edit') return
     const node = findNode(engine.getTree(), id)
-    if (!node || (node.type !== 'text' && node.type !== 'button')) return
+    if (!node) return
     const el = doc.querySelector(`[data-sigil-id="${escapeCssId(id)}"]`) as HTMLElement | null
     if (!el) return
 
+    if (opts?.richText?.resolver.supports(node)) {
+      startRichTextEditing(node, el, doc)
+      return
+    }
+    if (node.type !== 'text' && node.type !== 'button') return
+
     engine.select(id)
-    editingId = id
-    editingEl = el
-    editingCommitted = false
+    editing = { kind: 'plain', id, element: el, cancelledByKey: false }
 
     // 讓 iframe 能接收 pointer 以操作 caret
     iframe.style.pointerEvents = 'auto'
@@ -230,34 +259,44 @@ export function createCanvas(
   }
 
   function endEditing(commit: boolean): void {
-    if (!editingId || !editingEl) return
-    const el = editingEl
-    const id = editingId
-    if (commit) {
-      const next = el.textContent ?? ''
-      // 先拆 listener 再寫回，避免 blur 重入
-      el.removeEventListener('blur', onEditingBlur)
-      el.removeEventListener('keydown', onEditingKeydown)
-      engine.update(id, { content: next })
-      // 重觸發 selection 讓 Inspector 同步 content（Inspector 不訂閱 patch）
-      engine.select(id)
-    } else {
-      el.removeEventListener('blur', onEditingBlur)
-      el.removeEventListener('keydown', onEditingKeydown)
+    const current = editing
+    if (!current) return
+    if (current.kind === 'rich' && current.starting) {
+      current.pendingEnd = commit
+      return
     }
-    el.removeAttribute('contenteditable')
-    // 復原 edit 模式的 pointer-events
-    iframe.style.pointerEvents = 'none'
-    overlay.style.display = ''
-    editingId = null
-    editingEl = null
-    editingCommitted = false
+
+    editing = null
+    let next: string | null = null
+    if (current.kind === 'plain') {
+      current.element.removeEventListener('blur', onEditingBlur)
+      current.element.removeEventListener('keydown', onEditingKeydown)
+      if (commit) next = current.element.textContent ?? ''
+      current.element.removeAttribute('contenteditable')
+    } else {
+      current.document.removeEventListener('keydown', onRichEditingKeydown, true)
+      if (commit && current.session) {
+        try {
+          next = current.session.getValue()
+        } catch (error) {
+          reportEditingError(error)
+        }
+      }
+      destroyRichTextSession(current.session)
+    }
+
+    restoreEditingChrome(current.element, current.kind === 'rich')
+    if (next !== null) {
+      engine.update(current.id, { content: next })
+      // 重觸發 selection 讓未訂閱 patch 的面板同步 content
+      engine.select(current.id)
+    }
     paintSelection()
   }
 
   function onEditingBlur(): void {
-    // blur 預設提交（Enter 也走此路；Esc 先設 flag 再 blur）
-    endEditing(!editingCommitted)
+    // blur 預設提交，Escape 先標記取消再 blur
+    endEditing(editing?.kind === 'plain' && !editing.cancelledByKey)
   }
 
   function onEditingKeydown(e: KeyboardEvent): void {
@@ -267,9 +306,90 @@ export function createCanvas(
       ;(e.target as HTMLElement).blur()
     } else if (e.key === 'Escape') {
       e.preventDefault()
-      editingCommitted = true // 標記取消，blur 不寫回
+      if (editing?.kind === 'plain') editing.cancelledByKey = true
       ;(e.target as HTMLElement).blur()
     }
+  }
+
+  function startRichTextEditing(
+    node: NonNullable<ReturnType<typeof findNode>>,
+    el: HTMLElement,
+    doc: Document,
+  ): void {
+    const adapter = opts?.richText
+    if (!adapter) return
+    const state: RichEditingState = {
+      kind: 'rich',
+      id: node.id,
+      element: el,
+      document: doc,
+      session: null,
+      starting: true,
+      pendingEnd: null,
+    }
+    editing = state
+    engine.select(node.id)
+    iframe.style.pointerEvents = 'auto'
+    overlay.style.display = 'none'
+    doc.addEventListener('keydown', onRichEditingKeydown, true)
+
+    try {
+      state.session = adapter.start({
+        node,
+        element: el,
+        document: doc,
+        value: adapter.resolver.read(node),
+        requestCommit: () => requestRichTextEnd(state, true),
+        requestCancel: () => requestRichTextEnd(state, false),
+      })
+      state.starting = false
+      if (state.pendingEnd !== null) {
+        endEditing(state.pendingEnd)
+        return
+      }
+      state.session.focus()
+    } catch (error) {
+      state.starting = false
+      if (editing === state) {
+        editing = null
+        doc.removeEventListener('keydown', onRichEditingKeydown, true)
+        destroyRichTextSession(state.session)
+        restoreEditingChrome(el, true)
+        paintSelection()
+      }
+      reportEditingError(error)
+    }
+  }
+
+  function requestRichTextEnd(state: RichEditingState, commit: boolean): void {
+    if (editing !== state) return
+    endEditing(commit)
+  }
+
+  function onRichEditingKeydown(e: KeyboardEvent): void {
+    if (e.key !== 'Escape' || editing?.kind !== 'rich') return
+    e.preventDefault()
+    e.stopPropagation()
+    endEditing(false)
+  }
+
+  function destroyRichTextSession(session: RichTextSession | null): void {
+    if (!session) return
+    try {
+      session.destroy()
+    } catch (error) {
+      reportEditingError(error)
+    }
+  }
+
+  function restoreEditingChrome(el: HTMLElement, restoreFocus: boolean): void {
+    iframe.style.pointerEvents = mode === 'preview' ? 'auto' : 'none'
+    overlay.style.display = mode === 'preview' ? 'none' : ''
+    if (restoreFocus && el.isConnected) el.focus({ preventScroll: true })
+  }
+
+  function reportEditingError(error: unknown): void {
+    opts?.onEditingError?.(error)
   }
 
   function selectAll(el: HTMLElement, doc: Document): void {
@@ -504,11 +624,22 @@ export function createCanvas(
     const d = iframe.contentDocument
     if (!d) return
     if (ev.type === 'patch') {
+      if (
+        editing &&
+        ((ev.patch.type === 'update' &&
+          ev.patch.id === editing.id &&
+          ev.patch.content !== undefined) ||
+          (ev.patch.type === 'replace' && ev.patch.id === editing.id) ||
+          (ev.patch.type === 'remove' && !findNode(engine.getTree(), editing.id)))
+      ) {
+        endEditing(false)
+      }
       if (affectsShortcodeSlot(ev.patch, engine.getTree())) renderer.reconcile(engine.getTree())
       else renderer.applyPatch(ev.patch)
       paintSelection()
       paintHover()
     } else if (ev.type === 'tree') {
+      if (editing) endEditing(false)
       renderer.reconcile(ev.tree)
       paintSelection()
       paintHover()
@@ -532,7 +663,7 @@ export function createCanvas(
       endEditing(false)
     },
     getEditingId() {
-      return editingId
+      return editing?.id ?? null
     },
     getDevice() {
       return device
@@ -545,7 +676,7 @@ export function createCanvas(
       }
     },
     destroy() {
-      if (editingId) endEditing(false)
+      if (editing) endEditing(false)
       overlay.removeEventListener('click', onOverlayClick)
       overlay.removeEventListener('dblclick', onOverlayDblClick)
       overlay.removeEventListener('contextmenu', onOverlayContextMenu)

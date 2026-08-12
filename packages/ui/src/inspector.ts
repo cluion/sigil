@@ -1,8 +1,16 @@
-import type { AssetStore, Engine, I18n, PropSchema, ResponsiveDevice } from '@cluion/sigil-core'
+import type {
+  AssetStore,
+  Engine,
+  I18n,
+  PropSchema,
+  ResponsiveDevice,
+  RichTextResolver,
+} from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
 import { uiText } from './i18n.js'
 import { openMediaPicker } from './media-picker.js'
+import { richTextSummary } from './rich-text.js'
 import {
   clearDeviceStyles,
   decorateStyleControl,
@@ -16,6 +24,7 @@ export type InspectorTab = 'content' | 'style' | 'advanced'
 
 export interface InspectorOptions {
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
+  richText?: RichTextResolver
   assets?: AssetStore
   i18n?: I18n
   device?: ResponsiveDevice
@@ -145,7 +154,24 @@ function renderContent(
   opts?: InspectorOptions,
   registerDestroy?: (fn: () => void) => void,
 ): void {
-  if (node.type === 'text' || node.type === 'button') {
+  const isRichText = opts?.richText?.supports(node) ?? false
+  if (isRichText && opts?.richText) {
+    const wrap = document.createElement('div')
+    wrap.className = 'sigil-field sigil-rich-text-field'
+    const label = document.createElement('span')
+    label.className = 'sigil-field-label'
+    label.textContent = uiText(opts.i18n, 'rich_text.summary', '富文字摘要')
+    const summary = document.createElement('p')
+    summary.className = 'sigil-rich-text-summary'
+    summary.textContent =
+      richTextSummary(opts.richText.read(node)) ||
+      uiText(opts.i18n, 'rich_text.empty', '空白富文字')
+    const hint = document.createElement('p')
+    hint.className = 'sigil-muted sigil-rich-text-hint'
+    hint.textContent = uiText(opts.i18n, 'rich_text.canvas_hint', '請在畫布編輯富文字')
+    wrap.append(label, summary, hint)
+    container.appendChild(wrap)
+  } else if (node.type === 'text' || node.type === 'button') {
     field(container, uiText(opts?.i18n, 'inspector.tab_content', '內容'), () => {
       const input = document.createElement('input')
       input.className = 'sigil-input'
@@ -195,7 +221,13 @@ function renderContent(
       }
     }
   }
-  if (node.type !== 'text' && node.type !== 'button' && node.type !== 'image' && !node.shortcode) {
+  if (
+    !isRichText &&
+    node.type !== 'text' &&
+    node.type !== 'button' &&
+    node.type !== 'image' &&
+    !node.shortcode
+  ) {
     const p = document.createElement('p')
     p.className = 'sigil-muted'
     p.textContent = uiText(
