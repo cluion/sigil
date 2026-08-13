@@ -350,6 +350,58 @@ test('Marketing Pricing：三方案、推薦狀態、responsive grid 與安全�
   expect(errors).toEqual([])
 })
 
+test('Marketing FAQ：語意問答、responsive grid 與安全輸出', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+
+  const insertFAQ = page.getByRole('button', { name: '插入 FAQ 常見問題', exact: true })
+  await insertFAQ.focus()
+  await insertFAQ.press('Enter')
+
+  const frame = page.frameLocator('iframe[title="編輯畫布"]')
+  const faq = frame.getByRole('region', { name: '常見問題', exact: true })
+  const faqList = faq.locator('dl[aria-label="常見問題列表"]')
+  const items = faqList.locator(':scope > div')
+  await expect(faq.getByRole('heading', { name: '開始之前，先了解這些' })).toBeVisible()
+  await expect(items).toHaveCount(6)
+  await expect(items.locator('dt')).toHaveCount(6)
+  await expect(items.locator('dd')).toHaveCount(6)
+  await expect(items.first().locator('dt')).toHaveText('Sigil 適合哪類產品？')
+  await expect(items.last().locator('dd')).toContainText('不綁定後端技術')
+  await expect.poll(() => gridColumnCount(faqList)).toBe(2)
+
+  await page.getByRole('button', { name: 'Tablet', exact: true }).click()
+  await expect.poll(() => gridColumnCount(faqList)).toBe(1)
+  await page.getByRole('button', { name: 'Mobile', exact: true }).click()
+  await expect.poll(() => gridColumnCount(faqList)).toBe(1)
+
+  await page.getByRole('button', { name: '匯出', exact: true }).click()
+  const exported = page.getByRole('dialog', { name: '匯出 HTML', exact: true }).locator('textarea')
+  await expect(exported).toHaveValue(/<section aria-label="常見問題"/)
+  await expect(exported).toHaveValue(/<dl aria-label="常見問題列表"/)
+  await expect(exported).toHaveValue(/<dt[^>]*>Sigil 適合哪類產品？<\/dt>/)
+  await expect(exported).toHaveValue(/<dd[^>]*>適合需要在既有產品中加入視覺化內容編輯能力/)
+  await expect(exported).toHaveValue(/@media \(max-width:480px\)/)
+  await page.keyboard.press('Escape')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.locator('.sigil-app')).toHaveAttribute('data-layout', 'compact')
+  await expect
+    .poll(async () => ({
+      page: await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+      app: await page
+        .locator('.sigil-app')
+        .evaluate((element) => Math.max(0, element.scrollWidth - element.clientWidth)),
+      canvas: await frame
+        .locator('html')
+        .evaluate((element) => Math.max(0, element.scrollWidth - element.clientWidth)),
+    }))
+    .toEqual({ page: 0, app: 0, canvas: 0 })
+  expect(errors).toEqual([])
+})
+
 test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.setViewportSize({ width: 390, height: 844 })

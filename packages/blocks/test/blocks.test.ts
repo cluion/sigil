@@ -10,8 +10,10 @@ import {
   templateToBlockDef,
   blockHero,
   blockPricing,
+  blockFAQ,
   heroBlockDef,
   pricingBlockDef,
+  faqBlockDef,
   marketingBlockDefs,
 } from '../src/index.js'
 import { toHTML, type ComponentNode, type TemplateDef } from '@cluion/sigil-core'
@@ -319,7 +321,100 @@ describe('marketing Pricing', () => {
       category: '行銷',
     })
     expect(pricingBlockDef.create().name).toBe('方案價格')
-    expect(marketingBlockDefs).toEqual([heroBlockDef, pricingBlockDef])
+    expect(marketingBlockDefs).toContain(pricingBlockDef)
+  })
+})
+
+describe('marketing FAQ', () => {
+  it('建立六組語意問答與 responsive grid', () => {
+    const faq = blockFAQ()
+    const list = findByName(faq, '常見問題列表')
+    const items = list?.children ?? []
+
+    expect(faq.type).toBe('section')
+    expect(faq.name).toBe('常見問題')
+    expect(faq.attributes).toEqual({ 'aria-label': '常見問題' })
+    expect(faq.children?.map((node) => node.tagName ?? node.type)).toEqual([
+      'span',
+      'h2',
+      'p',
+      'dl',
+    ])
+    expect(list?.attributes).toEqual({ 'aria-label': '常見問題列表' })
+    expect(list?.style?.['grid-template-columns']).toBe('repeat(2, minmax(0, 1fr))')
+    expect(list?.responsiveStyles).toMatchObject({
+      tablet: { 'grid-template-columns': 'minmax(0, 1fr)' },
+      mobile: { gap: '1rem' },
+    })
+    expect(items).toHaveLength(6)
+    expect(items.every((node) => node.tagName === 'div')).toBe(true)
+    expect(items.every((node) => node.children?.[0]?.tagName === 'dt')).toBe(true)
+    expect(items.every((node) => node.children?.[1]?.tagName === 'dd')).toBe(true)
+  })
+
+  it('接受自訂問答且不修改輸入', () => {
+    const items = [{ question: '如何開始？', answer: '安裝套件後加入區塊定義。' }] as const
+    const before = structuredClone(items)
+    const faq = blockFAQ({
+      eyebrow: '支援中心',
+      title: '自訂標題',
+      description: '自訂說明',
+      ariaLabel: '導入問答',
+      items,
+    })
+
+    expect(faq.attributes?.['aria-label']).toBe('導入問答')
+    expect(findByName(faq, 'FAQ 眉標')?.content).toBe('支援中心')
+    expect(findByName(faq, 'FAQ 標題')?.content).toBe('自訂標題')
+    expect(findByName(faq, 'FAQ 說明')?.content).toBe('自訂說明')
+    expect(findByName(faq, '如何開始？問題')?.content).toBe('如何開始？')
+    expect(findByName(faq, '如何開始？答案')?.content).toBe('安裝套件後加入區塊定義。')
+    expect(items).toEqual(before)
+  })
+
+  it('每次建立整棵 FAQ 都使用唯一 id', () => {
+    const first = collectIds(blockFAQ())
+    const second = collectIds(blockFAQ())
+
+    expect(new Set(first).size).toBe(first.length)
+    expect(new Set(second).size).toBe(second.length)
+    expect(first.some((id) => second.includes(id))).toBe(false)
+  })
+
+  it('輸出安全的 dl／dt／dd 與 responsive media rules', () => {
+    const html = toHTML({
+      version: 1,
+      root: blockFAQ({
+        title: '<script>bad()</script>',
+        items: [
+          {
+            question: '<b>安全嗎？</b>',
+            answer: '<img src=x onerror=bad()>',
+          },
+        ],
+      }),
+    })
+
+    expect(html).toContain('<section aria-label="常見問題"')
+    expect(html).toContain('<dl aria-label="常見問題列表"')
+    expect(html).toContain('<dt')
+    expect(html).toContain('&lt;b&gt;安全嗎？&lt;/b&gt;</dt>')
+    expect(html).toContain('<dd')
+    expect(html).toContain('&lt;img src=x onerror=bad()&gt;</dd>')
+    expect(html).toContain('@media (max-width:768px)')
+    expect(html).toContain('@media (max-width:480px)')
+    expect(html).not.toContain('<script>')
+    expect(html).not.toContain('<img src=x')
+  })
+
+  it('公開 FAQ definition 並加入 marketing definitions', () => {
+    expect(faqBlockDef).toMatchObject({
+      id: 'marketing-faq',
+      label: 'FAQ 常見問題',
+      category: '行銷',
+    })
+    expect(faqBlockDef.create().name).toBe('常見問題')
+    expect(marketingBlockDefs).toEqual([heroBlockDef, pricingBlockDef, faqBlockDef])
   })
 })
 

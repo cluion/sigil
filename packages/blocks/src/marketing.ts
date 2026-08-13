@@ -31,6 +31,21 @@ export interface PricingBlockOptions {
   plans?: readonly PricingPlanOptions[]
 }
 
+/** 單一 FAQ 問答內容 */
+export interface FAQItemOptions {
+  question: string
+  answer: string
+}
+
+/** FAQ 區塊可覆寫內容 */
+export interface FAQBlockOptions {
+  eyebrow?: string
+  title?: string
+  description?: string
+  ariaLabel?: string
+  items?: readonly FAQItemOptions[]
+}
+
 const DEFAULT_PRICING_PLANS: readonly PricingPlanOptions[] = [
   {
     name: '入門',
@@ -55,6 +70,33 @@ const DEFAULT_PRICING_PLANS: readonly PricingPlanOptions[] = [
     description: '適合重視治理、安全與導入服務的組織。',
     features: ['進階權限', '導入協助', '專屬支援'],
     ctaLabel: '聯絡顧問',
+  },
+]
+
+const DEFAULT_FAQ_ITEMS: readonly FAQItemOptions[] = [
+  {
+    question: 'Sigil 適合哪類產品？',
+    answer: '適合需要在既有產品中加入視覺化內容編輯能力的網站、後台與 SaaS 服務。',
+  },
+  {
+    question: '是否需要特定前端框架？',
+    answer: '不需要。核心以原生 TypeScript 與 DOM API 為主，也能整合進 Vue、React 或其他框架。',
+  },
+  {
+    question: '可以自訂樣式與內容嗎？',
+    answer: '可以。每個區塊都是可拆解的節點樹，宿主能調整文案、樣式、屬性與響應式設定。',
+  },
+  {
+    question: '編輯內容如何儲存？',
+    answer: '內容序列化為可攜的 JSON 文件，宿主可以接上自己的 API、資料庫或儲存 adapter。',
+  },
+  {
+    question: '是否支援不同裝置？',
+    answer: '支援 Desktop、Tablet 與 Mobile 樣式，編輯畫布與靜態 HTML 輸出會套用相同規則。',
+  },
+  {
+    question: '可以接到既有後端嗎？',
+    answer: '可以。Sigil 不綁定後端技術，透過公開介面即可整合現有的驗證、資產與內容服務。',
   },
 ]
 
@@ -443,6 +485,168 @@ function createPricingPlan(plan: PricingPlanOptions): ComponentNode {
   }
 }
 
+/**
+ * 建立響應式 FAQ
+ *
+ * 問答使用 dl／dt／dd 完整顯示，不帶互動折疊狀態
+ */
+export function blockFAQ(options: FAQBlockOptions = {}): ComponentNode {
+  const items = options.items ?? DEFAULT_FAQ_ITEMS
+  return {
+    id: createId(),
+    type: 'section',
+    name: '常見問題',
+    attributes: { 'aria-label': options.ariaLabel ?? '常見問題' },
+    style: {
+      'box-sizing': 'border-box',
+      width: '100%',
+      display: 'flex',
+      'flex-direction': 'column',
+      'align-items': 'center',
+      gap: '1.25rem',
+      padding: '5rem 3rem',
+      overflow: 'hidden',
+      color: '#0f172a',
+      'text-align': 'center',
+      background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+      border: '1px solid #e2e8f0',
+      'border-radius': '1.5rem',
+      'font-family': 'ui-sans-serif, system-ui, sans-serif',
+    },
+    responsiveStyles: {
+      tablet: { padding: '4rem 2rem' },
+      mobile: { padding: '3.5rem 1rem', 'border-radius': '1rem' },
+    },
+    children: [
+      {
+        id: createId(),
+        type: 'text',
+        tagName: 'span',
+        name: 'FAQ 眉標',
+        content: options.eyebrow ?? '常見問題',
+        style: {
+          color: '#4f46e5',
+          'font-size': '0.875rem',
+          'font-weight': '750',
+          'line-height': '1.25',
+          'letter-spacing': '0.08em',
+          'text-transform': 'uppercase',
+        },
+      },
+      {
+        id: createId(),
+        type: 'text',
+        tagName: 'h2',
+        name: 'FAQ 標題',
+        content: options.title ?? '開始之前，先了解這些',
+        style: {
+          margin: '0',
+          'max-width': '48rem',
+          'font-size': '2.75rem',
+          'font-weight': '750',
+          'line-height': '1.12',
+          'letter-spacing': '-0.025em',
+        },
+        responsiveStyles: {
+          tablet: { 'font-size': '2.375rem' },
+          mobile: { 'font-size': '2rem' },
+        },
+      },
+      {
+        id: createId(),
+        type: 'text',
+        tagName: 'p',
+        name: 'FAQ 說明',
+        content: options.description ?? '整理導入與使用時最常遇到的問題，協助你快速做出判斷。',
+        style: {
+          margin: '0 0 2rem',
+          'max-width': '42rem',
+          color: '#64748b',
+          'font-size': '1.0625rem',
+          'line-height': '1.7',
+        },
+        responsiveStyles: {
+          mobile: { margin: '0 0 1.25rem', 'font-size': '1rem' },
+        },
+      },
+      {
+        id: createId(),
+        type: 'section',
+        tagName: 'dl',
+        name: '常見問題列表',
+        attributes: { 'aria-label': '常見問題列表' },
+        style: {
+          width: '100%',
+          'max-width': '72rem',
+          display: 'grid',
+          'grid-template-columns': 'repeat(2, minmax(0, 1fr))',
+          gap: '1.25rem',
+          margin: '0',
+          'text-align': 'left',
+        },
+        responsiveStyles: {
+          tablet: { 'grid-template-columns': 'minmax(0, 1fr)' },
+          mobile: { gap: '1rem' },
+        },
+        children: items.map(createFAQItem),
+      },
+    ],
+  }
+}
+
+function createFAQItem(item: FAQItemOptions): ComponentNode {
+  return {
+    id: createId(),
+    type: 'section',
+    tagName: 'div',
+    name: `${item.question}問答`,
+    style: {
+      'box-sizing': 'border-box',
+      'min-width': '0',
+      display: 'flex',
+      'flex-direction': 'column',
+      gap: '0.75rem',
+      padding: '1.5rem',
+      background: '#ffffff',
+      border: '1px solid #e2e8f0',
+      'border-radius': '1.25rem',
+      'box-shadow': '0 0.75rem 2rem rgba(15, 23, 42, 0.06)',
+    },
+    responsiveStyles: {
+      mobile: { padding: '1.25rem' },
+    },
+    children: [
+      {
+        id: createId(),
+        type: 'text',
+        tagName: 'dt',
+        name: `${item.question}問題`,
+        content: item.question,
+        style: {
+          color: '#1e1b4b',
+          'font-size': '1.125rem',
+          'font-weight': '750',
+          'line-height': '1.4',
+          'overflow-wrap': 'anywhere',
+        },
+      },
+      {
+        id: createId(),
+        type: 'text',
+        tagName: 'dd',
+        name: `${item.question}答案`,
+        content: item.answer,
+        style: {
+          margin: '0',
+          color: '#475569',
+          'line-height': '1.7',
+          'overflow-wrap': 'anywhere',
+        },
+      },
+    ],
+  }
+}
+
 /** BlocksPanel 使用的 Hero 定義 */
 export const heroBlockDef: BlockDefinition = {
   id: 'marketing-hero',
@@ -463,5 +667,15 @@ export const pricingBlockDef: BlockDefinition = {
   create: blockPricing,
 }
 
-/** 官方行銷區塊；後續切片加入 FAQ */
-export const marketingBlockDefs: BlockDefinition[] = [heroBlockDef, pricingBlockDef]
+/** BlocksPanel 使用的 FAQ 定義 */
+export const faqBlockDef: BlockDefinition = {
+  id: 'marketing-faq',
+  label: 'FAQ 常見問題',
+  category: '行銷',
+  icon: '?',
+  keywords: ['faq', 'questions', 'answers', '問答', '常見問題', '行銷'],
+  create: blockFAQ,
+}
+
+/** 官方行銷區塊 */
+export const marketingBlockDefs: BlockDefinition[] = [heroBlockDef, pricingBlockDef, faqBlockDef]

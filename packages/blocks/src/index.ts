@@ -3,12 +3,16 @@ import { createId, cloneWithNewIds, type ComponentNode, type TemplateDef } from 
 export {
   blockHero,
   blockPricing,
+  blockFAQ,
   heroBlockDef,
   pricingBlockDef,
+  faqBlockDef,
   marketingBlockDefs,
   type HeroBlockOptions,
   type PricingBlockOptions,
   type PricingPlanOptions,
+  type FAQBlockOptions,
+  type FAQItemOptions,
 } from './marketing.js'
 
 /**

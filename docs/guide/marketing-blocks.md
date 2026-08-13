@@ -70,9 +70,37 @@ const pricing = blockPricing({
 
 Pricing 同樣是一般節點樹：外層 `section` 包含標題與方案列表，每個方案使用 `article`，功能清單使用 `ul/li`。Desktop 三欄、Tablet 兩欄、Mobile 單欄；推薦樣式只影響 presentation，不增加不可序列化狀態。
 
+## FAQ
+
+FAQ 預設提供六組完整顯示的問答。宿主可以覆寫區塊文案與完整問答陣列：
+
+```ts
+import { blockFAQ } from '@cluion/sigil-blocks'
+
+const faq = blockFAQ({
+  eyebrow: '支援中心',
+  title: '開始之前，先了解這些',
+  description: '整理導入時最常遇到的問題。',
+  ariaLabel: '導入問答',
+  items: [
+    {
+      question: '是否需要特定前端框架？',
+      answer: '不需要，也能整合進 Vue、React 或其他框架。',
+    },
+    {
+      question: '可以接到既有後端嗎？',
+      answer: '可以，公開介面不綁定特定後端技術。',
+    },
+  ],
+})
+```
+
+問答列表使用 `dl`，每組問答以 `div` 包住一個 `dt` 與 `dd`。Desktop 兩欄，Tablet／Mobile 單欄；問題與答案預設完整顯示，沒有隱藏狀態或 accordion runtime。
+
 ## 設計邊界
 
 - 不依賴 shortcode、富文字 adapter 或第三方 runtime
 - 不寫死遠端圖片、品牌字型或全域 CSS selector
 - CTA 使用 `type="button"`，實際 click 行為由宿主接管
-- `marketingBlockDefs` 目前包含 Hero 與 Pricing；FAQ 會以獨立切片加入
+- FAQ 不包含互動折疊；若需要 accordion，應由後續獨立契約處理
+- `marketingBlockDefs` 包含 Hero、Pricing 與 FAQ

@@ -28,10 +28,16 @@ createApp({ mount: '#app', blocks })
 
 ## Marketing Blocks
 
-`marketingBlockDefs` 可直接加入 BlocksPanel。第一個產品級區塊是可拆解編輯、具響應式預設的 Hero：
+`marketingBlockDefs` 可直接加入 BlocksPanel，內含可拆解編輯、具響應式預設的產品級行銷區塊：
 
 ```ts
-import { basicBlockDefs, blockHero, blockPricing, marketingBlockDefs } from '@cluion/sigil-blocks'
+import {
+  basicBlockDefs,
+  blockFAQ,
+  blockHero,
+  blockPricing,
+  marketingBlockDefs,
+} from '@cluion/sigil-blocks'
 
 createApp({
   mount: '#app',
@@ -59,9 +65,19 @@ const pricing = blockPricing({
     },
   ],
 })
+
+const faq = blockFAQ({
+  title: '開始之前，先了解這些',
+  items: [
+    {
+      question: '需要特定前端框架嗎？',
+      answer: '不需要，也能整合進 Vue、React 或其他框架。',
+    },
+  ],
+})
 ```
 
-Hero 與 Pricing 都不依賴 shortcode、遠端圖片、CSS framework 或第三方 runtime。完整結構與響應式行為見 [官方行銷區塊指南](../../docs/guide/marketing-blocks.md)。
+Hero、Pricing 與 FAQ 都不依賴 shortcode、遠端圖片、CSS framework 或第三方 runtime。完整結構與響應式行為見 [官方行銷區塊指南](../../docs/guide/marketing-blocks.md)。
 
 ## License
 
