@@ -1,5 +1,17 @@
 # @cluion/sigil-blocks
 
+## 0.18.0
+
+### Minor Changes
+
+- d5720a5: Add a responsive semantic FAQ factory with customizable questions and answers.
+- d2ec868: Add a product-ready responsive Hero factory and marketing block definition built from editable semantic nodes.
+- 8bbff6a: Add a responsive semantic Pricing factory with customizable plans, feature lists, featured states, and calls to action.
+
+### Patch Changes
+
+- @cluion/sigil-core@0.18.0
+
 ## 0.17.0
 
 ### Patch Changes

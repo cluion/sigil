@@ -1,5 +1,11 @@
 # @cluion/sigil-ui
 
+## 0.18.0
+
+### Patch Changes
+
+- @cluion/sigil-core@0.18.0
+
 ## 0.17.0
 
 ### Minor Changes
