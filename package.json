@@ -27,6 +27,7 @@
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "security:check": "node scripts/check-security-sinks.mjs",
     "publint": "pnpm -r --filter \"./packages/*\" exec publint",
     "attw": "pnpm -r --filter \"./packages/*\" exec attw --pack --profile esm-only --exclude-entrypoints ./tokens.css",
     "size": "size-limit",

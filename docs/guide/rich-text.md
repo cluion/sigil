@@ -77,3 +77,5 @@ PropsPanel 與 Inspector 只顯示文字摘要及「請在畫布編輯」提示�
 - 低階 `toHTML()` 有 resolver 卻沒有 sanitizer 時只會輸出 escaped markup
 
 本倉庫 `pnpm dev` 的 demo 提供零依賴 `contenteditable` adapter 與嚴格 allowlist sanitizer，只示範 `<strong>`、`<em>` 及安全連結。正式產品應使用經審核、持續更新的 sanitizer 與 RTE。
+
+完整的信任邊界、CSP 設定與已審核 DOM sink 見[安全模型](./security.md)。

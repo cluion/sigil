@@ -23,7 +23,11 @@ export default defineConfig({
   define: sigilVersionDefines(),
   test: {
     environment: 'happy-dom',
-    include: ['packages/**/test/**/*.test.ts', 'packages/**/src/**/*.test.ts'],
+    include: [
+      'packages/**/test/**/*.test.ts',
+      'packages/**/src/**/*.test.ts',
+      'scripts/**/*.test.mjs',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

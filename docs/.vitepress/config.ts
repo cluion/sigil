@@ -60,6 +60,7 @@ export default defineConfig({
             { text: 'Getting Started', link: '/guide/getting-started' },
             { text: '官方行銷區塊', link: '/guide/marketing-blocks' },
             { text: '可選富文字 Adapter', link: '/guide/rich-text' },
+            { text: '安全模型', link: '/guide/security' },
             { text: '響應式樣式', link: '/guide/responsive-styles' },
             { text: '擴充（Commands／Hooks）', link: '/guide/extensibility' },
             { text: '範例', link: '/guide/examples' },

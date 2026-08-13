@@ -35,6 +35,8 @@ app.destroy()
 
 詳見 [docs/guide/getting-started.md](./docs/guide/getting-started.md)
 
+安全信任邊界、CSP／Trusted Types 設定與已審核 DOM sink 見[安全模型](./docs/guide/security.md)。
+
 ## 套件
 
 | 套件                       | 用途           |
