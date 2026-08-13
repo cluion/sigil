@@ -9,7 +9,9 @@ import {
   basicBlocks,
   templateToBlockDef,
   blockHero,
+  blockPricing,
   heroBlockDef,
+  pricingBlockDef,
   marketingBlockDefs,
 } from '../src/index.js'
 import { toHTML, type ComponentNode, type TemplateDef } from '@cluion/sigil-core'
@@ -203,10 +205,133 @@ describe('marketing Hero', () => {
       category: '行銷',
     })
     expect(heroBlockDef.create().type).toBe('section')
-    expect(marketingBlockDefs).toEqual([heroBlockDef])
+    expect(marketingBlockDefs).toContain(heroBlockDef)
+  })
+})
+
+describe('marketing Pricing', () => {
+  it('建立三方案語意節點樹與 responsive grid', () => {
+    const pricing = blockPricing()
+    const list = findByName(pricing, '方案列表')
+    const plans = list?.children ?? []
+
+    expect(pricing.type).toBe('section')
+    expect(pricing.name).toBe('方案價格')
+    expect(pricing.attributes).toEqual({ 'aria-label': '方案價格' })
+    expect(pricing.children?.map((node) => node.tagName ?? node.type)).toEqual([
+      'span',
+      'h2',
+      'p',
+      'div',
+    ])
+    expect(list?.style?.['grid-template-columns']).toBe('repeat(3, minmax(0, 1fr))')
+    expect(list?.attributes).toEqual({ role: 'list', 'aria-label': '方案列表' })
+    expect(list?.responsiveStyles).toMatchObject({
+      tablet: { 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' },
+      mobile: { 'grid-template-columns': 'minmax(0, 1fr)' },
+    })
+    expect(plans.map((node) => node.tagName)).toEqual(['article', 'article', 'article'])
+    expect(plans.map((node) => node.name)).toEqual(['入門方案', '專業方案', '企業方案'])
+    expect(plans.filter((node) => node.attributes?.['data-featured'] === 'true')).toHaveLength(1)
+    expect(findByName(pricing, '專業功能')?.children?.map((node) => node.tagName)).toEqual([
+      'li',
+      'li',
+      'li',
+    ])
+  })
+
+  it('接受自訂方案且不修改輸入', () => {
+    const plans = [
+      {
+        name: '開發者',
+        price: 'NT$300',
+        period: '／月',
+        description: '開發者方案',
+        features: ['兩個網站', 'Email 支援'],
+        ctaLabel: '開始使用',
+        featured: true,
+        badgeLabel: '首選',
+      },
+    ] as const
+    const before = structuredClone(plans)
+    const pricing = blockPricing({
+      eyebrow: '彈性方案',
+      title: '自訂標題',
+      description: '自訂說明',
+      ariaLabel: '價格比較',
+      plans,
+    })
+
+    expect(pricing.attributes?.['aria-label']).toBe('價格比較')
+    expect(findByName(pricing, '價格眉標')?.content).toBe('彈性方案')
+    expect(findByName(pricing, '價格標題')?.content).toBe('自訂標題')
+    expect(findByName(pricing, '價格說明')?.content).toBe('自訂說明')
+    expect(findByName(pricing, '開發者推薦標記')?.content).toBe('首選')
+    expect(findByName(pricing, '開發者金額')?.content).toBe('NT$300')
+    expect(findByName(pricing, '開發者週期')?.content).toBe('／月')
+    expect(findByName(pricing, '開發者行動')?.content).toBe('開始使用')
+    expect(plans).toEqual(before)
+  })
+
+  it('每次建立整棵 Pricing 都使用唯一 id', () => {
+    const first = collectIds(blockPricing())
+    const second = collectIds(blockPricing())
+
+    expect(new Set(first).size).toBe(first.length)
+    expect(new Set(second).size).toBe(second.length)
+    expect(first.some((id) => second.includes(id))).toBe(false)
+  })
+
+  it('輸出安全的語意 HTML 與 responsive media rules', () => {
+    const html = toHTML({
+      version: 1,
+      root: blockPricing({
+        title: '<script>bad()</script>',
+        plans: [
+          {
+            name: '<b>方案</b>',
+            price: 'NT$1',
+            features: ['<img src=x onerror=bad()>'],
+            featured: true,
+          },
+        ],
+      }),
+    })
+
+    expect(html).toContain('<section aria-label="方案價格"')
+    expect(html).toContain(
+      '<article role="listitem" aria-label="&lt;b&gt;方案&lt;/b&gt;方案" data-featured="true"',
+    )
+    expect(html).toContain('<h2')
+    expect(html).toContain('&lt;script&gt;bad()&lt;/script&gt;</h2>')
+    expect(html).toContain('<ul')
+    expect(html).toContain('<li')
+    expect(html).toContain('✓ &lt;img src=x onerror=bad()&gt;</li>')
+    expect(html).toContain('@media (max-width:480px)')
+    expect(html).not.toContain('<script>')
+    expect(html).not.toContain('<img src=x')
+  })
+
+  it('公開 Pricing definition 並加入 marketing definitions', () => {
+    expect(pricingBlockDef).toMatchObject({
+      id: 'marketing-pricing',
+      label: 'Pricing 方案價格',
+      category: '行銷',
+    })
+    expect(pricingBlockDef.create().name).toBe('方案價格')
+    expect(marketingBlockDefs).toEqual([heroBlockDef, pricingBlockDef])
   })
 })
 
 function collectIds(node: ComponentNode): string[] {
   return [node.id, ...(node.children ?? []).flatMap(collectIds)]
+}
+
+function findByName(node: ComponentNode, name: string): ComponentNode | null {
+  if (node.name === name) return node
+  for (const child of node.children ?? []) {
+    const found = findByName(child, name)
+    if (found) return found
+  }
+  return null
 }

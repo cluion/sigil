@@ -298,6 +298,58 @@ test('Marketing Hero：鍵盤插入、語意輸出與 responsive 預設', async 
   expect(errors).toEqual([])
 })
 
+test('Marketing Pricing：三方案、推薦狀態、responsive grid 與安全輸出', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+
+  const insertPricing = page.getByRole('button', { name: '插入 Pricing 方案價格', exact: true })
+  await insertPricing.focus()
+  await insertPricing.press('Enter')
+
+  const frame = page.frameLocator('iframe[title="編輯畫布"]')
+  const pricing = frame.getByRole('region', { name: '方案價格', exact: true })
+  const planList = pricing.getByRole('list', { name: '方案列表', exact: true })
+  const plans = planList.locator(':scope > article[role="listitem"]')
+  await expect(pricing.getByRole('heading', { name: '選擇適合你的成長方案' })).toBeVisible()
+  await expect(plans).toHaveCount(3)
+  await expect(plans.nth(0)).toContainText('入門')
+  await expect(plans.nth(1)).toContainText('最受歡迎')
+  await expect(plans.nth(1)).toHaveAttribute('data-featured', 'true')
+  await expect(plans.nth(2)).toContainText('企業')
+  await expect.poll(() => gridColumnCount(planList)).toBe(3)
+
+  await page.getByRole('button', { name: 'Tablet', exact: true }).click()
+  await expect.poll(() => gridColumnCount(planList)).toBe(2)
+  await page.getByRole('button', { name: 'Mobile', exact: true }).click()
+  await expect.poll(() => gridColumnCount(planList)).toBe(1)
+  await expect(plans.nth(1)).toHaveCSS('transform', 'none')
+
+  await page.getByRole('button', { name: '匯出', exact: true }).click()
+  const exported = page.getByRole('dialog', { name: '匯出 HTML', exact: true }).locator('textarea')
+  await expect(exported).toHaveValue(/<section aria-label="方案價格"/)
+  await expect(exported).toHaveValue(/<article role="listitem" aria-label="專業方案"/)
+  await expect(exported).toHaveValue(/<ul[^>]*>.*<li/s)
+  await expect(exported).toHaveValue(/@media \(max-width:480px\)/)
+  await page.keyboard.press('Escape')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.locator('.sigil-app')).toHaveAttribute('data-layout', 'compact')
+  await expect
+    .poll(async () => ({
+      page: await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+      app: await page
+        .locator('.sigil-app')
+        .evaluate((element) => Math.max(0, element.scrollWidth - element.clientWidth)),
+      canvas: await frame
+        .locator('html')
+        .evaluate((element) => Math.max(0, element.scrollWidth - element.clientWidth)),
+    }))
+    .toEqual({ page: 0, app: 0, canvas: 0 })
+  expect(errors).toEqual([])
+})
+
 test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.setViewportSize({ width: 390, height: 844 })
@@ -358,6 +410,12 @@ test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) =>
     .toEqual({ page: 0, app: 0, topbar: 0 })
   expect(errors).toEqual([])
 })
+
+async function gridColumnCount(locator: import('@playwright/test').Locator): Promise<number> {
+  return locator.evaluate(
+    (element) => getComputedStyle(element).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+  )
+}
 
 test('英文 locale：Blocks、Layers、Media 與 compact 介面', async ({ page }) => {
   const errors = await prepareDemo(page)
