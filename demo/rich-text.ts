@@ -7,12 +7,23 @@ const DROP_CONTENT = new Set(['script', 'style', 'iframe', 'object', 'embed', 's
  * Demo 專用 allowlist sanitizer
  */
 export function sanitizeDemoRichText(input: string): string {
-  const parsed = new DOMParser().parseFromString(input, 'text/html')
+  const parsed = parseRichTextInput(input)
   const output = document.createElement('div')
-  for (const child of parsed.body.childNodes) {
+  for (const child of parsed.childNodes) {
     output.appendChild(sanitizeNode(child, output.ownerDocument))
   }
   return output.innerHTML
+}
+
+function parseRichTextInput(input: string): ParentNode {
+  const container = document.createElement('div') as HTMLDivElement & {
+    setHTML?: (untrusted: string) => void
+  }
+  if (typeof container.setHTML === 'function') {
+    container.setHTML(input)
+    return container
+  }
+  return new DOMParser().parseFromString(input, 'text/html').body
 }
 
 function sanitizeNode(node: Node, target: Document): Node {

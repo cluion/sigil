@@ -25,24 +25,39 @@ export interface HtmlPolicyOptions {
 }
 
 export interface HtmlPolicy {
-  // 注入可信 template
+  // 注入可信 template 或 iframe 文件
   setTemplate(el: Element, html: string): void
   // 注入動態值
   setSanitized(el: Element, untrusted: string): void
 }
 
 type TTFactory = {
-  createPolicy: (
-    name: string,
-    rules: { createHTML: (s: string) => string },
-  ) => { createHTML: (s: string) => string }
+  createPolicy: (name: string, rules: { createHTML: (s: string) => string }) => TTPolicy
 }
+
+type TTPolicy = { createHTML: (s: string) => string }
+
+const policyCache = new WeakMap<TTFactory, Map<string, TTPolicy>>()
 
 // 偵測 Trusted Types
 function getTT(): TTFactory | null {
   if (typeof globalThis === 'undefined') return null
   const g = globalThis as unknown as { trustedTypes?: TTFactory }
   return g.trustedTypes ?? null
+}
+
+function getOrCreatePolicy(tt: TTFactory | null, name: string): TTPolicy | null {
+  if (!tt) return null
+  let policies = policyCache.get(tt)
+  if (!policies) {
+    policies = new Map()
+    policyCache.set(tt, policies)
+  }
+  const cached = policies.get(name)
+  if (cached) return cached
+  const policy = tt.createPolicy(name, { createHTML: (s) => s })
+  policies.set(name, policy)
+  return policy
 }
 
 /**
@@ -53,14 +68,19 @@ function getTT(): TTFactory | null {
 export function createDefaultPolicy(opts: HtmlPolicyOptions = {}): HtmlPolicy {
   const base = opts.trustedTypesPolicyName ?? 'sigil'
   const tt = getTT()
-  const templatePolicy = tt?.createPolicy(`${base}#template`, { createHTML: (s) => s }) ?? null
-  const sanitizedPolicy = tt?.createPolicy(`${base}#sanitized`, { createHTML: (s) => s }) ?? null
+  const templatePolicy = getOrCreatePolicy(tt, `${base}#template`)
+  const sanitizedPolicy = getOrCreatePolicy(tt, `${base}#sanitized`)
 
   return {
     setTemplate(el, html) {
       const trusted = templatePolicy ? templatePolicy.createHTML(html) : html
       // policy 內的受控 sink
-      el.innerHTML = trusted as string
+      if (el.tagName.toUpperCase() === 'IFRAME') {
+        const iframe = el as HTMLIFrameElement
+        iframe.srcdoc = trusted as string
+      } else {
+        el.innerHTML = trusted as string
+      }
     },
     setSanitized(el, untrusted) {
       const e = el as Element & { setHTML?: (input: string) => void }

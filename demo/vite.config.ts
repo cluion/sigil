@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite'
 import { fileURLToPath } from 'node:url'
 import { sigilVersionDefines } from '../scripts/sigil-version-defines.mjs'
+import { enforcedPolicy } from '../e2e/security-policy'
 
 const src = (p: string): string => fileURLToPath(new URL(p, import.meta.url))
 
 // dev 直接指向各套件 src，改碼即時生效
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   define: sigilVersionDefines(),
   resolve: {
     alias: {
@@ -18,4 +19,6 @@ export default defineConfig({
       '@cluion/sigil-app': src('../packages/app/src/index.ts'),
     },
   },
-})
+  server:
+    mode === 'csp-e2e' ? { headers: { 'Content-Security-Policy': enforcedPolicy } } : undefined,
+}))

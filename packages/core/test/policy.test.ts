@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { escapeHtml, createDefaultPolicy } from '../src/index.js'
 
 describe('escapeHtml', () => {
@@ -20,7 +20,31 @@ describe('createDefaultPolicy — setTemplate／setSanitized', () => {
     expect(typeof p.setTemplate).toBe('function')
     expect(typeof p.setSanitized).toBe('function')
   })
+
+  it('setTemplate 可安全設定 iframe srcdoc', () => {
+    const iframe = document.createElement('iframe')
+    const p = createDefaultPolicy()
+    p.setTemplate(iframe, '<!doctype html><html><body></body></html>')
+    expect(iframe.srcdoc).toBe('<!doctype html><html><body></body></html>')
+  })
+
+  it('同一 realm 與名稱重用 Trusted Types policies', () => {
+    const names: string[] = []
+    vi.stubGlobal('trustedTypes', {
+      createPolicy(name: string, rules: { createHTML: (s: string) => string }) {
+        names.push(name)
+        return { createHTML: rules.createHTML }
+      },
+    })
+
+    createDefaultPolicy()
+    createDefaultPolicy()
+
+    expect(names).toEqual(['sigil#template', 'sigil#sanitized'])
+  })
 })
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe('setSanitized — 三層防禦', () => {
   // happy-dom 無 setHTML → 跳過第一層，測第二／三層

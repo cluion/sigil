@@ -19,6 +19,8 @@ const RULES = [
   { kind: 'dangerouslySetInnerHTML use', pattern: /\bdangerouslySetInnerHTML\b/ },
   { kind: 'setHTMLUnsafe call', pattern: /\.setHTMLUnsafe\s*\(/ },
   { kind: 'setHTML call', pattern: /\.setHTML\s*\(/ },
+  { kind: 'DOMParser parseFromString call', pattern: /\.parseFromString\s*\(/ },
+  { kind: 'Trusted Types policy creation', pattern: /\.createPolicy\s*\(/ },
   {
     kind: 'srcdoc write',
     pattern: /\.srcdoc\s*=|\.setAttribute\(\s*['"]srcdoc['"]\s*,/,
@@ -39,10 +41,24 @@ const DYNAMIC_CALL_RULES = [
 export const APPROVED_FINDINGS = [
   {
     file: 'packages/core/src/policy/html-policy.ts',
+    kind: 'Trusted Types policy creation',
+    source: 'const policy = tt.createPolicy(name, { createHTML: (s) => s })',
+    count: 1,
+    reason: 'All Sigil named policy creation is centralized and cached here.',
+  },
+  {
+    file: 'packages/core/src/policy/html-policy.ts',
     kind: 'innerHTML access',
     source: 'el.innerHTML = trusted as string',
     count: 2,
     reason: 'Trusted Types policy output is written only inside HtmlPolicy.',
+  },
+  {
+    file: 'packages/core/src/policy/html-policy.ts',
+    kind: 'srcdoc write',
+    source: 'iframe.srcdoc = trusted as string',
+    count: 1,
+    reason: 'Trusted Types policy output creates the Canvas iframe document.',
   },
   {
     file: 'packages/core/src/policy/html-policy.ts',
@@ -89,9 +105,23 @@ export const APPROVED_FINDINGS = [
   {
     file: 'packages/ui/src/canvas.ts',
     kind: 'srcdoc write',
-    source: "iframe.srcdoc = '<!doctype html><html><head></head><body></body></html>'",
+    source: 'else iframe.srcdoc = FRAME_DOCUMENT',
     count: 1,
-    reason: 'The iframe document is a source-controlled constant.',
+    reason: 'Low-level Canvas fallback when the host does not provide HtmlPolicy.',
+  },
+  {
+    file: 'demo/rich-text.ts',
+    kind: 'setHTML call',
+    source: 'container.setHTML(input)',
+    count: 1,
+    reason: 'Uses the browser safe HTML parser before the stricter demo allowlist.',
+  },
+  {
+    file: 'demo/rich-text.ts',
+    kind: 'DOMParser parseFromString call',
+    source: "return new DOMParser().parseFromString(input, 'text/html').body",
+    count: 1,
+    reason: 'Legacy demo fallback; enforcement browsers must provide the safe setHTML API.',
   },
   {
     file: 'demo/rich-text.ts',

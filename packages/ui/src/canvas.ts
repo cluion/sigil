@@ -14,6 +14,8 @@ import type { RichTextAdapter, RichTextSession } from './rich-text.js'
 export type CanvasMode = 'edit' | 'preview'
 export type CanvasDevice = ResponsiveDevice
 
+const FRAME_DOCUMENT = '<!doctype html><html><head></head><body></body></html>'
+
 export interface CanvasHandle {
   iframe: HTMLIFrameElement
   setMode: (mode: CanvasMode) => void
@@ -614,7 +616,9 @@ export function createCanvas(
     if (el) el.setAttribute('data-sigil-hover', '1')
   }
 
-  iframe.srcdoc = '<!doctype html><html><head></head><body></body></html>'
+  const htmlPolicy = opts?.rendererOptions?.htmlPolicy
+  if (htmlPolicy) htmlPolicy.setTemplate(iframe, FRAME_DOCUMENT)
+  else iframe.srcdoc = FRAME_DOCUMENT
   iframe.addEventListener('load', () => {
     const d = iframe.contentDocument
     if (!d) return

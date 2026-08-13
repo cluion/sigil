@@ -12,6 +12,8 @@ describe('security sink guard', () => {
         "document.createElement('section')",
         'document.createElement(`${node.tagName}`)',
         'target.setAttribute(name, value)',
+        "new DOMParser().parseFromString(input, 'text/html')",
+        'trustedTypes.createPolicy(name, rules)',
       ].join('\n'),
     )
 
@@ -20,8 +22,10 @@ describe('security sink guard', () => {
       'dynamic createElement call',
       'dynamic createElement call',
       'dynamic setAttribute call',
+      'DOMParser parseFromString call',
+      'Trusted Types policy creation',
     ])
-    expect(validateSecurityFindings(findings, [])).toHaveLength(4)
+    expect(validateSecurityFindings(findings, [])).toHaveLength(6)
   })
 
   it('requires an exact reviewed occurrence count', () => {

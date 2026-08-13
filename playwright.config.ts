@@ -24,7 +24,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm dev --host 127.0.0.1 --port 4173 --strictPort',
+    command: 'pnpm dev --host 127.0.0.1 --port 4173 --strictPort --mode csp-e2e',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
