@@ -1,5 +1,16 @@
 # @cluion/sigil-ui
 
+## 0.19.0
+
+### Minor Changes
+
+- b3e139c: 支援 CSP／Trusted Types enforcement：Canvas iframe 文件經 HtmlPolicy 設定，named policies 可在同一 realm 重用。
+
+### Patch Changes
+
+- Updated dependencies [b3e139c]
+  - @cluion/sigil-core@0.19.0
+
 ## 0.18.0
 
 ### Patch Changes
