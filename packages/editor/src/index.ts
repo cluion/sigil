@@ -21,6 +21,8 @@ import {
   type HtmlMode,
   type ComponentNode,
   type Locale,
+  type MessageCatalog,
+  type MessageOverrides,
   type ProjectStore,
   type TemplateStore,
   type CommandDefinition,
@@ -211,7 +213,7 @@ const i18nMessages = {
     'editor.delete': 'Delete',
     'editor.context_menu': 'Node actions',
   },
-}
+} satisfies MessageCatalog
 
 export interface EditorOptions {
   mount: string | HTMLElement
@@ -227,7 +229,10 @@ export interface EditorOptions {
   /** 可選富文字 editor adapter，必須搭配 sanitize */
   richText?: RichTextAdapter
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
+  /** 初始介面語系；預設 zh */
   locale?: Locale
+  /** 依語系淺層覆寫內建產品字串 */
+  messages?: MessageOverrides
   /** 主題：light／dark／auto；預設 auto。SDK 無切換按鈕，宿主自理 */
   theme?: ThemeChoice
   /** 額外命令可覆寫同 id 預設 */
@@ -242,6 +247,10 @@ export interface SigilEditor {
   toHTML(mode?: HtmlMode): string
   /** 執行已註冊命令 */
   runCommand(id: string): Promise<boolean>
+  /** 取得目前介面語系 */
+  getLocale(): Locale
+  /** 原地切換介面語系，不重建 engine */
+  setLocale(locale: Locale): void
   destroy(): void
 }
 
@@ -273,7 +282,13 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       : undefined
   const fetchJSON = opts.fetchJSON ?? defaultFetch
   const bus = createEventBus()
-  const i18n = createI18n(i18nMessages, opts.locale ?? 'zh')
+  const i18n = createI18n(
+    {
+      zh: { ...i18nMessages.zh, ...opts.messages?.zh },
+      en: { ...i18nMessages.en, ...opts.messages?.en },
+    },
+    opts.locale ?? 'zh',
+  )
   const sharedStore = createStore()
   const shortcodeResolver = createShortcodeResolver({
     registry: shortcodeRegistry,
@@ -286,6 +301,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
 
   let clipboard: ComponentNode | null = null
   let templateLibrary: TemplateLibraryController | null = null
+  let destroyed = false
 
   async function persist(): Promise<SigilDoc> {
     let doc = engine.toJSON()
@@ -482,6 +498,14 @@ export function createEditor(opts: EditorOptions): SigilEditor {
 
   runAfterLoad(hooks, engine.toJSON(), engine)
 
+  function setLocale(next: Locale): void {
+    if (destroyed || next === i18n.getLocale()) return
+    closeMenu?.()
+    i18n.setLocale(next)
+    layersTitle.textContent = i18n.t('layers.title')
+    propsTitle.textContent = i18n.t('props.title')
+  }
+
   return {
     engine,
     toJSON() {
@@ -501,7 +525,12 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     runCommand(id: string) {
       return commands.run(id, makeCtx())
     },
+    getLocale() {
+      return i18n.getLocale()
+    },
+    setLocale,
     destroy() {
+      destroyed = true
       runBeforeDestroy(hooks, engine)
       closeMenu?.()
       cleanupTheme()

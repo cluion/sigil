@@ -150,6 +150,75 @@ describe('editor — toHTML', () => {
     editor.destroy()
   })
 
+  it('runtime locale 與宿主 messages override 保留 engine、device 與 history', async () => {
+    const save = vi.fn()
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('Host template')
+    const el = document.createElement('div')
+    const editor = createEditor({
+      mount: el,
+      theme: 'dark',
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 't', type: 'text', content: 'before' }],
+        },
+      },
+      blocks: { Text: () => ({ id: 'new-text', type: 'text', content: '' }) },
+      templates: { list: () => [], save },
+      messages: {
+        en: {
+          'props.title': '',
+          'blocks.search_placeholder': 'Host search',
+          'editor.template_name': 'Host template name',
+        },
+      },
+    })
+    const layout = el.firstElementChild
+    const iframe = el.querySelector('iframe')
+    const tablet = el.querySelector('[data-device="tablet"]') as HTMLButtonElement
+
+    expect(editor.getLocale()).toBe('zh')
+    editor.engine.select('t')
+    editor.engine.update('t', { content: 'after' })
+    tablet.click()
+    const tree = editor.engine.getTree()
+
+    editor.setLocale('en')
+
+    expect(editor.getLocale()).toBe('en')
+    expect(el.firstElementChild).toBe(layout)
+    expect(el.querySelector('iframe')).toBe(iframe)
+    expect(editor.engine.getTree()).toBe(tree)
+    expect(editor.engine.getSelection()).toBe('t')
+    expect(layout?.classList.contains('sigil-theme-dark')).toBe(true)
+    expect(tablet.getAttribute('aria-pressed')).toBe('true')
+    expect((el.querySelector('.sigil-blocks-panel input') as HTMLInputElement).placeholder).toBe(
+      'Host search',
+    )
+    expect(
+      [...el.querySelectorAll('h4')].slice(0, 2).map((heading) => heading.textContent),
+    ).toEqual(['Layers', ''])
+    expect(await editor.runCommand('save-as-template')).toBe(true)
+    expect(prompt).toHaveBeenCalledWith('Host template name', 'text')
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ label: 'Host template' }))
+    expect(await editor.runCommand('undo')).toBe(true)
+    expect(editor.engine.getTree().children?.[0]?.content).toBe('before')
+
+    editor.setLocale('zh')
+    expect(editor.getLocale()).toBe('zh')
+    expect((el.querySelector('.sigil-blocks-panel input') as HTMLInputElement).placeholder).toBe(
+      '搜尋區塊…',
+    )
+    expect(
+      [...el.querySelectorAll('h4')].slice(0, 2).map((heading) => heading.textContent),
+    ).toEqual(['圖層', '屬性'])
+
+    prompt.mockRestore()
+    editor.destroy()
+  })
+
   it('輸出 static HTML,shortcode 用 render 展開', () => {
     const def = defineShortcode({
       name: 'greet',

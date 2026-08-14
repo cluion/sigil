@@ -31,7 +31,11 @@ interface DemoNode {
 interface DemoApp {
   engine: {
     update(id: string, patch: { content: string }): void
+    select(id: string | null): void
+    getSelection(): string | null
+    getTree(): DemoNode
   }
+  getLocale(): 'zh' | 'en'
   toJSON(): { root: DemoNode }
 }
 
@@ -469,13 +473,63 @@ async function gridColumnCount(locator: import('@playwright/test').Locator): Pro
   )
 }
 
-test('英文 locale：Blocks、Layers、Media 與 compact 介面', async ({ page }) => {
+test('runtime locale：保留 App 狀態、套用 override 與更新完整介面', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.goto('/')
+  await page.getByRole('button', { name: 'Tablet', exact: true }).click()
+  await page.evaluate(() => {
+    const app = (window as unknown as { __sigil: DemoApp }).__sigil
+    app.engine.select('rich-demo')
+    app.engine.update('rich-demo', { content: '<p>locale state</p>' })
+    Reflect.set(window, '__sigilLocaleProbe', {
+      app,
+      engine: app.engine,
+      root: document.querySelector('.sigil-app'),
+      tree: app.engine.getTree(),
+    })
+  })
+  await expect(page.locator('.sigil-status-dirty')).toHaveText('未儲存')
   await page.getByRole('button', { name: '中/EN', exact: true }).click()
+
+  expect(
+    await page.evaluate(() => {
+      const app = (window as unknown as { __sigil: DemoApp }).__sigil
+      const probe = Reflect.get(window, '__sigilLocaleProbe') as {
+        app: DemoApp
+        engine: DemoApp['engine']
+        root: Element
+        tree: DemoNode
+      }
+      return {
+        sameApp: app === probe.app,
+        sameEngine: app.engine === probe.engine,
+        sameRoot: document.querySelector('.sigil-app') === probe.root,
+        sameTree: app.engine.getTree() === probe.tree,
+        locale: app.getLocale(),
+        selection: app.engine.getSelection(),
+        content: app.engine.getTree().children?.find((node) => node.id === 'rich-demo')?.content,
+      }
+    }),
+  ).toEqual({
+    sameApp: true,
+    sameEngine: true,
+    sameRoot: true,
+    sameTree: true,
+    locale: 'en',
+    selection: 'rich-demo',
+    content: '<p>locale state</p>',
+  })
 
   const app = page.locator('.sigil-app')
   await expect(app).toHaveAttribute('data-layout', 'desktop')
+  await expect(page.locator('.sigil-topbar-brand')).toHaveText('Sigil Demo')
+  await expect(page.locator('.sigil-status-dirty')).toHaveText('Unsaved')
+  await expect(page.locator('[data-device="tablet"]')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Save as Template', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
   const layerTree = page.getByRole('tree', { name: 'Layers', exact: true })
   await expect(layerTree).toBeVisible()
   await expect(page.getByRole('searchbox', { name: 'Search blocks', exact: true })).toHaveAttribute(
@@ -526,5 +580,23 @@ test('英文 locale：Blocks、Layers、Media 與 compact 介面', async ({ page
       }),
     )
     .toEqual({ page: 0, app: 0, topbar: 0 })
+
+  await page.getByRole('button', { name: '中/EN', exact: true }).click()
+  await expect(page.locator('.sigil-topbar-brand')).toHaveText('Sigil')
+  await expect(blocks.getByRole('searchbox', { name: '搜尋區塊', exact: true })).toHaveAttribute(
+    'placeholder',
+    '搜尋區塊…',
+  )
+  expect(
+    await page.evaluate(() => {
+      const app = (window as unknown as { __sigil: DemoApp }).__sigil
+      const probe = Reflect.get(window, '__sigilLocaleProbe') as { app: DemoApp; engine: unknown }
+      return {
+        sameApp: app === probe.app,
+        sameEngine: app.engine === probe.engine,
+        locale: app.getLocale(),
+      }
+    }),
+  ).toEqual({ sameApp: true, sameEngine: true, locale: 'zh' })
   expect(errors).toEqual([])
 })

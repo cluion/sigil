@@ -29,6 +29,23 @@ app.toHTML()
 app.destroy()
 ```
 
+宿主可覆寫內建中英文字串，並在不重建 App／engine 的情況下切換語系：
+
+```ts
+const app = createApp({
+  mount: '#app',
+  locale: 'zh',
+  messages: {
+    en: { 'app.brand': 'My Editor' },
+  },
+})
+
+app.setLocale('en')
+app.getLocale() // 'en'
+```
+
+`createEditor()` 提供相同的 `locale`、`messages`、`getLocale()` 與 `setLocale()` 契約。未覆寫的 key 沿用內建字串，空字串也是有效 override。
+
 - 產品殼：`createApp`（`@cluion/sigil-app`）
 - 自組 UI：`createEditor`（`@cluion/sigil`）
 - 僅引擎：`createEngine`（`@cluion/sigil-core`）

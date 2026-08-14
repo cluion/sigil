@@ -226,6 +226,79 @@ describe('createApp', () => {
     app.destroy()
   })
 
+  it('runtime locale 與宿主 messages override 不重掛並保留編輯狀態', () => {
+    const mount = document.createElement('div')
+    document.body.appendChild(mount)
+    const app = createApp({
+      mount,
+      theme: 'dark',
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 't', type: 'text', content: 'before' }],
+        },
+      },
+      blocks: { Text: () => ({ id: 'new-text', type: 'text', content: '' }) },
+      messages: {
+        en: {
+          'app.brand': 'Host brand',
+          'app.help': '',
+          'blocks.search_placeholder': '',
+        },
+      },
+    })
+    const root = mount.querySelector('.sigil-app') as HTMLElement
+    const iframe = mount.querySelector('iframe')
+    const tablet = mount.querySelector(
+      '.sigil-topbar button[data-device="tablet"]',
+    ) as HTMLButtonElement
+
+    expect(app.getLocale()).toBe('zh')
+    app.engine.select('t')
+    app.engine.update('t', { content: 'after' })
+    tablet.click()
+    const tree = app.engine.getTree()
+    ;(mount.querySelector('button[data-command-id="export"]') as HTMLButtonElement).click()
+
+    app.setLocale('en')
+
+    expect(app.getLocale()).toBe('en')
+    expect(mount.querySelector('.sigil-app')).toBe(root)
+    expect(mount.querySelector('iframe')).toBe(iframe)
+    expect(app.engine.getTree()).toBe(tree)
+    expect(app.engine.getSelection()).toBe('t')
+    expect(app.isDirty()).toBe(true)
+    expect(root.classList.contains('sigil-theme-dark')).toBe(true)
+    expect(tablet.getAttribute('aria-pressed')).toBe('true')
+    expect(mount.querySelector('.sigil-topbar-brand')?.textContent).toBe('Host brand')
+    expect(mount.querySelector('button[data-command-id="help"]')?.textContent).toBe('')
+    expect((mount.querySelector('.sigil-blocks-panel input') as HTMLInputElement).placeholder).toBe(
+      '',
+    )
+    expect(mount.querySelector('.sigil-blocks-panel input')?.getAttribute('aria-label')).toBe(
+      'Search blocks',
+    )
+    expect(mount.querySelector('.sigil-layers-panel')?.getAttribute('aria-label')).toBe('Layers')
+    expect(document.querySelector('.sigil-dialog-head h3')?.textContent).toBe('Export HTML')
+    expect(mount.querySelector('.sigil-status span:last-child')?.textContent).toMatch(
+      /^HTML \d+ characters$/,
+    )
+
+    app.setLocale('zh')
+    expect(app.getLocale()).toBe('zh')
+    expect(mount.querySelector('.sigil-topbar-brand')?.textContent).toBe('Sigil')
+    expect((mount.querySelector('.sigil-blocks-panel input') as HTMLInputElement).placeholder).toBe(
+      '搜尋區塊…',
+    )
+    expect(document.querySelector('.sigil-dialog-head h3')?.textContent).toBe('匯出 HTML')
+    ;(document.querySelector('.sigil-dialog-head button') as HTMLButtonElement).click()
+
+    app.destroy()
+    mount.remove()
+  })
+
   it('掛載產品殼並可 toJSON / toHTML', () => {
     const def = defineShortcode({
       name: 'greet',

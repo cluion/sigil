@@ -272,6 +272,7 @@ function mountApp(d: SigilDoc): SigilApp {
     sanitize: sanitizeDemoRichText,
     fetchJSON: mockFetchJSON,
     locale,
+    messages: { en: { 'app.brand': 'Sigil Demo' } },
     commands: [
       defineCommand({
         id: 'demo-ping',
@@ -339,11 +340,8 @@ persistBtn.addEventListener('click', () => {
 const localeBtn = document.createElement('button')
 localeBtn.textContent = '中/EN'
 localeBtn.addEventListener('click', () => {
-  locale = locale === 'zh' ? 'en' : 'zh'
-  const d = app.toJSON()
-  app.destroy()
-  app = mountApp(d)
-  ;(window as unknown as { __sigil: SigilApp }).__sigil = app
+  locale = app.getLocale() === 'zh' ? 'en' : 'zh'
+  app.setLocale(locale)
   status.textContent = ` 語系 ${locale}`
 })
 

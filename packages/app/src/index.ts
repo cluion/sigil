@@ -21,6 +21,8 @@ import {
   type HtmlMode,
   type ComponentNode,
   type Locale,
+  type MessageCatalog,
+  type MessageOverrides,
   type ProjectStore,
   type AssetStore,
   type TemplateStore,
@@ -286,7 +288,7 @@ const i18nMessages = {
     'rich_text.canvas_hint': 'Edit rich text on the canvas',
     'status.none': 'Nothing selected',
   },
-}
+} satisfies MessageCatalog
 
 export interface AppOptions {
   mount: string | HTMLElement
@@ -304,7 +306,10 @@ export interface AppOptions {
   /** 可選富文字 editor adapter，必須搭配 sanitize */
   richText?: RichTextAdapter
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
+  /** 初始介面語系；預設 zh */
   locale?: Locale
+  /** 依語系淺層覆寫內建產品字串 */
+  messages?: MessageOverrides
   /** 主題：light／dark／auto；未傳時讀 localStorage，預設 auto */
   theme?: ThemeChoice
   /** 額外命令可覆寫同 id 預設 */
@@ -321,6 +326,10 @@ export interface SigilApp {
   isDirty(): boolean
   /** 執行已註冊命令 */
   runCommand(id: string): Promise<boolean>
+  /** 取得目前介面語系 */
+  getLocale(): Locale
+  /** 原地切換介面語系，不重建 engine */
+  setLocale(locale: Locale): void
   destroy(): void
 }
 
@@ -357,8 +366,13 @@ export function createApp(opts: AppOptions): SigilApp {
       : undefined
   const fetchJSON = opts.fetchJSON ?? defaultFetch
   const bus = createEventBus()
-  const locale = opts.locale ?? 'zh'
-  const i18n = createI18n(i18nMessages, locale)
+  const i18n = createI18n(
+    {
+      zh: { ...i18nMessages.zh, ...opts.messages?.zh },
+      en: { ...i18nMessages.en, ...opts.messages?.en },
+    },
+    opts.locale ?? 'zh',
+  )
   const sharedStore = createStore()
   const shortcodeResolver = createShortcodeResolver({
     registry: shortcodeRegistry,
@@ -376,8 +390,18 @@ export function createApp(opts: AppOptions): SigilApp {
   let activePanel: CompactPanel | null = null
   let clipboard: ComponentNode | null = null
   let closeExportDialog: (() => void) | null = null
+  let refreshExportDialog: (() => void) | null = null
+  let refreshStatusMessage: (() => void) | null = null
   let templateLibrary: TemplateLibraryController | null = null
+  let destroyed = false
   const hooks = opts.hooks
+
+  function setStatusMessage(render: () => string): void {
+    refreshStatusMessage = () => {
+      statusMsg.textContent = render()
+    }
+    refreshStatusMessage()
+  }
 
   async function doSave(): Promise<SigilDoc> {
     try {
@@ -386,11 +410,11 @@ export function createApp(opts: AppOptions): SigilApp {
       await Promise.resolve(store.save(doc))
       await runAfterSave(hooks, doc, engine)
       dirty = false
-      statusMsg.textContent = i18n.t('app.saved_msg')
+      setStatusMessage(() => i18n.t('app.saved_msg'))
       refreshChrome()
       return doc
     } catch {
-      statusMsg.textContent = i18n.t('app.save_fail')
+      setStatusMessage(() => i18n.t('app.save_fail'))
       refreshChrome()
       return engine.toJSON()
     }
@@ -470,6 +494,7 @@ export function createApp(opts: AppOptions): SigilApp {
       delete: i18n.t('app.delete'),
       save: i18n.t('app.save'),
       export: i18n.t('app.export'),
+      'save-as-template': i18n.t('app.save_as_template'),
     }
     return known[cmd.id] ?? cmd.label ?? cmd.id
   }
@@ -706,6 +731,7 @@ export function createApp(opts: AppOptions): SigilApp {
   const helpTitle = document.createElement('h4')
   helpTitle.textContent = i18n.t('app.help')
   const helpList = document.createElement('ul')
+  const helpItems: HTMLLIElement[] = []
   for (const line of [
     i18n.t('app.help_delete'),
     i18n.t('app.help_undo'),
@@ -716,6 +742,7 @@ export function createApp(opts: AppOptions): SigilApp {
     const li = document.createElement('li')
     li.textContent = line
     helpList.appendChild(li)
+    helpItems.push(li)
   }
   helpPanel.append(helpTitle, helpList)
   canvasWrap.appendChild(helpPanel)
@@ -889,7 +916,6 @@ export function createApp(opts: AppOptions): SigilApp {
   const unsubDevice = canvas.subscribeDevice((next) => inspector.setDevice(next))
   const layers = createLayersPanel(engine, layersBox, {
     i18n,
-    ariaLabel: i18n.t('app.layers'),
     onContextMenu: (_id, x, y) => {
       openSelectionMenu(x, y)
     },
@@ -974,6 +1000,46 @@ export function createApp(opts: AppOptions): SigilApp {
     refreshEmptyGuide()
   }
 
+  function refreshLocaleChrome(): void {
+    brand.textContent = i18n.t('app.brand')
+    compactControls.setAttribute('aria-label', i18n.t('app.panels'))
+    blocksToggle.textContent = i18n.t('app.blocks')
+    settingsToggle.textContent = i18n.t('app.panel_settings')
+    for (const [id, button] of cmdButtons) {
+      const command = commands.get(id)
+      if (command) button.textContent = commandLabel(command)
+    }
+    editBtn.textContent = i18n.t('canvas.edit')
+    previewBtn.textContent = i18n.t('canvas.preview')
+    themeBtn.textContent = themeLabel(themeChoice)
+    themeBtn.title = i18n.t('app.theme')
+    themeBtn.setAttribute('aria-label', `${i18n.t('app.theme')}: ${themeLabel(themeChoice)}`)
+    helpBtn.textContent = i18n.t('app.help')
+    sidebar.setAttribute('aria-label', i18n.t('app.blocks'))
+    blocksTitle.textContent = i18n.t('app.blocks')
+    blocksClose.setAttribute('aria-label', i18n.t('app.close_panel'))
+    emptyTitle.textContent = i18n.t('app.empty_title')
+    emptyBody.textContent = i18n.t('app.empty_body')
+    emptyTip.textContent = i18n.t('app.empty_tip')
+    helpTitle.textContent = i18n.t('app.help')
+    const helpLines = [
+      i18n.t('app.help_delete'),
+      i18n.t('app.help_undo'),
+      i18n.t('app.help_redo'),
+      i18n.t('app.help_copy_paste'),
+      i18n.t('app.help_save'),
+    ]
+    helpItems.forEach((item, index) => {
+      item.textContent = helpLines[index] ?? ''
+    })
+    right.setAttribute('aria-label', i18n.t('app.panel_settings'))
+    layersTitle.textContent = i18n.t('app.layers')
+    settingsClose.setAttribute('aria-label', i18n.t('app.close_panel'))
+    refreshChrome()
+    refreshStatusMessage?.()
+    refreshExportDialog?.()
+  }
+
   function openExportDialog(): void {
     closeExportDialog?.()
     const html = toHTML(engine.toJSON(), {
@@ -1014,21 +1080,29 @@ export function createApp(opts: AppOptions): SigilApp {
 
     const actionsRow = document.createElement('div')
     actionsRow.className = 'sigil-dialog-actions'
+    let copied = false
     const copyBtn = btn(i18n.t('app.copy'), () => {
       void copyText(html).then((ok) => {
-        statusMsg.textContent = ok
-          ? i18n.t('app.copied')
-          : `HTML ${html.length} ${i18n.t('app.characters')}`
-        if (ok) copyBtn.textContent = i18n.t('app.copied')
+        copied = ok
+        setStatusMessage(() =>
+          copied ? i18n.t('app.copied') : `HTML ${html.length} ${i18n.t('app.characters')}`,
+        )
+        copyBtn.textContent = copied ? i18n.t('app.copied') : i18n.t('app.copy')
       })
     })
     copyBtn.classList.add('sigil-btn--primary')
     const dlBtn = btn(i18n.t('app.download'), () => downloadText(html, 'sigil-page.html'))
-    actionsRow.append(
-      copyBtn,
-      dlBtn,
-      btn(i18n.t('app.close'), () => close()),
-    )
+    const actionsCloseBtn = btn(i18n.t('app.close'), () => close())
+    actionsRow.append(copyBtn, dlBtn, actionsCloseBtn)
+
+    refreshExportDialog = () => {
+      title.textContent = i18n.t('app.export_title')
+      closeBtn.textContent = i18n.t('app.close')
+      hint.textContent = i18n.t('app.export_hint')
+      copyBtn.textContent = copied ? i18n.t('app.copied') : i18n.t('app.copy')
+      dlBtn.textContent = i18n.t('app.download')
+      actionsCloseBtn.textContent = i18n.t('app.close')
+    }
 
     panel.append(head, hint, ta, actionsRow)
     backdrop.appendChild(panel)
@@ -1055,11 +1129,12 @@ export function createApp(opts: AppOptions): SigilApp {
       document.removeEventListener('keydown', onDialogKeyDown)
       backdrop.remove()
       closeExportDialog = null
+      refreshExportDialog = null
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus()
     }
     closeExportDialog = close
 
-    statusMsg.textContent = `HTML ${html.length} ${i18n.t('app.characters')}`
+    setStatusMessage(() => `HTML ${html.length} ${i18n.t('app.characters')}`)
   }
 
   const unsub = engine.subscribe((ev) => {
@@ -1094,6 +1169,13 @@ export function createApp(opts: AppOptions): SigilApp {
   }
   document.addEventListener('keydown', onKeyDown)
 
+  function setLocale(next: Locale): void {
+    if (destroyed || next === i18n.getLocale()) return
+    closeMenu?.()
+    i18n.setLocale(next)
+    refreshLocaleChrome()
+  }
+
   const api: SigilApp = {
     engine,
     toJSON() {
@@ -1115,7 +1197,12 @@ export function createApp(opts: AppOptions): SigilApp {
     runCommand(id: string) {
       return commands.run(id, makeCtx())
     },
+    getLocale() {
+      return i18n.getLocale()
+    },
+    setLocale,
     destroy() {
+      destroyed = true
       runBeforeDestroy(hooks, engine)
       closeExportDialog?.()
       closeMenu?.()

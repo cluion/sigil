@@ -48,6 +48,28 @@ app.toHTML()
 
 `createApp()` 會依 mount 容器寬度調整產品殼。窄於 900px 時，左右面板會改成互斥抽屜；可用面板按鈕開關，或按 Escape／點擊背景關閉。這項判斷以嵌入容器為準，不依賴整個瀏覽器視窗寬度。
 
+## 語系與宿主字串
+
+App／Editor 內建 `zh` 與 `en`。`messages` 會依語系淺層覆寫內建 catalog；未提供的 key 保留內建翻譯，空字串也是有效值。
+
+```ts
+const app = createApp({
+  mount: '#app',
+  locale: 'zh',
+  messages: {
+    zh: { 'app.brand': '內容編輯器' },
+    en: { 'app.brand': 'Content Editor' },
+  },
+})
+
+app.setLocale('en')
+app.getLocale() // 'en'
+```
+
+`setLocale()` 會原地更新產品 chrome、面板、ARIA 與後續開啟的 prompt／confirm，不會重建 engine，也不改 tree、selection、history、dirty、theme 或 device。文件內容、區塊名稱、範本名稱與 schema label 屬宿主資料，不會被翻譯。
+
+自組 UI 的 `createEditor()` 提供相同契約；直接使用低階 UI 時，也可把同一個 `createI18n()` 結果注入各面板後呼叫 `setLocale()`。
+
 - `createEditor`：`@cluion/sigil`
 - `createEngine`：`@cluion/sigil-core`
 - 官方區塊：[Marketing Blocks 與 Hero](/guide/marketing-blocks)
