@@ -1,5 +1,21 @@
 # @cluion/sigil
 
+## 0.20.0
+
+### Minor Changes
+
+- 4702832: 讓 App 與 Editor 接受宿主 messages override，並提供不重掛的 runtime locale API。
+
+### Patch Changes
+
+- Updated dependencies [d9dfbfa]
+- Updated dependencies [b2ee637]
+  - @cluion/sigil-ui@0.20.0
+  - @cluion/sigil-core@0.20.0
+  - @cluion/sigil-blocks@0.20.0
+  - @cluion/sigil-shortcode@0.20.0
+  - @cluion/sigil-store-json@0.20.0
+
 ## 0.19.0
 
 ### Patch Changes

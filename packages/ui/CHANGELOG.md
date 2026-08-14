@@ -1,5 +1,16 @@
 # @cluion/sigil-ui
 
+## 0.20.0
+
+### Minor Changes
+
+- d9dfbfa: 讓低階 UI 在 ReactiveI18n locale 切換時原地更新產品字串，並於 destroy 清理訂閱。
+
+### Patch Changes
+
+- Updated dependencies [b2ee637]
+  - @cluion/sigil-core@0.20.0
+
 ## 0.19.0
 
 ### Minor Changes

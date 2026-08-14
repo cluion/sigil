@@ -1,5 +1,12 @@
 # @cluion/sigil-blocks
 
+## 0.20.0
+
+### Patch Changes
+
+- Updated dependencies [b2ee637]
+  - @cluion/sigil-core@0.20.0
+
 ## 0.19.0
 
 ### Patch Changes
