@@ -8,7 +8,7 @@ import type {
 import { createRenderer, findNode } from '@cluion/sigil-core'
 // findNode 用於鎖定檢查
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
-import { uiText } from './i18n.js'
+import { subscribeLocale, uiText } from './i18n.js'
 import type { RichTextAdapter, RichTextSession } from './rich-text.js'
 
 export type CanvasMode = 'edit' | 'preview'
@@ -455,7 +455,10 @@ export function createCanvas(
     'display:none',
   ].join(';')
 
+  let injectedStyle: HTMLStyleElement | null = null
+
   function injectStyle(doc: Document): void {
+    injectedStyle?.remove()
     const style = doc.createElement('style')
     const emptyContainerText = JSON.stringify(uiText(i18n, 'canvas.empty_container', '拖入元件'))
     style.textContent = [
@@ -483,6 +486,7 @@ export function createCanvas(
       '[data-sigil-type-badge]{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
     ].join('')
     doc.head.appendChild(style)
+    injectedStyle = style
   }
 
   function escapeCssId(id: string): string {
@@ -656,6 +660,16 @@ export function createCanvas(
       paintHover()
     }
   })
+  const unsubLocale = subscribeLocale(i18n, () => {
+    iframe.title = uiText(i18n, 'canvas.title', '編輯畫布')
+    toggle.textContent = uiText(
+      i18n,
+      mode === 'preview' ? 'canvas.preview' : 'canvas.edit',
+      mode === 'preview' ? '👁 預覽' : '✏ 編輯',
+    )
+    const doc = iframe.contentDocument
+    if (doc) injectStyle(doc)
+  })
 
   return {
     iframe,
@@ -693,8 +707,11 @@ export function createCanvas(
       overlay.removeEventListener('pointerleave', onOverlayPointerLeave)
       overlay.removeEventListener('wheel', onOverlayWheel)
       unsub()
+      unsubLocale()
       deviceListeners.clear()
       renderer.destroy()
+      injectedStyle?.remove()
+      injectedStyle = null
       typeBadge?.remove()
       typeBadge = null
       iframe.remove()

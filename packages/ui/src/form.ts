@@ -7,7 +7,7 @@ import {
   type I18n,
   type PropSchema,
 } from '@cluion/sigil-core'
-import { uiText } from './i18n.js'
+import { subscribeLocale, uiText } from './i18n.js'
 import { openMediaPicker } from './media-picker.js'
 
 export interface FormOptions {
@@ -40,6 +40,7 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
   const fieldRoots = new Map<string, HTMLElement>()
   /** optionsFrom select 的重載器，鍵為 prop name */
   const reloaders = new Map<string, () => void>()
+  const localeRefreshers: (() => void)[] = []
   const disposers: (() => void)[] = []
 
   function currentProps(): Record<string, unknown> {
@@ -87,6 +88,7 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
       if (sel) {
         const setup = setupOptionsFrom(sel, s, () => currentProps(), fetchJSON, i18n)
         reloaders.set(s.name, setup.reload)
+        localeRefreshers.push(setup.refreshLocale)
         disposers.push(setup.destroy)
       }
     }
@@ -109,6 +111,20 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
     refreshVisibility()
   })
   disposers.push(unsub)
+  disposers.push(
+    subscribeLocale(i18n, () => {
+      for (const button of wrap.querySelectorAll<HTMLButtonElement>('.sigil-repeater-add')) {
+        button.textContent = `+ ${uiText(i18n, 'form.add', '新增')}`
+      }
+      for (const button of wrap.querySelectorAll<HTMLButtonElement>('.sigil-repeater-delete')) {
+        button.textContent = uiText(i18n, 'form.delete', '刪除')
+      }
+      for (const button of wrap.querySelectorAll<HTMLButtonElement>('.sigil-media-pick')) {
+        button.textContent = uiText(i18n, 'form.pick_image', '選圖')
+      }
+      for (const refresh of localeRefreshers) refresh()
+    }),
+  )
 
   return {
     el: wrap,
@@ -169,7 +185,7 @@ function createRepeaterField(
   list.className = 'sigil-repeater-list'
   const addBtn = document.createElement('button')
   addBtn.type = 'button'
-  addBtn.className = 'sigil-btn'
+  addBtn.className = 'sigil-btn sigil-repeater-add'
   addBtn.textContent = `+ ${uiText(i18n, 'form.add', '新增')}`
 
   /** 取得目前陣列（同步讀 engine 樹，保證最新） */
@@ -213,7 +229,7 @@ function createRepeaterField(
       actions.className = 'sigil-repeater-actions'
       const delBtn = document.createElement('button')
       delBtn.type = 'button'
-      delBtn.className = 'sigil-btn sigil-btn--ghost'
+      delBtn.className = 'sigil-btn sigil-btn--ghost sigil-repeater-delete'
       delBtn.textContent = uiText(i18n, 'form.delete', '刪除')
       delBtn.addEventListener('click', () => {
         const next = currentArray()
@@ -301,7 +317,7 @@ function createMediaField(
   if (assets) {
     const pickBtn = document.createElement('button')
     pickBtn.type = 'button'
-    pickBtn.className = 'sigil-btn'
+    pickBtn.className = 'sigil-btn sigil-media-pick'
     pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
     pickBtn.addEventListener('click', () => {
       openMediaPicker({
@@ -338,9 +354,10 @@ function setupOptionsFrom(
   getProps: () => Record<string, unknown>,
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>,
   i18n?: I18n,
-): { reload: () => void; destroy: () => void } {
+): { reload: () => void; refreshLocale: () => void; destroy: () => void } {
   const fn = schema.optionsFrom!
   let ac: AbortController | null = null
+  let state: 'loaded' | 'loading' | 'failed' | 'unavailable' = 'loading'
 
   function fill(options: { value: string; label?: string }[]): void {
     // 保留已選值：優先取 props（select 空時 sel.value 不可靠）
@@ -370,9 +387,11 @@ function setupOptionsFrom(
     ac = new AbortController()
     const current = ac
     if (!fetchJSON) {
+      state = 'unavailable'
       placeholder(uiText(i18n, 'form.load_unavailable', '無法載入'))
       return
     }
+    state = 'loading'
     placeholder(uiText(i18n, 'form.loading', '載入中…'))
     try {
       const options = await fn({
@@ -382,17 +401,26 @@ function setupOptionsFrom(
       })
       // race 防護：只接受仍為當前的 controller 結果
       if (current !== ac) return
+      state = 'loaded'
       fill(options)
     } catch (err) {
       if (current === ac && err instanceof DOMException && err.name === 'AbortError') return
       if (current !== ac) return
+      state = 'failed'
       placeholder(uiText(i18n, 'form.load_failed', '載入失敗'))
     }
+  }
+
+  function refreshLocale(): void {
+    if (state === 'unavailable') placeholder(uiText(i18n, 'form.load_unavailable', '無法載入'))
+    else if (state === 'loading') placeholder(uiText(i18n, 'form.loading', '載入中…'))
+    else if (state === 'failed') placeholder(uiText(i18n, 'form.load_failed', '載入失敗'))
   }
 
   load()
   return {
     reload: load,
+    refreshLocale,
     destroy() {
       ac?.abort()
       ac = null

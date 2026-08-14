@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { createEngine, createI18n } from '@cluion/sigil-core'
+import { createEngine, createI18n, type I18n } from '@cluion/sigil-core'
 import { createBlocksPanel } from '../src/blocks-panel.js'
 
 describe('createBlocksPanel', () => {
@@ -317,32 +317,30 @@ describe('createBlocksPanel', () => {
     expect(status.hidden).toBe(true)
   })
 
-  it('注入英文 i18n 後翻譯搜尋、預設分類、插入與空狀態', () => {
+  it('runtime locale 切換更新文字並保留搜尋，destroy 後停止更新', () => {
     const engine = createEngine({
       doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
     })
     const box = document.createElement('div')
-    const i18n = createI18n(
-      {
-        zh: {},
-        en: {
-          'blocks.search_placeholder': 'Search blocks…',
-          'blocks.search_label': 'Search blocks',
-          'blocks.insert': 'Insert',
-          'blocks.default_category': 'General',
-          'blocks.empty': 'No matching blocks',
-          'blocks.actions': 'Template actions',
-          'blocks.rename': 'Rename',
-          'blocks.rename_prompt': 'Template name',
-          'blocks.remove': 'Delete',
-          'blocks.remove_confirm_before': 'Delete template “',
-          'blocks.remove_confirm_after': '”?',
-          'blocks.pending': 'Working on',
-        },
+    const i18n = createI18n({
+      zh: {},
+      en: {
+        'blocks.search_placeholder': 'Search blocks…',
+        'blocks.search_label': 'Search blocks',
+        'blocks.insert': 'Insert',
+        'blocks.default_category': 'General',
+        'blocks.empty': 'No matching blocks',
+        'blocks.actions': 'Template actions',
+        'blocks.rename': 'Rename',
+        'blocks.rename_prompt': 'Template name',
+        'blocks.remove': 'Delete',
+        'blocks.remove_confirm_before': 'Delete template “',
+        'blocks.remove_confirm_after': '”?',
+        'blocks.pending': 'Working on',
+        'blocks.retry': 'Retry',
       },
-      'en',
-    )
-    createBlocksPanel(
+    })
+    const panel = createBlocksPanel(
       engine,
       box,
       document.createElement('iframe'),
@@ -351,9 +349,24 @@ describe('createBlocksPanel', () => {
     )
 
     const search = box.querySelector('input[type="search"]') as HTMLInputElement
+    search.value = 'text'
+    search.dispatchEvent(new Event('input'))
+    const tree = engine.getTree()
+    const retry = vi.fn()
+    panel.setStatus({ kind: 'error', message: 'Host error', retry })
+
+    expect(search.placeholder).toBe('搜尋區塊…')
+    expect(box.querySelector('.sigil-blocks-category')?.textContent).toBe('一般')
+    expect(box.querySelector('.sigil-blocks-retry')?.textContent).toBe('重試')
+
+    i18n.setLocale('en')
+
     expect(search.placeholder).toBe('Search blocks…')
     expect(search.getAttribute('aria-label')).toBe('Search blocks')
+    expect(search.value).toBe('text')
+    expect(engine.getTree()).toBe(tree)
     expect(box.querySelector('.sigil-blocks-category')?.textContent).toBe('General')
+    expect(box.querySelector('.sigil-blocks-retry')?.textContent).toBe('Retry')
     expect(box.querySelector('[role="button"]')?.getAttribute('aria-label')).toBe('Insert Text')
     const trigger = box.querySelector('.sigil-block-actions-trigger') as HTMLButtonElement
     expect(trigger.getAttribute('aria-label')).toBe('Text Template actions')
@@ -366,8 +379,45 @@ describe('createBlocksPanel', () => {
     ).toEqual(['Rename', 'Delete'])
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
 
+    i18n.setLocale('zh')
+    expect(search.placeholder).toBe('搜尋區塊…')
+    expect(box.querySelector('.sigil-blocks-category')?.textContent).toBe('一般')
+    expect(box.querySelector('.sigil-blocks-retry')?.textContent).toBe('重試')
+
+    i18n.setLocale('en')
     search.value = 'missing'
     search.dispatchEvent(new Event('input'))
     expect(box.querySelector('.sigil-muted')?.textContent).toBe('No matching blocks')
+
+    panel.destroy()
+    i18n.setLocale('zh')
+    expect(search.placeholder).toBe('Search blocks…')
+  })
+
+  it('只有基礎 I18n contract 的 adapter 維持 mount-time 翻譯', () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [] } },
+    })
+    const messages: Record<string, string> = {
+      'blocks.search_placeholder': 'Host search',
+      'blocks.default_category': 'Host category',
+    }
+    const i18n: I18n = {
+      t: (key) => messages[key] ?? key,
+      setLocale: vi.fn(),
+    }
+    const box = document.createElement('div')
+
+    const panel = createBlocksPanel(
+      engine,
+      box,
+      document.createElement('iframe'),
+      { Text: () => ({ id: 't', type: 'text', content: '' }) },
+      { i18n },
+    )
+
+    expect((box.querySelector('input') as HTMLInputElement).placeholder).toBe('Host search')
+    expect(box.querySelector('.sigil-blocks-category')?.textContent).toBe('Host category')
+    panel.destroy()
   })
 })

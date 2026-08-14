@@ -1,5 +1,5 @@
 import { createId, type AssetItem, type AssetStore, type I18n } from '@cluion/sigil-core'
-import { uiText } from './i18n.js'
+import { subscribeLocale, uiText } from './i18n.js'
 
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
@@ -78,12 +78,13 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
   const actions = document.createElement('div')
   actions.className = 'sigil-media-actions'
 
+  let uploadBtn: HTMLButtonElement | null = null
   if (opts.assets.upload) {
     const fileInput = document.createElement('input')
     fileInput.type = 'file'
     fileInput.accept = 'image/*'
     fileInput.hidden = true
-    const uploadBtn = document.createElement('button')
+    uploadBtn = document.createElement('button')
     uploadBtn.type = 'button'
     uploadBtn.className = 'sigil-btn'
     uploadBtn.textContent = uiText(opts.i18n, 'media.upload', '上傳圖片')
@@ -116,6 +117,14 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
     trapFocus(event, backdrop)
   }
   document.addEventListener('keydown', onKeyDown)
+
+  const unsubLocale = subscribeLocale(opts.i18n, () => {
+    title.textContent = uiText(opts.i18n, 'media.title', '媒體庫')
+    closeBtn.textContent = uiText(opts.i18n, 'media.close', '關閉')
+    if (uploadBtn) uploadBtn.textContent = uiText(opts.i18n, 'media.upload', '上傳圖片')
+    const empty = grid.querySelector<HTMLElement>('.sigil-muted')
+    if (empty) empty.textContent = uiText(opts.i18n, 'media.empty', '尚無媒體')
+  })
 
   void Promise.resolve(opts.assets.list()).then((items) => {
     if (closed) return
@@ -150,6 +159,7 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
   function close(): void {
     if (closed) return
     closed = true
+    unsubLocale()
     document.removeEventListener('keydown', onKeyDown)
     backdrop.remove()
     if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus()

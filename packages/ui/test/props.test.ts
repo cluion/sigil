@@ -19,7 +19,7 @@ function panel(schema: PropSchema[] | undefined, props: Record<string, unknown> 
 }
 
 describe('createPropsPanel — shortcode props', () => {
-  it('英文 i18n 翻譯空狀態、欄位、樣式與繼承操作', () => {
+  it('runtime locale 切換更新欄位與樣式並保留裝置狀態', () => {
     const engine = createEngine({
       doc: {
         version: 1,
@@ -27,15 +27,21 @@ describe('createPropsPanel — shortcode props', () => {
       },
     })
     const box = document.createElement('div')
-    const handle = createPropsPanel(engine, box, { i18n: createEnglishUiI18n() })
+    const i18n = createEnglishUiI18n()
+    i18n.setLocale('zh')
+    const handle = createPropsPanel(engine, box, { i18n })
 
-    expect(box.textContent).toBe('No node selected')
+    expect(box.textContent).toBe('未選取節點')
     engine.select('n')
+    handle.setDevice('tablet')
+    const tree = engine.getTree()
+
+    i18n.setLocale('en')
+
     expect(box.querySelector('h3')?.textContent).toBe('text (n)')
     expect(box.textContent).toContain('Content:')
-    expect(box.textContent).toContain('Styles · Desktop')
-
-    handle.setDevice('tablet')
+    expect(box.textContent).toContain('Styles · Tablet')
+    expect(engine.getTree()).toBe(tree)
     expect(box.querySelector('.sigil-responsive-style-context')?.textContent).toBe(
       'Inherits Desktop when not overridden',
     )
@@ -46,6 +52,8 @@ describe('createPropsPanel — shortcode props', () => {
       ?.parentElement?.querySelector('input') as HTMLInputElement
     expect(margin.placeholder).toBe('Inherited: 16px')
     handle.destroy()
+    i18n.setLocale('zh')
+    expect(box.textContent).toContain('Styles · Tablet')
   })
 
   it('有 schema → 生成型別控制項(number)', () => {

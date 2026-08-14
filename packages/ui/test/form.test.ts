@@ -15,7 +15,7 @@ function setup(schema: PropSchema[], props: Record<string, unknown> = {}) {
 }
 
 describe('createPropForm', () => {
-  it('英文 i18n 翻譯 repeater、media 與不可載入狀態', () => {
+  it('runtime locale 切換更新控制文字並保留欄位狀態', () => {
     const engine = createEngine({
       doc: {
         version: 1,
@@ -26,10 +26,12 @@ describe('createPropForm', () => {
         },
       },
     })
+    const i18n = createEnglishUiI18n()
+    i18n.setLocale('zh')
     const handle = createPropForm({
       engine,
       node: engine.getTree(),
-      i18n: createEnglishUiI18n(),
+      i18n,
       schema: [
         {
           name: 'items',
@@ -41,18 +43,39 @@ describe('createPropForm', () => {
       ],
       assets: { list: () => [] },
     })
+    document.body.appendChild(handle.el)
+
+    const input = handle.el.querySelector('.sigil-repeater-item input') as HTMLInputElement
+    input.value = 'A2'
+    input.dispatchEvent(new Event('input'))
+    input.focus()
+    expect(handle.el.textContent).toContain('+ 新增')
+    expect(handle.el.textContent).toContain('刪除')
+    expect(handle.el.textContent).toContain('選圖')
+    expect(
+      (handle.el.querySelector('[data-prop-field="remote"] select') as HTMLSelectElement)
+        .textContent,
+    ).toBe('無法載入')
+
+    i18n.setLocale('en')
 
     expect(handle.el.textContent).toContain('+ Add')
     expect(handle.el.textContent).toContain('Delete')
     expect(handle.el.textContent).toContain('Choose image')
+    expect(handle.el.querySelector('.sigil-repeater-item input')).toBe(input)
+    expect(document.activeElement).toBe(input)
+    expect((engine.getTree().shortcode?.props.items as { label: string }[])[0]?.label).toBe('A2')
     expect(
       (handle.el.querySelector('[data-prop-field="remote"] select') as HTMLSelectElement)
         .textContent,
     ).toBe('Unavailable')
     handle.destroy()
+    i18n.setLocale('zh')
+    expect(handle.el.textContent).toContain('+ Add')
+    handle.el.remove()
   })
 
-  it('英文 i18n 翻譯 optionsFrom 載入中與失敗狀態', async () => {
+  it('runtime locale 切換更新 optionsFrom 載入與失敗狀態', async () => {
     let rejectRequest: ((reason?: unknown) => void) | undefined
     const request = new Promise<unknown>((_resolve, reject) => {
       rejectRequest = reject
@@ -63,10 +86,12 @@ describe('createPropForm', () => {
         root: { id: 'n', type: 'shortcode', shortcode: { name: 'x', props: {} } },
       },
     })
+    const i18n = createEnglishUiI18n()
+    i18n.setLocale('zh')
     const handle = createPropForm({
       engine,
       node: engine.getTree(),
-      i18n: createEnglishUiI18n(),
+      i18n,
       schema: [
         {
           name: 'remote',
@@ -81,10 +106,16 @@ describe('createPropForm', () => {
     })
     const select = handle.el.querySelector('select') as HTMLSelectElement
 
+    expect(select.textContent).toBe('載入中…')
+    i18n.setLocale('en')
     expect(select.textContent).toBe('Loading…')
     rejectRequest?.(new Error('failed'))
     await vi.waitFor(() => expect(select.textContent).toBe('Failed to load'))
+    i18n.setLocale('zh')
+    expect(select.textContent).toBe('載入失敗')
     handle.destroy()
+    i18n.setLocale('en')
+    expect(select.textContent).toBe('載入失敗')
   })
 
   it('text 生成 input[type=text],初始值取自 props', () => {

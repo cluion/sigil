@@ -1,6 +1,6 @@
 import type { I18n, TemplateDef, TemplateStore } from '@cluion/sigil-core'
 import type { BlockDef, BlockItemActions, BlocksInput, BlocksPanelHandle } from './blocks-panel.js'
-import { uiText } from './i18n.js'
+import { subscribeLocale, uiText } from './i18n.js'
 
 export interface TemplateLibraryOptions {
   store: TemplateStore
@@ -57,24 +57,31 @@ export function createTemplateLibraryController(
   let destroyed = false
   let requestId = 0
   let templatesByBlockId = new Map<string, TemplateDef>()
+  let refreshStatus: (() => void) | null = null
 
   function isActive(id: number): boolean {
     return !destroyed && id === requestId
   }
 
   function showPending(operation: TemplateOperation): void {
-    options.panel.setStatus({ kind: 'loading', message: pendingText(options.i18n, operation) })
+    refreshStatus = () => {
+      options.panel.setStatus({ kind: 'loading', message: pendingText(options.i18n, operation) })
+    }
+    refreshStatus()
   }
 
   function showError(operation: TemplateOperation, retry: () => Promise<boolean>): void {
-    options.panel.setStatus({
-      kind: 'error',
-      message: errorText(options.i18n, operation),
-      retryLabel: uiText(options.i18n, 'blocks.retry', '重試'),
-      retry: () => {
-        void retry()
-      },
-    })
+    refreshStatus = () => {
+      options.panel.setStatus({
+        kind: 'error',
+        message: errorText(options.i18n, operation),
+        retryLabel: uiText(options.i18n, 'blocks.retry', '重試'),
+        retry: () => {
+          void retry()
+        },
+      })
+    }
+    refreshStatus()
   }
 
   function applyTemplates(templates: TemplateDef[]): void {
@@ -86,6 +93,7 @@ export function createTemplateLibraryController(
     })
     templatesByBlockId = nextByBlockId
     options.panel.reload(mergeBlocks(options.blocks, templateBlocks))
+    refreshStatus = null
     options.panel.setStatus(null)
   }
 
@@ -143,6 +151,10 @@ export function createTemplateLibraryController(
     )
   }
 
+  const unsubLocale = subscribeLocale(options.i18n, () => {
+    refreshStatus?.()
+  })
+
   return {
     reload,
     save,
@@ -167,6 +179,8 @@ export function createTemplateLibraryController(
       destroyed = true
       requestId += 1
       templatesByBlockId.clear()
+      refreshStatus = null
+      unsubLocale()
     },
   }
 }

@@ -4,7 +4,7 @@ import { createInspector } from '../src/inspector.js'
 import { createEnglishUiI18n } from './i18n.js'
 
 describe('createInspector — responsive style', () => {
-  it('英文 i18n 翻譯分頁、空狀態、樣式與進階操作', () => {
+  it('runtime locale 切換更新分頁與內容並保留 tab／device', () => {
     const engine = createEngine({
       doc: {
         version: 1,
@@ -16,23 +16,35 @@ describe('createInspector — responsive style', () => {
       },
     })
     const box = document.createElement('div')
-    const inspector = createInspector(engine, box, { i18n: createEnglishUiI18n() })
+    const i18n = createEnglishUiI18n()
+    i18n.setLocale('zh')
+    const inspector = createInspector(engine, box, { i18n })
 
     expect([...box.querySelectorAll('.sigil-tab')].map((tab) => tab.textContent)).toEqual([
-      'Content',
-      'Style',
-      'Advanced',
+      '內容',
+      '樣式',
+      '進階',
     ])
-    expect(box.textContent).toContain('No component selected')
+    expect(box.textContent).toContain('尚未選取元件')
     engine.select('t')
-    expect(box.querySelector('.sigil-field-label')?.textContent).toBe('Content')
+    expect(box.querySelector('.sigil-field-label')?.textContent).toBe('內容')
 
     ;(
       [...box.querySelectorAll<HTMLButtonElement>('.sigil-tab')].find(
-        (tab) => tab.textContent === 'Style',
+        (tab) => tab.textContent === '樣式',
       ) as HTMLButtonElement
     ).click()
     inspector.setDevice('tablet')
+    const tree = engine.getTree()
+
+    i18n.setLocale('en')
+
+    expect(
+      [...box.querySelectorAll<HTMLButtonElement>('.sigil-tab')]
+        .find((tab) => tab.textContent === 'Style')
+        ?.getAttribute('aria-selected'),
+    ).toBe('true')
+    expect(engine.getTree()).toBe(tree)
     expect(
       [...box.querySelectorAll('.sigil-section-title')].map((title) => title.textContent),
     ).toEqual(['Layout', 'Typography', 'Appearance'])
@@ -49,6 +61,12 @@ describe('createInspector — responsive style', () => {
     ).click()
     expect(box.textContent).toContain('Delete component')
     inspector.destroy()
+    i18n.setLocale('zh')
+    expect([...box.querySelectorAll('.sigil-tab')].map((tab) => tab.textContent)).toEqual([
+      'Content',
+      'Style',
+      'Advanced',
+    ])
   })
 
   it('裝置切換後顯示繼承來源，清除只影響目前 breakpoint', () => {

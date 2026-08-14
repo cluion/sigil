@@ -65,19 +65,16 @@ describe('openMediaPicker', () => {
     trigger.remove()
   })
 
-  it('注入英文 i18n 後翻譯對話框、上傳與空狀態', async () => {
-    const i18n = createI18n(
-      {
-        zh: {},
-        en: {
-          'media.title': 'Media library',
-          'media.close': 'Close',
-          'media.upload': 'Upload image',
-          'media.empty': 'No media yet',
-        },
+  it('runtime locale 切換更新開啟中的對話框，關閉後停止更新', async () => {
+    const i18n = createI18n({
+      zh: {},
+      en: {
+        'media.title': 'Media library',
+        'media.close': 'Close',
+        'media.upload': 'Upload image',
+        'media.empty': 'No media yet',
       },
-      'en',
-    )
+    })
     const close = openMediaPicker({
       assets: {
         list: () => [],
@@ -89,6 +86,13 @@ describe('openMediaPicker', () => {
     })
 
     const dialog = document.querySelector('.sigil-media-backdrop') as HTMLElement
+    expect(dialog.querySelector('h3')?.textContent).toBe('媒體庫')
+    await vi.waitFor(() =>
+      expect(dialog.querySelector('.sigil-muted')?.textContent).toBe('尚無媒體'),
+    )
+
+    i18n.setLocale('en')
+
     expect(dialog.querySelector('h3')?.textContent).toBe('Media library')
     expect(dialog.querySelector('.sigil-media-head button')?.textContent).toBe('Close')
     expect(dialog.querySelector('.sigil-media-actions button')?.textContent).toBe('Upload image')
@@ -97,5 +101,7 @@ describe('openMediaPicker', () => {
     )
 
     close()
+    i18n.setLocale('zh')
+    expect(dialog.querySelector('h3')?.textContent).toBe('Media library')
   })
 })

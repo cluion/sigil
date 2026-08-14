@@ -60,36 +60,43 @@ function waitIframeLoad(iframe: HTMLIFrameElement): Promise<void> {
 }
 
 describe('createCanvas — preview mode', () => {
-  it('英文 i18n 翻譯初始模式、切換模式與空容器提示', async () => {
+  it('runtime locale 切換更新 chrome 與空容器提示並保留狀態', async () => {
     const engine = createEngine({ doc })
     const container = document.createElement('div')
     document.body.appendChild(container)
-    const i18n = createI18n(
-      {
-        zh: {},
-        en: {
-          'canvas.title': 'Canvas',
-          'canvas.edit': 'Edit mode',
-          'canvas.preview': 'Preview mode',
-          'canvas.empty_container': 'Drop components here',
-        },
+    const i18n = createI18n({
+      zh: {},
+      en: {
+        'canvas.title': 'Canvas',
+        'canvas.edit': 'Edit mode',
+        'canvas.preview': 'Preview mode',
+        'canvas.empty_container': 'Drop components here',
       },
-      'en',
-    )
+    })
     const canvas = createCanvas(engine, container, { i18n })
     await waitIframeLoad(canvas.iframe)
     await new Promise((resolve) => setTimeout(resolve, 30))
     const toggle = container.querySelector('.sigil-canvas-mode-btn') as HTMLButtonElement
 
+    expect(canvas.iframe.title).toBe('編輯畫布')
+    expect(toggle.textContent).toBe('✏ 編輯')
+    canvas.setMode('preview')
+    canvas.setDevice('tablet')
+    const tree = engine.getTree()
+
+    i18n.setLocale('en')
+
     expect(canvas.iframe.title).toBe('Canvas')
-    expect(toggle.textContent).toBe('Edit mode')
+    expect(toggle.textContent).toBe('Preview mode')
+    expect(canvas.getDevice()).toBe('tablet')
+    expect(engine.getTree()).toBe(tree)
     expect(canvas.iframe.contentDocument?.head.textContent).toContain(
       'content:"Drop components here"',
     )
-    canvas.setMode('preview')
-    expect(toggle.textContent).toBe('Preview mode')
 
     canvas.destroy()
+    i18n.setLocale('zh')
+    expect(toggle.textContent).toBe('Preview mode')
     container.remove()
   })
 

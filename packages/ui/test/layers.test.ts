@@ -202,7 +202,7 @@ describe('createLayersPanel', () => {
     panel.destroy()
   })
 
-  it('注入英文 i18n 後翻譯樹名、操作與重命名提示', () => {
+  it('runtime locale 切換更新操作並保留焦點，destroy 後停止更新', () => {
     const engine = createEngine({
       doc: {
         version: 1,
@@ -213,33 +213,44 @@ describe('createLayersPanel', () => {
         },
       },
     })
-    const i18n = createI18n(
-      {
-        zh: {},
-        en: {
-          'layers.title': 'Layers',
-          'layers.show': 'Show',
-          'layers.hide': 'Hide',
-          'layers.lock': 'Lock',
-          'layers.unlock': 'Unlock',
-          'layers.rename_prompt': 'Layer name',
-        },
+    const i18n = createI18n({
+      zh: {},
+      en: {
+        'layers.title': 'Layers',
+        'layers.show': 'Show',
+        'layers.hide': 'Hide',
+        'layers.lock': 'Lock',
+        'layers.unlock': 'Unlock',
+        'layers.rename_prompt': 'Layer name',
       },
-      'en',
-    )
+    })
     const box = document.createElement('div')
+    document.body.appendChild(box)
     const prompt = vi.spyOn(window, 'prompt').mockReturnValue(null)
     const panel = createLayersPanel(engine, box, { i18n })
-    const row = box.querySelector('.sigil-layer-row[data-layer-id="t"]') as HTMLElement
-    const actions = row.querySelectorAll<HTMLButtonElement>('.sigil-layer-icon-btn')
+    let row = box.querySelector('.sigil-layer-row[data-layer-id="t"]') as HTMLElement
+    let actions = row.querySelectorAll<HTMLButtonElement>('.sigil-layer-icon-btn')
+
+    expect(box.getAttribute('aria-label')).toBe('圖層')
+    expect(actions[0]?.getAttribute('aria-label')).toBe('顯示')
+    actions[0]?.focus()
+
+    i18n.setLocale('en')
+
+    row = box.querySelector('.sigil-layer-row[data-layer-id="t"]') as HTMLElement
+    actions = row.querySelectorAll<HTMLButtonElement>('.sigil-layer-icon-btn')
 
     expect(box.getAttribute('aria-label')).toBe('Layers')
     expect(actions[0]?.getAttribute('aria-label')).toBe('Show')
     expect(actions[1]?.getAttribute('aria-label')).toBe('Unlock')
+    expect((document.activeElement as HTMLElement).dataset.layerAction).toBe('visibility')
     row.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true }))
     expect(prompt).toHaveBeenCalledWith('Layer name', '')
 
     prompt.mockRestore()
     panel.destroy()
+    i18n.setLocale('zh')
+    expect(box.getAttribute('aria-label')).toBe('Layers')
+    box.remove()
   })
 })

@@ -1,5 +1,5 @@
 import type { Engine, ComponentNode, I18n } from '@cluion/sigil-core'
-import { uiText } from './i18n.js'
+import { subscribeLocale, uiText } from './i18n.js'
 
 export interface LayersPanelOptions {
   i18n?: I18n
@@ -21,10 +21,13 @@ export function createLayersPanel(
 } {
   container.classList.add('sigil-layers-panel')
   container.setAttribute('role', 'tree')
-  container.setAttribute(
-    'aria-label',
-    opts?.ariaLabel ?? uiText(opts?.i18n, 'layers.title', '圖層'),
-  )
+  function refreshLabel(): void {
+    container.setAttribute(
+      'aria-label',
+      opts?.ariaLabel ?? uiText(opts?.i18n, 'layers.title', '圖層'),
+    )
+  }
+  refreshLabel()
 
   function render(): void {
     const active = document.activeElement
@@ -60,10 +63,15 @@ export function createLayersPanel(
   const unsub = engine.subscribe((ev) => {
     if (ev.type === 'selection' || ev.type === 'patch' || ev.type === 'tree') render()
   })
+  const unsubLocale = subscribeLocale(opts?.i18n, () => {
+    refreshLabel()
+    render()
+  })
   render()
   return {
     destroy() {
       unsub()
+      unsubLocale()
     },
   }
 }

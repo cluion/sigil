@@ -7,7 +7,7 @@ import type {
 } from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
-import { uiText } from './i18n.js'
+import { subscribeLocale, uiText } from './i18n.js'
 import { richTextSummary } from './rich-text.js'
 import {
   clearDeviceStyles,
@@ -83,6 +83,7 @@ export function createPropsPanel(
   const unsub = engine.subscribe((ev) => {
     if (ev.type === 'selection' || ev.type === 'tree') render()
   })
+  const unsubLocale = subscribeLocale(opts?.i18n, render)
   render()
   return {
     setDevice(next) {
@@ -94,6 +95,7 @@ export function createPropsPanel(
       currentFormDestroy?.()
       currentFormDestroy = null
       unsub()
+      unsubLocale()
     },
   }
 }

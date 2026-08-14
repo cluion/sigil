@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TemplateDef, TemplateStore } from '@cluion/sigil-core'
+import { createI18n, type TemplateDef, type TemplateStore } from '@cluion/sigil-core'
 import {
   createTemplateLibraryController,
   type BlockDef,
@@ -35,6 +35,45 @@ function lastStatus(panel: ReturnType<typeof panelStub>): BlocksPanelStatus | nu
 }
 
 describe('createTemplateLibraryController', () => {
+  it('runtime locale 切換更新進行中與失敗狀態，destroy 後停止更新', async () => {
+    let rejectList!: (reason?: unknown) => void
+    const request = new Promise<TemplateDef[]>((_resolve, reject) => {
+      rejectList = reject
+    })
+    const i18n = createI18n({
+      zh: {},
+      en: {
+        'blocks.templates_loading': 'Loading templates…',
+        'blocks.templates_load_failed': 'Failed to load templates',
+        'blocks.retry': 'Retry',
+      },
+    })
+    const panel = panelStub()
+    const controller = createTemplateLibraryController({
+      store: { list: () => request, save: vi.fn() },
+      panel,
+      mapTemplate,
+      i18n,
+    })
+
+    const loading = controller.reload()
+    expect(lastStatus(panel)?.message).toBe('正在載入範本…')
+
+    i18n.setLocale('en')
+    expect(lastStatus(panel)?.message).toBe('Loading templates…')
+
+    rejectList(new Error('failed'))
+    expect(await loading).toBe(false)
+    expect(lastStatus(panel)).toMatchObject({
+      message: 'Failed to load templates',
+      retryLabel: 'Retry',
+    })
+
+    controller.destroy()
+    i18n.setLocale('zh')
+    expect(lastStatus(panel)?.message).toBe('Failed to load templates')
+  })
+
   it('載入範本並與 Record blocks 正確合併', async () => {
     let resolveList!: (templates: TemplateDef[]) => void
     const store: TemplateStore = {

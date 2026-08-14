@@ -1,7 +1,7 @@
 import type { Engine, ComponentNode, I18n } from '@cluion/sigil-core'
 import { openContextMenu } from './context-menu.js'
 import { startInsertDrag } from './dnd.js'
-import { uiText } from './i18n.js'
+import { subscribeLocale, uiText } from './i18n.js'
 
 export type BlockFactory = () => ComponentNode
 
@@ -44,21 +44,18 @@ export interface BlocksPanelHandle {
   setStatus: (status: BlocksPanelStatus | null) => void
 }
 
-function normalize(input: BlocksInput, defaultCategory: string): BlockDef[] {
-  if (Array.isArray(input)) {
-    return input.map((d) => ({ category: defaultCategory, ...d }))
-  }
+function normalize(input: BlocksInput): BlockDef[] {
+  if (Array.isArray(input)) return input.map((d) => ({ ...d }))
   return Object.entries(input).map(([label, create]) => ({
     id: label,
     label,
-    category: defaultCategory,
     create,
   }))
 }
 
-function matches(def: BlockDef, q: string): boolean {
+function matches(def: BlockDef, q: string, defaultCategory: string): boolean {
   if (!q) return true
-  const hay = [def.label, def.id, def.category ?? '', ...(def.keywords ?? [])]
+  const hay = [def.label, def.id, def.category ?? defaultCategory, ...(def.keywords ?? [])]
     .join(' ')
     .toLowerCase()
   return hay.includes(q)
@@ -93,22 +90,31 @@ export function createBlocksPanel(
   list.className = 'sigil-blocks-list'
   container.appendChild(list)
 
-  const defaultCategory = uiText(opts?.i18n, 'blocks.default_category', '一般')
-  let defs = normalize(blocks, defaultCategory)
+  let source = blocks
+  let defs = normalize(source)
+  let currentStatus: BlocksPanelStatus | null = null
+  let pendingActions = 0
+  let localeRefreshPending = false
+  let destroyed = false
   let closeActionsMenu: (() => void) | null = null
+
+  function defaultCategory(): string {
+    return uiText(opts?.i18n, 'blocks.default_category', '一般')
+  }
 
   function renderList(filter: string): void {
     closeActionsMenu?.()
     closeActionsMenu = null
     list.replaceChildren()
     const q = filter.trim().toLowerCase()
-    const filtered = defs.filter((d) => matches(d, q))
+    const fallbackCategory = defaultCategory()
+    const filtered = defs.filter((d) => matches(d, q, fallbackCategory))
 
     // 依分類分組，維持首次出現順序
     const order: string[] = []
     const groups = new Map<string, BlockDef[]>()
     for (const d of filtered) {
-      const cat = d.category ?? defaultCategory
+      const cat = d.category ?? fallbackCategory
       if (!groups.has(cat)) {
         groups.set(cat, [])
         order.push(cat)
@@ -160,10 +166,9 @@ export function createBlocksPanel(
           trigger.className = 'sigil-block-actions-trigger'
           trigger.dataset.blockActions = def.id
           trigger.textContent = '⋯'
-          const actionsLabel = uiText(opts?.i18n, 'blocks.actions', '範本操作')
-          const idleLabel = `${def.label} ${actionsLabel}`
-          trigger.title = idleLabel
-          trigger.setAttribute('aria-label', idleLabel)
+          const idleLabel = () => `${def.label} ${uiText(opts?.i18n, 'blocks.actions', '範本操作')}`
+          trigger.title = idleLabel()
+          trigger.setAttribute('aria-label', idleLabel())
           trigger.setAttribute('aria-haspopup', 'menu')
           trigger.setAttribute('aria-expanded', 'false')
           trigger.setAttribute('aria-busy', 'false')
@@ -171,16 +176,22 @@ export function createBlocksPanel(
           let pending = false
 
           function setPending(next: boolean): void {
+            if (pending === next) return
             pending = next
+            pendingActions += next ? 1 : -1
             item.setAttribute('aria-busy', String(next))
             trigger.setAttribute('aria-busy', String(next))
             trigger.setAttribute('aria-disabled', String(next))
             trigger.textContent = next ? '…' : '⋯'
             const label = next
               ? `${uiText(opts?.i18n, 'blocks.pending', '處理中')} ${def.label}`
-              : idleLabel
+              : idleLabel()
             trigger.title = label
             trigger.setAttribute('aria-label', label)
+            if (!destroyed && !next && pendingActions === 0 && localeRefreshPending) {
+              localeRefreshPending = false
+              refreshLocale()
+            }
           }
 
           async function runAction(
@@ -248,7 +259,7 @@ export function createBlocksPanel(
               x,
               y,
               theme: container.closest('.sigil-theme-dark') ? 'dark' : 'light',
-              ariaLabel: idleLabel,
+              ariaLabel: idleLabel(),
               onClose: () => {
                 trigger.setAttribute('aria-expanded', 'false')
                 closeActionsMenu = null
@@ -303,41 +314,66 @@ export function createBlocksPanel(
     }
   }
 
+  function renderStatus(): void {
+    status.replaceChildren()
+    const next = currentStatus
+    if (!next) {
+      status.hidden = true
+      status.removeAttribute('role')
+      delete status.dataset.kind
+      return
+    }
+
+    status.hidden = false
+    status.dataset.kind = next.kind
+    status.setAttribute('role', next.kind === 'error' ? 'alert' : 'status')
+    const message = document.createElement('span')
+    message.textContent = next.message
+    status.appendChild(message)
+    if (next.retry) {
+      const retry = document.createElement('button')
+      retry.type = 'button'
+      retry.className = 'sigil-blocks-retry'
+      retry.textContent = next.retryLabel ?? uiText(opts?.i18n, 'blocks.retry', '重試')
+      retry.addEventListener('click', next.retry)
+      status.appendChild(retry)
+    }
+  }
+
+  function refreshLocale(): void {
+    if (destroyed) return
+    search.placeholder = uiText(opts?.i18n, 'blocks.search_placeholder', '搜尋區塊…')
+    search.setAttribute('aria-label', uiText(opts?.i18n, 'blocks.search_label', '搜尋區塊'))
+    if (pendingActions > 0) {
+      localeRefreshPending = true
+      return
+    }
+    renderList(search.value)
+    renderStatus()
+  }
+
   search.addEventListener('input', () => renderList(search.value))
+  const unsubLocale = subscribeLocale(opts?.i18n, refreshLocale)
   renderList('')
   return {
     destroy() {
+      destroyed = true
+      localeRefreshPending = false
+      unsubLocale()
       closeActionsMenu?.()
       closeActionsMenu = null
       status.replaceChildren()
     },
     reload(next?: BlocksInput) {
-      if (next !== undefined) defs = normalize(next, defaultCategory)
+      if (next !== undefined) {
+        source = next
+        defs = normalize(source)
+      }
       renderList(search.value)
     },
     setStatus(next) {
-      status.replaceChildren()
-      if (!next) {
-        status.hidden = true
-        status.removeAttribute('role')
-        delete status.dataset.kind
-        return
-      }
-
-      status.hidden = false
-      status.dataset.kind = next.kind
-      status.setAttribute('role', next.kind === 'error' ? 'alert' : 'status')
-      const message = document.createElement('span')
-      message.textContent = next.message
-      status.appendChild(message)
-      if (next.retry) {
-        const retry = document.createElement('button')
-        retry.type = 'button'
-        retry.className = 'sigil-blocks-retry'
-        retry.textContent = next.retryLabel ?? uiText(opts?.i18n, 'blocks.retry', '重試')
-        retry.addEventListener('click', next.retry)
-        status.appendChild(retry)
-      }
+      currentStatus = next
+      renderStatus()
     },
   }
 }

@@ -8,7 +8,7 @@ import type {
 } from '@cluion/sigil-core'
 import { findNode, type ComponentNode } from '@cluion/sigil-core'
 import { createPropForm } from './form.js'
-import { uiText } from './i18n.js'
+import { subscribeLocale, uiText } from './i18n.js'
 import { openMediaPicker } from './media-picker.js'
 import { richTextSummary } from './rich-text.js'
 import {
@@ -132,6 +132,12 @@ export function createInspector(
   const unsub = engine.subscribe((ev) => {
     if (ev.type === 'selection' || ev.type === 'tree') render()
   })
+  const unsubLocale = subscribeLocale(opts?.i18n, () => {
+    tabBtns.content.textContent = uiText(opts?.i18n, 'inspector.tab_content', '內容')
+    tabBtns.style.textContent = uiText(opts?.i18n, 'inspector.tab_style', '樣式')
+    tabBtns.advanced.textContent = uiText(opts?.i18n, 'inspector.tab_advanced', '進階')
+    render()
+  })
   render()
   return {
     setDevice(next) {
@@ -143,6 +149,7 @@ export function createInspector(
       currentFormDestroy?.()
       currentFormDestroy = null
       unsub()
+      unsubLocale()
     },
   }
 }
