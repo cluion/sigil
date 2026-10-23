@@ -50,11 +50,19 @@ pnpm test:visual:docker
 
 效能測量另在背景負載可比較的 reference machine 執行 `pnpm test:performance --enforce-budgets`，避免與 build／browser tests 同時跑。方法、固定預算、測量限制及容量界限見[效能文件](docs/guide/performance.md)。CI hosted runner 保留量測 artifact 供審查，不把其機器差異冒充穩定 reference 硬體。
 
+## 首個候選的遠端 CI 記錄
+
+2026-10-23，候選 head `f814c8e851c697c415444ee726e71532afdcace5` 在 [CI run 39952171811](https://github.com/cluion/sigil/actions/runs/39952171811)（attempt 1）完成驗證。PR #3 的七個 jobs：`ci`、`docs`、`e2e`、`performance`、`visual`、`laravel (8.3)`、`laravel (8.5)` 全部成功；三引擎共 45／45 案通過，零 skipped／flaky／retry。實際 checkout 是合併候選 `6ad6115aa756829464f172a36dfc22d0c53448e8`，由該 head 與 base `ad16f3fd0f6ac7bed8e45a8f1a4db6b0aa740805` 組成。
+
+Hosted 效能量測完成，但 5,000 節點有四項超過 reference 預算，`budgetStatus=exceeded`、`enforceBudgets=false`；CI 成功不表示效能預算全過，詳見[效能記錄](docs/guide/performance.md)。
+
+這是首次候選的歷史記錄，無須隨每次文件提交改寫 run 號。後續 commit 必須核對自己的 head SHA、CI run 與實際 checkout SHA，不沿用此 run 宣稱新 head 已通過。
+
 ## 正式交付條件
 
 1. 上述工程結果對應明確的來源與實際打包版本。dirty 工作樹的本機結果是準備證據，不能只憑 HEAD SHA 重建；版本、changelog 或實作改變後，重跑受影響的檢查。
 2. [非工程師 15 分鐘活動頁任務](docs/guide/usability-check.md)取得真實操作記錄。此項目前尚未安排，保留為待驗收；自動化測試與 AI 操作不能取代。
-3. 取得交付候選的遠端 CI 結果。目前只有 workflow 配置與本機證據，沒有把遠端執行標為成功。
+3. 取得欲交付候選自身 SHA 對應的遠端 CI 結果；上節首個候選的成功記錄不涵蓋後續 commit。
 4. 經授權建立正式候選後，核對 commit／tag／tarball checksum 與套件版本、README、CHANGELOG、升級及支援承諾，使用該固定版本完成消費端驗收。不要混用較早 SHA 或未提交檔案的通過結果。
 5. 若另外授權發布，再執行發布並驗證 registry 版本與安裝結果；若另外授權部署，依宿主環境處理備份、資料遷移與部署驗證。套件發布、範例可跑與正式系統部署是不同結果，分別記錄。
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 import { createI18n, type TemplateDef, type TemplateStore } from '@cluion/sigil-core'
 import {
   createTemplateLibraryController,
@@ -20,13 +20,13 @@ function mapTemplate(value: TemplateDef): BlockDef {
 }
 
 function panelStub(): BlocksPanelHandle & {
-  reload: ReturnType<typeof vi.fn>
-  setStatus: ReturnType<typeof vi.fn>
+  reload: Mock<BlocksPanelHandle['reload']>
+  setStatus: Mock<BlocksPanelHandle['setStatus']>
 } {
   return {
     destroy: vi.fn(),
-    reload: vi.fn(),
-    setStatus: vi.fn(),
+    reload: vi.fn<BlocksPanelHandle['reload']>(),
+    setStatus: vi.fn<BlocksPanelHandle['setStatus']>(),
   }
 }
 

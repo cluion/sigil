@@ -23,6 +23,7 @@ export default defineConfig({
   define: sigilVersionDefines(),
   test: {
     environment: 'happy-dom',
+    setupFiles: ['./vitest.setup.ts'],
     include: [
       'packages/**/test/**/*.test.ts',
       'packages/**/src/**/*.test.ts',

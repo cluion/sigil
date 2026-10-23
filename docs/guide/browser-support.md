@@ -59,7 +59,7 @@ node node_modules/@playwright/test/cli.js test --config playwright.compat.config
 - `test-results/compat/{demo,laravel}/{engine}/report.json`：每一案例的結果；安全案例附有 `browser-security` annotation 與 JSON attachment。
 - `playwright-report/compat/{demo,laravel}/{engine}/`：可用 `playwright show-report` 開啟的 HTML 報告；失敗時保留 trace 與 screenshot。
 
-零 skipped、零 flaky 且所有案例通過，才由 runner 回傳成功。報告屬於本機忽略的產物；不代表已提交的固定 SHA、CI 或發布驗收。
+零 skipped、零 flaky 且所有案例通過，才由 runner 回傳成功。本機報告屬於忽略的產物，僅本機結果不等同遠端 CI 或發布驗收；下列本機與遠端記錄分別標示來源。
 
 2026-10-23 修正 Undo／Redo 歷史邊界及 Laravel E2E 取消清理後，於 macOS 26.5.2 arm64、Node 24.18.0、Playwright 1.62.1 重跑完整矩陣，45／45 通過，零 skipped、零 flaky。本次使用 PHP 8.3.36，記錄時間為 11:55:05.784Z–11:55:51.822Z；各引擎的實際版本與結果如下。
 
@@ -72,3 +72,9 @@ node node_modules/@playwright/test/cli.js test --config playwright.compat.config
 三個引擎的報告均確認 Trusted Types API 與 raw sink 的 `TypeError` enforcement。Chromium 與 Firefox 使用原生 `setHTML`；WebKit 沒有該 API，使用注入的 demo sanitizer，並通過相同安全輸出斷言。本輪沒有執行缺少 Trusted Types API 的舊版引擎，因此不把條件分支視為那些版本的驗收證據。
 
 跨引擎輸入步驟會保留既有富文字段落；焦點還原案例以鍵盤啟動匯出，再驗證 focus trap 與關閉後回到原按鈕。WebKit 的滑鼠點擊不保證按鈕取得焦點，App 依開啟對話框時實際的 `document.activeElement` 還原；不將不同引擎的原生滑鼠焦點行為當作相同前提。
+
+## 首個候選的 Linux CI
+
+2026-10-23，候選 head `f814c8e851c697c415444ee726e71532afdcace5` 的 [CI run 39952171811](https://github.com/cluion/sigil/actions/runs/39952171811)（attempt 1）七個 jobs 全部成功。實際 merge checkout 為 `6ad6115aa756829464f172a36dfc22d0c53448e8`。此處固定保留首次候選記錄；後續 commit 須核對自己的 CI，不沿用本次結果。
+
+`browser-compatibility-report` 確認 Ubuntu 24.04.5 x64（kernel 6.17.0-1022-azure）、Node 24.21.0、Playwright 1.62.1；Chromium 151.0.7922.34、Firefox 153.0、WebKit 26.5 各為 demo／保存／安全 12／12 與 Laravel 活動頁 3／3，共 45／45，零 skipped／flaky／retry。三引擎均通過 TT raw sink 拒絕、安全輸出與缺少解析 policy 的負例；Chromium／Firefox 使用原生 `setHTML`，WebKit 使用注入的 sanitizer。這份遠端證據不改寫前述 macOS 工作樹觀測，也不代表發布驗收。

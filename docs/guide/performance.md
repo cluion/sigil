@@ -141,6 +141,21 @@ Chromium 同時回報的實驗性 `embedderHeapUsedSize` 也保留在 JSON。5,0
 
 各規模仍確認 Undo／Redo 均為 100 步，歷史共享物件數與首次 baseline 相同。65 個 runtime 來源檔開始／結束 SHA256 相同：`f8279e3cc37c960a55e3781a6b858b34b7a709604c4cfdca241bbf31279b1a31`。原始樣本位於 `test-results/performance/2026-10-23T11-56-11-129Z-post-review/results.json`。5,000 節點 fixture 超過 Laravel 1 MiB、單機樣本及記憶體量測限制仍適用；本次是未提交工作樹驗證。
 
+## 首個候選的 hosted CI 觀測
+
+2026-10-23，候選 head `f814c8e851c697c415444ee726e71532afdcace5` 的 [CI run 39952171811](https://github.com/cluion/sigil/actions/runs/39952171811)（attempt 1）七個 jobs 成功；`performance-report` 記錄的實際 merge checkout 是 `6ad6115aa756829464f172a36dfc22d0c53448e8`，工作樹乾淨。環境為 Ubuntu 24.04.5 x64、AMD EPYC 7763（4 logical CPUs）、Node 24.21.0、Playwright 1.62.1、Chromium 151.0.7922.34。
+
+完整 protocol 為 100／1,000／5,000 節點，各 5 次 mount、每頁 6 組操作及 100 步 history。量測結果是 `status=completed`、`budgetStatus=exceeded`、`enforceBudgets=false`；來源穩定、無 runtime errors，65 個 runtime 來源檔的 hash 與前述修正後 reference 記錄一致。100／1,000 節點沒有超標；5,000 節點的以下四項超過原定預算，數值為 ready ms 的 p95：
+
+| 指標     | Hosted CI | Reference 預算 |
+| -------- | --------: | -------------: |
+| 選取     |     589.9 |            250 |
+| 文字更新 |     571.4 |            250 |
+| Undo     |     713.9 |            500 |
+| Redo     |     872.8 |            500 |
+
+Hosted job 未啟用預算硬門檻，成功只代表量測完整完成，不能解讀為效能預算全過。這份觀測與 M4 Pro reference 分開保留；硬體與負載不同，不能以單次差異判定回歸或取代 reference 驗收。原始 JSON 位於該 run 的 `performance-report` artifact：`2026-10-23T12-17-57-073Z-baseline/results.json`。本節是首次候選的歷史記錄，不代表後續 commit 已通過自己的 CI。
+
 ## 程式路徑與後續判讀
 
 `packages/core/src/model/tree.ts` 使用不可變樹與共享子樹，更新仍需走訪樹；`packages/core/src/engine/engine.ts` 保存歷史 root。`packages/ui/src/layers.ts` 目前在 selection／patch／tree 事件完整重建圖層列，`packages/core/src/renderer/renderer.ts` 對 Undo／Redo 的 tree 事件完整 reconcile。這些是可核對的程式路徑，不等於已取得 CPU profile 的瓶頸歸因。

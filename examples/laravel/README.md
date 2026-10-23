@@ -179,7 +179,9 @@ pnpm test:laravel:e2e
 
 三個引擎的活動頁各 **3／3** 通過；連同 demo、保存及安全流程的完整矩陣為 **45／45**，實際版本與平台見[瀏覽器支援](../../docs/guide/browser-support.md)。[效能量測](../../docs/guide/performance.md)另有 100／1,000／5,000 節點的本機證據；5,000 節點 fixture 超過此範例的 1 MiB 接收界限，不能據此宣稱該文件可在 Laravel 保存。
 
-CI 已配置 PHP 8.3／8.5 的獨立 Laravel job，但尚未遠端執行。真實使用者 [15 分鐘任務驗收](../../docs/guide/usability-check.md) 目前尚未安排，保留待驗收，不以自動化測試替代。固定版本交付、正式部署與備份復原演練也不在本次已驗證範圍。
+2026-10-23 首個候選的 [CI run 39952171811](https://github.com/cluion/sigil/actions/runs/39952171811) 七個 jobs 全部成功，包含 PHP 8.3／8.5 各自的 PHP、adapters、型別／build 與 5 案瀏覽器／真 HTTP 驗證；Linux 三引擎矩陣為 45／45，零 skipped／flaky／retry。候選 head 與實際 merge checkout 的完整 SHA 見[交付記錄](../../RELEASING.md)；後續 commit 須確認自己的 CI。
+
+真實使用者 [15 分鐘任務驗收](../../docs/guide/usability-check.md) 目前尚未安排，保留待驗收，不以自動化測試替代。固定版本交付、正式部署與備份復原演練也不在本次已驗證範圍。
 
 ## 實作入口
 
