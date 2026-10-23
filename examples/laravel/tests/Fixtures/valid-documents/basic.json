@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "root": {
+    "id": "c-mvkv4hde-m-7pol",
+    "type": "section",
+    "children": [
+      {
+        "id": "c-mvkv4hde-n-n381",
+        "type": "section",
+        "children": []
+      },
+      {
+        "id": "c-mvkv4hde-o-djq9",
+        "type": "column",
+        "children": []
+      },
+      {
+        "id": "c-mvkv4hde-p-n0v9",
+        "type": "text",
+        "content": "文字"
+      },
+      {
+        "id": "c-mvkv4hde-q-hp6h",
+        "type": "image",
+        "attributes": {
+          "src": "https://placehold.co/120"
+        }
+      },
+      {
+        "id": "c-mvkv4hde-r-1bnq",
+        "type": "button",
+        "content": "按鈕"
+      }
+    ]
+  }
+}

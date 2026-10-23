@@ -1,0 +1,1198 @@
+{
+  "version": 1,
+  "root": {
+    "id": "c-mvkv4hde-s-d3qp",
+    "type": "section",
+    "children": [
+      {
+        "id": "c-mvkv4hde-t-mmux",
+        "type": "section",
+        "name": "主視覺",
+        "attributes": {
+          "aria-label": "主視覺"
+        },
+        "style": {
+          "box-sizing": "border-box",
+          "width": "100%",
+          "min-height": "34rem",
+          "display": "flex",
+          "flex-direction": "column",
+          "align-items": "center",
+          "justify-content": "center",
+          "gap": "1.5rem",
+          "padding": "6rem 3rem",
+          "overflow": "hidden",
+          "color": "#0f172a",
+          "text-align": "center",
+          "background": "linear-gradient(135deg, #f8fafc 0%, #eef2ff 52%, #f5f3ff 100%)",
+          "border": "1px solid #e2e8f0",
+          "border-radius": "1.5rem",
+          "font-family": "ui-sans-serif, system-ui, sans-serif"
+        },
+        "responsiveStyles": {
+          "tablet": {
+            "min-height": "30rem",
+            "padding": "4.5rem 2rem"
+          },
+          "mobile": {
+            "min-height": "26rem",
+            "gap": "1.25rem",
+            "padding": "3.5rem 1.25rem",
+            "border-radius": "1rem"
+          }
+        },
+        "children": [
+          {
+            "id": "c-mvkv4hde-u-qthv",
+            "type": "text",
+            "tagName": "span",
+            "name": "眉標",
+            "content": "打造更好的內容體驗",
+            "style": {
+              "display": "inline-flex",
+              "padding": "0.5rem 0.875rem",
+              "color": "#4338ca",
+              "background": "#ffffff",
+              "border": "1px solid #c7d2fe",
+              "border-radius": "999px",
+              "font-size": "0.875rem",
+              "font-weight": "700",
+              "line-height": "1.25",
+              "letter-spacing": "0.04em"
+            }
+          },
+          {
+            "id": "c-mvkv4hde-v-r9k9",
+            "type": "text",
+            "tagName": "h1",
+            "name": "主標題",
+            "content": "讓每個想法，都能快速成為漂亮頁面",
+            "style": {
+              "margin": "0",
+              "max-width": "52rem",
+              "font-size": "3.5rem",
+              "font-weight": "750",
+              "line-height": "1.08",
+              "letter-spacing": "-0.03em"
+            },
+            "responsiveStyles": {
+              "tablet": {
+                "font-size": "2.75rem"
+              },
+              "mobile": {
+                "font-size": "2.25rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-w-2k9m",
+            "type": "text",
+            "tagName": "p",
+            "name": "說明",
+            "content": "使用清楚的區塊與直覺編輯流程，建立適合各種裝置的內容。",
+            "style": {
+              "margin": "0",
+              "max-width": "42rem",
+              "color": "#475569",
+              "font-size": "1.125rem",
+              "line-height": "1.7"
+            },
+            "responsiveStyles": {
+              "mobile": {
+                "font-size": "1rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-x-agc6",
+            "type": "button",
+            "name": "主要行動",
+            "attributes": {
+              "type": "button"
+            },
+            "content": "立即開始",
+            "style": {
+              "appearance": "none",
+              "padding": "0.875rem 1.5rem",
+              "color": "#ffffff",
+              "background": "#4f46e5",
+              "border": "0",
+              "border-radius": "999px",
+              "box-shadow": "0 0.75rem 1.75rem rgba(79, 70, 229, 0.24)",
+              "cursor": "pointer",
+              "font-size": "1rem",
+              "font-weight": "700",
+              "line-height": "1.25"
+            }
+          }
+        ]
+      },
+      {
+        "id": "c-mvkv4hde-y-tbsc",
+        "type": "section",
+        "name": "方案價格",
+        "attributes": {
+          "aria-label": "方案價格"
+        },
+        "style": {
+          "box-sizing": "border-box",
+          "width": "100%",
+          "display": "flex",
+          "flex-direction": "column",
+          "align-items": "center",
+          "gap": "1.25rem",
+          "padding": "5rem 3rem",
+          "overflow": "hidden",
+          "color": "#0f172a",
+          "text-align": "center",
+          "background": "#f8fafc",
+          "border": "1px solid #e2e8f0",
+          "border-radius": "1.5rem",
+          "font-family": "ui-sans-serif, system-ui, sans-serif"
+        },
+        "responsiveStyles": {
+          "tablet": {
+            "padding": "4rem 2rem"
+          },
+          "mobile": {
+            "padding": "3.5rem 1rem",
+            "border-radius": "1rem"
+          }
+        },
+        "children": [
+          {
+            "id": "c-mvkv4hde-z-ljly",
+            "type": "text",
+            "tagName": "span",
+            "name": "價格眉標",
+            "content": "簡單透明的方案",
+            "style": {
+              "color": "#4f46e5",
+              "font-size": "0.875rem",
+              "font-weight": "750",
+              "line-height": "1.25",
+              "letter-spacing": "0.08em",
+              "text-transform": "uppercase"
+            }
+          },
+          {
+            "id": "c-mvkv4hde-10-5jgz",
+            "type": "text",
+            "tagName": "h2",
+            "name": "價格標題",
+            "content": "選擇適合你的成長方案",
+            "style": {
+              "margin": "0",
+              "max-width": "48rem",
+              "font-size": "2.75rem",
+              "font-weight": "750",
+              "line-height": "1.12",
+              "letter-spacing": "-0.025em"
+            },
+            "responsiveStyles": {
+              "tablet": {
+                "font-size": "2.375rem"
+              },
+              "mobile": {
+                "font-size": "2rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-11-uhl1",
+            "type": "text",
+            "tagName": "p",
+            "name": "價格說明",
+            "content": "從免費開始，需要更多能力時再升級。",
+            "style": {
+              "margin": "0 0 2rem",
+              "max-width": "40rem",
+              "color": "#64748b",
+              "font-size": "1.0625rem",
+              "line-height": "1.7"
+            },
+            "responsiveStyles": {
+              "mobile": {
+                "margin": "0 0 1.25rem",
+                "font-size": "1rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-12-qkuh",
+            "type": "section",
+            "tagName": "div",
+            "name": "方案列表",
+            "attributes": {
+              "role": "list",
+              "aria-label": "方案列表"
+            },
+            "style": {
+              "width": "100%",
+              "max-width": "72rem",
+              "display": "grid",
+              "grid-template-columns": "repeat(3, minmax(0, 1fr))",
+              "align-items": "stretch",
+              "gap": "1rem",
+              "text-align": "left"
+            },
+            "responsiveStyles": {
+              "tablet": {
+                "grid-template-columns": "repeat(2, minmax(0, 1fr))"
+              },
+              "mobile": {
+                "grid-template-columns": "minmax(0, 1fr)"
+              }
+            },
+            "children": [
+              {
+                "id": "c-mvkv4hde-13-4fb5",
+                "type": "section",
+                "tagName": "article",
+                "name": "入門方案",
+                "attributes": {
+                  "role": "listitem",
+                  "aria-label": "入門方案"
+                },
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "1rem",
+                  "padding": "1.5rem",
+                  "background": "#f8fafc",
+                  "border": "1px solid #cbd5e1",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "none",
+                  "transform": "none"
+                },
+                "responsiveStyles": {
+                  "tablet": {
+                    "transform": "none"
+                  },
+                  "mobile": {
+                    "padding": "1.5rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-14-kpf0",
+                    "type": "text",
+                    "tagName": "h3",
+                    "name": "入門名稱",
+                    "content": "入門",
+                    "style": {
+                      "margin": "0",
+                      "font-size": "1.375rem",
+                      "font-weight": "750",
+                      "line-height": "1.2"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-15-ftma",
+                    "type": "text",
+                    "tagName": "p",
+                    "name": "入門說明",
+                    "content": "適合個人與小型專案快速開始。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#64748b",
+                      "line-height": "1.6"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-16-l6kp",
+                    "type": "section",
+                    "tagName": "div",
+                    "name": "入門價格",
+                    "style": {
+                      "display": "grid",
+                      "grid-template-columns": "minmax(0, 1fr)",
+                      "gap": "0.375rem"
+                    },
+                    "children": [
+                      {
+                        "id": "c-mvkv4hde-17-j5s3",
+                        "type": "text",
+                        "tagName": "strong",
+                        "name": "入門金額",
+                        "content": "免費",
+                        "style": {
+                          "min-width": "0",
+                          "max-width": "100%",
+                          "font-size": "1.5rem",
+                          "font-weight": "800",
+                          "line-height": "1.1",
+                          "letter-spacing": "-0.025em",
+                          "overflow-wrap": "anywhere"
+                        },
+                        "responsiveStyles": {
+                          "mobile": {
+                            "font-size": "2rem"
+                          }
+                        }
+                      },
+                      {
+                        "id": "c-mvkv4hde-18-t1gk",
+                        "type": "text",
+                        "tagName": "span",
+                        "name": "入門週期",
+                        "content": "",
+                        "style": {
+                          "color": "#64748b",
+                          "font-size": "0.9375rem"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c-mvkv4hde-19-9bt8",
+                    "type": "section",
+                    "tagName": "ul",
+                    "name": "入門功能",
+                    "style": {
+                      "display": "flex",
+                      "flex-direction": "column",
+                      "gap": "0.75rem",
+                      "margin": "0",
+                      "padding": "0",
+                      "list-style": "none",
+                      "color": "#334155",
+                      "line-height": "1.5"
+                    },
+                    "children": [
+                      {
+                        "id": "c-mvkv4hde-1a-i230",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "入門功能項目",
+                        "content": "✓ 1 個網站"
+                      },
+                      {
+                        "id": "c-mvkv4hde-1b-stgh",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "入門功能項目",
+                        "content": "✓ 基礎區塊"
+                      },
+                      {
+                        "id": "c-mvkv4hde-1c-r8b5",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "入門功能項目",
+                        "content": "✓ 社群支援"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c-mvkv4hde-1d-5ph4",
+                    "type": "button",
+                    "name": "入門行動",
+                    "attributes": {
+                      "type": "button"
+                    },
+                    "content": "免費開始",
+                    "style": {
+                      "width": "100%",
+                      "margin-top": "auto",
+                      "padding": "0.875rem 1rem",
+                      "color": "#3730a3",
+                      "background": "#ffffff",
+                      "border": "1px solid #a5b4fc",
+                      "border-radius": "0.75rem",
+                      "cursor": "pointer",
+                      "font-size": "0.9375rem",
+                      "font-weight": "750",
+                      "line-height": "1.25"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c-mvkv4hde-1f-viaa",
+                "type": "section",
+                "tagName": "article",
+                "name": "專業方案",
+                "attributes": {
+                  "role": "listitem",
+                  "aria-label": "專業方案",
+                  "data-featured": "true"
+                },
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "1rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "2px solid #6366f1",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 1.25rem 3rem rgba(79, 70, 229, 0.16)",
+                  "transform": "translateY(-0.75rem)"
+                },
+                "responsiveStyles": {
+                  "tablet": {
+                    "transform": "none"
+                  },
+                  "mobile": {
+                    "padding": "1.5rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-1e-ooex",
+                    "type": "text",
+                    "tagName": "span",
+                    "name": "專業推薦標記",
+                    "content": "最受歡迎",
+                    "style": {
+                      "align-self": "flex-start",
+                      "padding": "0.375rem 0.75rem",
+                      "color": "#3730a3",
+                      "background": "#e0e7ff",
+                      "border-radius": "999px",
+                      "font-size": "0.75rem",
+                      "font-weight": "750",
+                      "line-height": "1.25",
+                      "letter-spacing": "0.04em"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-1g-pjcf",
+                    "type": "text",
+                    "tagName": "h3",
+                    "name": "專業名稱",
+                    "content": "專業",
+                    "style": {
+                      "margin": "0",
+                      "font-size": "1.375rem",
+                      "font-weight": "750",
+                      "line-height": "1.2"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-1h-62pn",
+                    "type": "text",
+                    "tagName": "p",
+                    "name": "專業說明",
+                    "content": "給需要完整功能與品牌彈性的成長團隊。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#64748b",
+                      "line-height": "1.6"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-1i-c8l9",
+                    "type": "section",
+                    "tagName": "div",
+                    "name": "專業價格",
+                    "style": {
+                      "display": "grid",
+                      "grid-template-columns": "minmax(0, 1fr)",
+                      "gap": "0.375rem"
+                    },
+                    "children": [
+                      {
+                        "id": "c-mvkv4hde-1j-7ydu",
+                        "type": "text",
+                        "tagName": "strong",
+                        "name": "專業金額",
+                        "content": "NT$990",
+                        "style": {
+                          "min-width": "0",
+                          "max-width": "100%",
+                          "font-size": "1.5rem",
+                          "font-weight": "800",
+                          "line-height": "1.1",
+                          "letter-spacing": "-0.025em",
+                          "overflow-wrap": "anywhere"
+                        },
+                        "responsiveStyles": {
+                          "mobile": {
+                            "font-size": "2rem"
+                          }
+                        }
+                      },
+                      {
+                        "id": "c-mvkv4hde-1k-8mpd",
+                        "type": "text",
+                        "tagName": "span",
+                        "name": "專業週期",
+                        "content": "／月",
+                        "style": {
+                          "color": "#64748b",
+                          "font-size": "0.9375rem"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c-mvkv4hde-1l-tkd0",
+                    "type": "section",
+                    "tagName": "ul",
+                    "name": "專業功能",
+                    "style": {
+                      "display": "flex",
+                      "flex-direction": "column",
+                      "gap": "0.75rem",
+                      "margin": "0",
+                      "padding": "0",
+                      "list-style": "none",
+                      "color": "#334155",
+                      "line-height": "1.5"
+                    },
+                    "children": [
+                      {
+                        "id": "c-mvkv4hde-1m-bcvz",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "專業功能項目",
+                        "content": "✓ 不限網站"
+                      },
+                      {
+                        "id": "c-mvkv4hde-1n-fxzw",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "專業功能項目",
+                        "content": "✓ 完整行銷區塊"
+                      },
+                      {
+                        "id": "c-mvkv4hde-1o-ke72",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "專業功能項目",
+                        "content": "✓ 優先支援"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c-mvkv4hde-1p-3qgc",
+                    "type": "button",
+                    "name": "專業行動",
+                    "attributes": {
+                      "type": "button"
+                    },
+                    "content": "選擇專業版",
+                    "style": {
+                      "width": "100%",
+                      "margin-top": "auto",
+                      "padding": "0.875rem 1rem",
+                      "color": "#ffffff",
+                      "background": "#4f46e5",
+                      "border": "1px solid #4f46e5",
+                      "border-radius": "0.75rem",
+                      "cursor": "pointer",
+                      "font-size": "0.9375rem",
+                      "font-weight": "750",
+                      "line-height": "1.25"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c-mvkv4hde-1q-5osd",
+                "type": "section",
+                "tagName": "article",
+                "name": "企業方案",
+                "attributes": {
+                  "role": "listitem",
+                  "aria-label": "企業方案"
+                },
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "1rem",
+                  "padding": "1.5rem",
+                  "background": "#f8fafc",
+                  "border": "1px solid #cbd5e1",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "none",
+                  "transform": "none"
+                },
+                "responsiveStyles": {
+                  "tablet": {
+                    "transform": "none"
+                  },
+                  "mobile": {
+                    "padding": "1.5rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-1r-tjaw",
+                    "type": "text",
+                    "tagName": "h3",
+                    "name": "企業名稱",
+                    "content": "企業",
+                    "style": {
+                      "margin": "0",
+                      "font-size": "1.375rem",
+                      "font-weight": "750",
+                      "line-height": "1.2"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-1s-vp78",
+                    "type": "text",
+                    "tagName": "p",
+                    "name": "企業說明",
+                    "content": "適合重視治理、安全與導入服務的組織。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#64748b",
+                      "line-height": "1.6"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-1t-cjll",
+                    "type": "section",
+                    "tagName": "div",
+                    "name": "企業價格",
+                    "style": {
+                      "display": "grid",
+                      "grid-template-columns": "minmax(0, 1fr)",
+                      "gap": "0.375rem"
+                    },
+                    "children": [
+                      {
+                        "id": "c-mvkv4hde-1u-fq2q",
+                        "type": "text",
+                        "tagName": "strong",
+                        "name": "企業金額",
+                        "content": "聯絡我們",
+                        "style": {
+                          "min-width": "0",
+                          "max-width": "100%",
+                          "font-size": "1.5rem",
+                          "font-weight": "800",
+                          "line-height": "1.1",
+                          "letter-spacing": "-0.025em",
+                          "overflow-wrap": "anywhere"
+                        },
+                        "responsiveStyles": {
+                          "mobile": {
+                            "font-size": "2rem"
+                          }
+                        }
+                      },
+                      {
+                        "id": "c-mvkv4hde-1v-9dik",
+                        "type": "text",
+                        "tagName": "span",
+                        "name": "企業週期",
+                        "content": "",
+                        "style": {
+                          "color": "#64748b",
+                          "font-size": "0.9375rem"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c-mvkv4hde-1w-smgp",
+                    "type": "section",
+                    "tagName": "ul",
+                    "name": "企業功能",
+                    "style": {
+                      "display": "flex",
+                      "flex-direction": "column",
+                      "gap": "0.75rem",
+                      "margin": "0",
+                      "padding": "0",
+                      "list-style": "none",
+                      "color": "#334155",
+                      "line-height": "1.5"
+                    },
+                    "children": [
+                      {
+                        "id": "c-mvkv4hde-1x-jvk6",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "企業功能項目",
+                        "content": "✓ 進階權限"
+                      },
+                      {
+                        "id": "c-mvkv4hde-1y-4dqe",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "企業功能項目",
+                        "content": "✓ 導入協助"
+                      },
+                      {
+                        "id": "c-mvkv4hde-1z-z6gt",
+                        "type": "text",
+                        "tagName": "li",
+                        "name": "企業功能項目",
+                        "content": "✓ 專屬支援"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c-mvkv4hde-20-wgfp",
+                    "type": "button",
+                    "name": "企業行動",
+                    "attributes": {
+                      "type": "button"
+                    },
+                    "content": "聯絡顧問",
+                    "style": {
+                      "width": "100%",
+                      "margin-top": "auto",
+                      "padding": "0.875rem 1rem",
+                      "color": "#3730a3",
+                      "background": "#ffffff",
+                      "border": "1px solid #a5b4fc",
+                      "border-radius": "0.75rem",
+                      "cursor": "pointer",
+                      "font-size": "0.9375rem",
+                      "font-weight": "750",
+                      "line-height": "1.25"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "c-mvkv4hde-21-80mf",
+        "type": "section",
+        "name": "常見問題",
+        "attributes": {
+          "aria-label": "常見問題"
+        },
+        "style": {
+          "box-sizing": "border-box",
+          "width": "100%",
+          "display": "flex",
+          "flex-direction": "column",
+          "align-items": "center",
+          "gap": "1.25rem",
+          "padding": "5rem 3rem",
+          "overflow": "hidden",
+          "color": "#0f172a",
+          "text-align": "center",
+          "background": "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+          "border": "1px solid #e2e8f0",
+          "border-radius": "1.5rem",
+          "font-family": "ui-sans-serif, system-ui, sans-serif"
+        },
+        "responsiveStyles": {
+          "tablet": {
+            "padding": "4rem 2rem"
+          },
+          "mobile": {
+            "padding": "3.5rem 1rem",
+            "border-radius": "1rem"
+          }
+        },
+        "children": [
+          {
+            "id": "c-mvkv4hde-22-aybr",
+            "type": "text",
+            "tagName": "span",
+            "name": "FAQ 眉標",
+            "content": "常見問題",
+            "style": {
+              "color": "#4f46e5",
+              "font-size": "0.875rem",
+              "font-weight": "750",
+              "line-height": "1.25",
+              "letter-spacing": "0.08em",
+              "text-transform": "uppercase"
+            }
+          },
+          {
+            "id": "c-mvkv4hde-23-dp2c",
+            "type": "text",
+            "tagName": "h2",
+            "name": "FAQ 標題",
+            "content": "開始之前，先了解這些",
+            "style": {
+              "margin": "0",
+              "max-width": "48rem",
+              "font-size": "2.75rem",
+              "font-weight": "750",
+              "line-height": "1.12",
+              "letter-spacing": "-0.025em"
+            },
+            "responsiveStyles": {
+              "tablet": {
+                "font-size": "2.375rem"
+              },
+              "mobile": {
+                "font-size": "2rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-24-13u1",
+            "type": "text",
+            "tagName": "p",
+            "name": "FAQ 說明",
+            "content": "整理導入與使用時最常遇到的問題，協助你快速做出判斷。",
+            "style": {
+              "margin": "0 0 2rem",
+              "max-width": "42rem",
+              "color": "#64748b",
+              "font-size": "1.0625rem",
+              "line-height": "1.7"
+            },
+            "responsiveStyles": {
+              "mobile": {
+                "margin": "0 0 1.25rem",
+                "font-size": "1rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-25-h5z7",
+            "type": "section",
+            "tagName": "dl",
+            "name": "常見問題列表",
+            "attributes": {
+              "aria-label": "常見問題列表"
+            },
+            "style": {
+              "width": "100%",
+              "max-width": "72rem",
+              "display": "grid",
+              "grid-template-columns": "repeat(2, minmax(0, 1fr))",
+              "gap": "1.25rem",
+              "margin": "0",
+              "text-align": "left"
+            },
+            "responsiveStyles": {
+              "tablet": {
+                "grid-template-columns": "minmax(0, 1fr)"
+              },
+              "mobile": {
+                "gap": "1rem"
+              }
+            },
+            "children": [
+              {
+                "id": "c-mvkv4hde-26-fqqg",
+                "type": "section",
+                "tagName": "div",
+                "name": "Sigil 適合哪類產品？問答",
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "0.75rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "1px solid #e2e8f0",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 0.75rem 2rem rgba(15, 23, 42, 0.06)"
+                },
+                "responsiveStyles": {
+                  "mobile": {
+                    "padding": "1.25rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-27-yulr",
+                    "type": "text",
+                    "tagName": "dt",
+                    "name": "Sigil 適合哪類產品？問題",
+                    "content": "Sigil 適合哪類產品？",
+                    "style": {
+                      "color": "#1e1b4b",
+                      "font-size": "1.125rem",
+                      "font-weight": "750",
+                      "line-height": "1.4",
+                      "overflow-wrap": "anywhere"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-28-q11e",
+                    "type": "text",
+                    "tagName": "dd",
+                    "name": "Sigil 適合哪類產品？答案",
+                    "content": "適合需要在既有產品中加入視覺化內容編輯能力的網站、後台與 SaaS 服務。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#475569",
+                      "line-height": "1.7",
+                      "overflow-wrap": "anywhere"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c-mvkv4hde-29-2bxo",
+                "type": "section",
+                "tagName": "div",
+                "name": "是否需要特定前端框架？問答",
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "0.75rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "1px solid #e2e8f0",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 0.75rem 2rem rgba(15, 23, 42, 0.06)"
+                },
+                "responsiveStyles": {
+                  "mobile": {
+                    "padding": "1.25rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-2a-znwg",
+                    "type": "text",
+                    "tagName": "dt",
+                    "name": "是否需要特定前端框架？問題",
+                    "content": "是否需要特定前端框架？",
+                    "style": {
+                      "color": "#1e1b4b",
+                      "font-size": "1.125rem",
+                      "font-weight": "750",
+                      "line-height": "1.4",
+                      "overflow-wrap": "anywhere"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-2b-qrhm",
+                    "type": "text",
+                    "tagName": "dd",
+                    "name": "是否需要特定前端框架？答案",
+                    "content": "不需要。核心以原生 TypeScript 與 DOM API 為主，也能整合進 Vue、React 或其他框架。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#475569",
+                      "line-height": "1.7",
+                      "overflow-wrap": "anywhere"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c-mvkv4hde-2c-4hxs",
+                "type": "section",
+                "tagName": "div",
+                "name": "可以自訂樣式與內容嗎？問答",
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "0.75rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "1px solid #e2e8f0",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 0.75rem 2rem rgba(15, 23, 42, 0.06)"
+                },
+                "responsiveStyles": {
+                  "mobile": {
+                    "padding": "1.25rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-2d-mugb",
+                    "type": "text",
+                    "tagName": "dt",
+                    "name": "可以自訂樣式與內容嗎？問題",
+                    "content": "可以自訂樣式與內容嗎？",
+                    "style": {
+                      "color": "#1e1b4b",
+                      "font-size": "1.125rem",
+                      "font-weight": "750",
+                      "line-height": "1.4",
+                      "overflow-wrap": "anywhere"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-2e-l5qa",
+                    "type": "text",
+                    "tagName": "dd",
+                    "name": "可以自訂樣式與內容嗎？答案",
+                    "content": "可以。每個區塊都是可拆解的節點樹，宿主能調整文案、樣式、屬性與響應式設定。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#475569",
+                      "line-height": "1.7",
+                      "overflow-wrap": "anywhere"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c-mvkv4hde-2f-lzjq",
+                "type": "section",
+                "tagName": "div",
+                "name": "編輯內容如何儲存？問答",
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "0.75rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "1px solid #e2e8f0",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 0.75rem 2rem rgba(15, 23, 42, 0.06)"
+                },
+                "responsiveStyles": {
+                  "mobile": {
+                    "padding": "1.25rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-2g-95iq",
+                    "type": "text",
+                    "tagName": "dt",
+                    "name": "編輯內容如何儲存？問題",
+                    "content": "編輯內容如何儲存？",
+                    "style": {
+                      "color": "#1e1b4b",
+                      "font-size": "1.125rem",
+                      "font-weight": "750",
+                      "line-height": "1.4",
+                      "overflow-wrap": "anywhere"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-2h-ru8c",
+                    "type": "text",
+                    "tagName": "dd",
+                    "name": "編輯內容如何儲存？答案",
+                    "content": "內容序列化為可攜的 JSON 文件，宿主可以接上自己的 API、資料庫或儲存 adapter。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#475569",
+                      "line-height": "1.7",
+                      "overflow-wrap": "anywhere"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c-mvkv4hde-2i-2gzl",
+                "type": "section",
+                "tagName": "div",
+                "name": "是否支援不同裝置？問答",
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "0.75rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "1px solid #e2e8f0",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 0.75rem 2rem rgba(15, 23, 42, 0.06)"
+                },
+                "responsiveStyles": {
+                  "mobile": {
+                    "padding": "1.25rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-2j-v35p",
+                    "type": "text",
+                    "tagName": "dt",
+                    "name": "是否支援不同裝置？問題",
+                    "content": "是否支援不同裝置？",
+                    "style": {
+                      "color": "#1e1b4b",
+                      "font-size": "1.125rem",
+                      "font-weight": "750",
+                      "line-height": "1.4",
+                      "overflow-wrap": "anywhere"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-2k-uvyw",
+                    "type": "text",
+                    "tagName": "dd",
+                    "name": "是否支援不同裝置？答案",
+                    "content": "支援 Desktop、Tablet 與 Mobile 樣式，編輯畫布與靜態 HTML 輸出會套用相同規則。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#475569",
+                      "line-height": "1.7",
+                      "overflow-wrap": "anywhere"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c-mvkv4hde-2l-od3z",
+                "type": "section",
+                "tagName": "div",
+                "name": "可以接到既有後端嗎？問答",
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "0.75rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "1px solid #e2e8f0",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 0.75rem 2rem rgba(15, 23, 42, 0.06)"
+                },
+                "responsiveStyles": {
+                  "mobile": {
+                    "padding": "1.25rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-2m-pxd1",
+                    "type": "text",
+                    "tagName": "dt",
+                    "name": "可以接到既有後端嗎？問題",
+                    "content": "可以接到既有後端嗎？",
+                    "style": {
+                      "color": "#1e1b4b",
+                      "font-size": "1.125rem",
+                      "font-weight": "750",
+                      "line-height": "1.4",
+                      "overflow-wrap": "anywhere"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-2n-1uk5",
+                    "type": "text",
+                    "tagName": "dd",
+                    "name": "可以接到既有後端嗎？答案",
+                    "content": "可以。Sigil 不綁定後端技術，透過公開介面即可整合現有的驗證、資產與內容服務。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#475569",
+                      "line-height": "1.7",
+                      "overflow-wrap": "anywhere"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -111,6 +111,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/store-json
 
+  examples/laravel:
+    dependencies:
+      '@cluion/sigil-app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@cluion/sigil-blocks':
+        specifier: workspace:*
+        version: link:../../packages/blocks
+      '@cluion/sigil-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   examples/react:
     dependencies:
       '@cluion/sigil-app':

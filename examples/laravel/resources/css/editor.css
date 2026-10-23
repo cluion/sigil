@@ -1,0 +1,95 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #172554;
+  background: #f8fafc;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+[hidden] {
+  display: none !important;
+}
+.host-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.host-page {
+  color: #64748b;
+  margin-left: 0.75rem;
+}
+.host-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.host-header button,
+.host-create button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  background: white;
+  color: #172554;
+}
+.host-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+.host-guide small {
+  flex-basis: 100%;
+  color: #475569;
+}
+.host-feedback {
+  padding: 0 1rem 0.75rem;
+  font-size: 0.875rem;
+}
+#page-status {
+  margin: 0;
+}
+#page-status[data-error='true'] {
+  color: #b91c1c;
+}
+.host-create {
+  max-width: 36rem;
+  margin: 4rem auto;
+  padding: 2rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 1rem;
+  background: white;
+}
+#sigil-root:empty {
+  display: none;
+}
+#sigil-root {
+  height: max(600px, calc(100dvh - 170px));
+}
+#sigil-root[inert] {
+  opacity: 0.6;
+}
+@media (max-width: 640px) {
+  .host-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .host-create {
+    margin: 1rem;
+  }
+}

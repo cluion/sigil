@@ -1,0 +1,24 @@
+# Only test inputs enter the local image; exclude Git, plans, secrets and host dependencies.
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig*.json
+!playwright*.config.ts
+!packages/
+!packages/**
+!demo/
+!demo/**
+!examples/
+!examples/*/
+examples/*/**
+!examples/*/package.json
+!scripts/
+!scripts/sigil-version-defines.mjs
+!e2e/
+!e2e/**
+**/node_modules
+**/dist
+**/*.tgz
+**/*.tsbuildinfo
+**/.env*

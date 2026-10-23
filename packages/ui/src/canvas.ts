@@ -620,17 +620,62 @@ export function createCanvas(
     if (el) el.setAttribute('data-sigil-hover', '1')
   }
 
-  const htmlPolicy = opts?.rendererOptions?.htmlPolicy
-  if (htmlPolicy) htmlPolicy.setTemplate(iframe, FRAME_DOCUMENT)
-  else iframe.srcdoc = FRAME_DOCUMENT
-  iframe.addEventListener('load', () => {
+  let previewDocument: Document | null = null
+
+  function onPreviewClick(event: MouseEvent): void {
+    if (
+      mode !== 'preview' ||
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey
+    ) {
+      return
+    }
+    const anchor = (event.target as Element | null)?.closest?.('a')
+    if (!anchor || anchor.hasAttribute('download')) return
+    const target = anchor.getAttribute('target')
+    if (target && target.toLowerCase() !== '_self') return
+    const href = anchor.getAttribute('href')
+    if (!href?.startsWith('#')) return
+
+    // srcdoc resolves fragment URLs against the host page; keep these jumps in the canvas.
+    event.preventDefault()
+    const doc = anchor.ownerDocument
+    if (href === '#') {
+      doc.defaultView?.scrollTo(0, 0)
+      return
+    }
+    let id = href.slice(1)
+    try {
+      id = decodeURIComponent(id)
+    } catch {
+      // A malformed escape may still be the literal id of an element.
+    }
+    const destination =
+      doc.getElementById(id) ??
+      Array.from(doc.getElementsByName(id)).find((element) => element.localName === 'a')
+    destination?.scrollIntoView()
+  }
+
+  function onFrameLoad(): void {
+    previewDocument?.removeEventListener('click', onPreviewClick)
     const d = iframe.contentDocument
+    previewDocument = d
     if (!d) return
+    d.addEventListener('click', onPreviewClick)
     injectStyle(d)
     renderer.mount(engine.getTree(), d.body)
     paintSelection()
     paintHover()
-  })
+  }
+
+  const htmlPolicy = opts?.rendererOptions?.htmlPolicy
+  if (htmlPolicy) htmlPolicy.setTemplate(iframe, FRAME_DOCUMENT)
+  else iframe.srcdoc = FRAME_DOCUMENT
+  iframe.addEventListener('load', onFrameLoad)
 
   const unsub = engine.subscribe((ev: EngineEvent) => {
     const d = iframe.contentDocument
@@ -699,6 +744,9 @@ export function createCanvas(
     },
     destroy() {
       if (editing) endEditing(false)
+      iframe.removeEventListener('load', onFrameLoad)
+      previewDocument?.removeEventListener('click', onPreviewClick)
+      previewDocument = null
       overlay.removeEventListener('click', onOverlayClick)
       overlay.removeEventListener('dblclick', onOverlayDblClick)
       overlay.removeEventListener('contextmenu', onOverlayContextMenu)

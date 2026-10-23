@@ -1,0 +1,14 @@
+FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+
+WORKDIR /work
+RUN npm install --global pnpm@10.27.0
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages ./packages
+COPY demo ./demo
+COPY examples ./examples
+RUN pnpm install --frozen-lockfile
+COPY tsconfig*.json playwright*.config.ts ./
+COPY scripts/sigil-version-defines.mjs ./scripts/
+COPY e2e ./e2e
+ENV CI=1
+ENTRYPOINT ["pnpm", "test:visual"]

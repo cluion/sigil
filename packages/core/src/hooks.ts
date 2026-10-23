@@ -4,7 +4,7 @@ import type { Engine } from './engine/types.js'
 /**
  * 殼層與宿主生命週期 hooks
  *
- * hooks 皆可選且隔離錯誤
+ * hooks 皆可選；通知型 hook 隔離錯誤，beforeSave 失敗則中止寫入。
  */
 export interface EditorHooks {
   onSelect?: (id: string | null, ctx: { engine: Engine }) => void
@@ -16,7 +16,10 @@ export interface EditorHooks {
     doc: SigilDoc,
     ctx: { engine: Engine },
   ) => void | SigilDoc | Promise<void | SigilDoc>
+  /** Notification after an acknowledged write; errors do not turn the save into a failure. */
   afterSave?: (doc: SigilDoc, ctx: { engine: Engine }) => void | Promise<void>
+  /** Failed beforeSave or adapter write, including saves initiated by keyboard/UI. */
+  onSaveError?: (error: unknown, ctx: { engine: Engine; doc: SigilDoc }) => void | Promise<void>
   /** 初始 doc 掛載後 */
   afterLoad?: (doc: SigilDoc, ctx: { engine: Engine }) => void | Promise<void>
   beforeDestroy?: (ctx: { engine: Engine }) => void
@@ -39,6 +42,19 @@ export async function runAfterSave(
 ): Promise<void> {
   if (!hooks?.afterSave) return
   await hooks.afterSave(doc, { engine })
+}
+
+export async function runOnSaveError(
+  hooks: EditorHooks | undefined,
+  error: unknown,
+  doc: SigilDoc,
+  engine: Engine,
+): Promise<void> {
+  try {
+    await hooks?.onSaveError?.(error, { engine, doc: structuredClone(doc) })
+  } catch {
+    // Preserve the original save failure even if the host's error notification fails.
+  }
 }
 
 export function runOnSelect(

@@ -2,10 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createApp, type SigilApp } from '@cluion/sigil-app'
 import { basicBlocks, blockSection, blockText, blockShortcode } from '@cluion/sigil-blocks'
 import { JsonProjectStore, MemoryAssetStore } from '@cluion/sigil-store-json'
-import type { SigilDoc } from '@cluion/sigil-core'
+import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 const store = new JsonProjectStore()
+const projectStore: ProjectStore = {
+  load() {
+    const json = localStorage.getItem('sigil-ex-react')
+    return json === null ? null : store.importJSON(json)
+  },
+  save(doc) {
+    localStorage.setItem('sigil-ex-react', store.exportJSON(doc))
+  },
+}
 const assets = new MemoryAssetStore([
   { id: 'r1', url: 'https://placehold.co/160x100/png?text=React', name: 'React' },
 ])
@@ -47,7 +56,7 @@ export function App() {
     appRef.current = createApp({
       mount: el,
       doc,
-      store,
+      store: projectStore,
       assets,
       blocks,
       shortcodes: [greet],
@@ -62,11 +71,17 @@ export function App() {
     }
   }, [mount])
 
-  function save() {
+  async function save(): Promise<void> {
     const a = appRef.current
     if (!a) return
-    localStorage.setItem('sigil-ex-react', store.exportJSON(a.toJSON()))
-    setStatus('已存')
+    try {
+      await a.save()
+      if (appRef.current === a) setStatus('已存')
+    } catch (error) {
+      if (appRef.current === a) {
+        setStatus(`存檔失敗：${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
   }
 
   function load() {
