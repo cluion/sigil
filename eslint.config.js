@@ -7,9 +7,13 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       '**/coverage/**',
+      'playwright-report/**',
+      'test-results/**',
       '**/*.d.ts',
-      // Laravel 參考片段・宿主環境 globals・非 monorepo 建置目標
-      'examples/laravel/**',
+      'examples/laravel/vendor/**',
+      'examples/laravel/public/build/**',
+      'examples/laravel/storage/**',
+      'examples/laravel/scripts/*.mjs',
       // Node 腳本
       'scripts/**',
     ],

@@ -27,12 +27,14 @@ const app = createApp({
     onSelect: (id) => console.log('select', id),
     beforeSave: (doc) => doc,
     afterSave: () => console.log('saved'),
+    onSaveError: (error) => console.error('save failed', error),
     afterLoad: () => console.log('loaded'),
   },
 })
 
 await app.runCommand('undo')
 app.isDirty()
+app.isSaving()
 ```
 
 `createEditor`（`@cluion/sigil`）同樣支援 `commands`／`hooks`／`runCommand`（無產品殼 Topbar 時，`toolbar` 僅語意標記，需自繪按鈕）。
@@ -52,6 +54,8 @@ app.isDirty()
 
 預設命令：`undo`／`redo`／`delete`／`copy`／`paste`／`save`（app 另註冊 `export`）。
 
+預設 `save` 命令與公開 `save()` 共用保存佇列；`await app.runCommand('save')` 或 `await editor.runCommand('save')` 會等待完成，`beforeSave`／store 失敗會 reject，呼叫者須處理錯誤。快捷鍵／App 按鈕啟動的失敗會經 `onSaveError` 通知宿主；App 也會顯示保存失敗。
+
 DevTools（demo 會掛 `window.__sigil`）：
 
 ```js
@@ -63,15 +67,18 @@ await __sigil.runCommand('demo-ping')
 
 ## Hooks
 
-| Hook            | 時機                               |
-| --------------- | ---------------------------------- |
-| `onSelect`      | 選取變更                           |
-| `beforeSave`    | 寫入 ProjectStore 前；可回傳新 doc |
-| `afterSave`     | 寫入後                             |
-| `afterLoad`     | 殼掛載完成                         |
-| `beforeDestroy` | destroy 前                         |
+| Hook            | 時機                                                                          |
+| --------------- | ----------------------------------------------------------------------------- |
+| `onSelect`      | 選取變更                                                                      |
+| `beforeSave`    | 寫入 ProjectStore 前；接收隔離快照，可回傳新 doc；拋錯中止該次寫入            |
+| `afterSave`     | store 確認成功後的通知；錯誤被隔離，不改變已成功寫入的結果                    |
+| `onSaveError`   | `beforeSave` 或 store 失敗；參數為 `error`、`{ engine, doc }`，通知錯誤被隔離 |
+| `afterLoad`     | 殼掛載完成                                                                    |
+| `beforeDestroy` | destroy 前                                                                    |
 
-宿主錯誤在多數 hook 會被隔離，避免拖垮編輯器。
+`beforeSave` 是保存閘門，不能吞掉錯誤繼續寫入。它修改的是該次提交的隔離 payload，不會將轉換結果寫回 engine；dirty 仍以呼叫 `save()` 時提交的樹版本為準。`afterSave`／`onSaveError` 是通知，通知失敗不會取代原本的保存結果。`onSelect`、`afterLoad`、`beforeDestroy` 的宿主錯誤也會隔離。
+
+`toJSON()` 現在只回傳隔離快照，不呼叫任何保存 hook。此契約為下一個**尚未發布的 minor 破壞性變更**；從 `0.20.x` 遷移時須將用來存檔的 `toJSON()` 改為 `await save()`。初始載入由宿主先 `await store.load()` 再建立 App／Editor；`afterLoad` 表示初始文件已掛載，不代表編輯器會自行讀取遠端。完整重試、dirty 與 destroy 契約見[保存指南](/guide/persistence)。
 
 ---
 

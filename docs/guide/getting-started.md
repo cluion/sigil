@@ -42,9 +42,12 @@ const app = createApp({
   shortcodes: [greet],
 })
 
-app.toJSON()
+app.toJSON() // 純快照，不存檔
+await app.save() // 寫入 ProjectStore；此例僅保存在記憶體
 app.toHTML()
 ```
+
+`save()`、`isSaving()` 與新的 `toJSON()` 語意是下一個**尚未發布的 minor 破壞性變更**。既有 `0.20.x` 若以 `toJSON()` 存檔，請改為 `await save()`；詳見[保存契約與遷移](/guide/persistence)。
 
 `createApp()` 會依 mount 容器寬度調整產品殼。窄於 900px 時，左右面板會改成互斥抽屜；可用面板按鈕開關，或按 Escape／點擊背景關閉。這項判斷以嵌入容器為準，不依賴整個瀏覽器視窗寬度。
 
@@ -108,20 +111,38 @@ import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
 
 const store: ProjectStore = {
   async load() {
-    const r = await fetch('/api/page')
-    return r.ok ? ((await r.json()) as SigilDoc) : null
+    const response = await fetch('/api/page', {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error(`load failed: ${response.status}`)
+    return (await response.json()) as SigilDoc
   },
   async save(doc) {
-    await fetch('/api/page', {
+    const response = await fetch('/api/page', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')!.content,
+      },
+      credentials: 'same-origin',
       body: JSON.stringify(doc),
     })
+    if (!response.ok) throw new Error(`save failed: ${response.status}`)
   },
 }
+
+// 宿主先載入，再掛載。載入失敗時中止，不以空白文件覆蓋原內容。
+const doc: SigilDoc = (await store.load()) ?? { version: 1, root: blockSection() }
+const app = createApp({ mount: '#app', doc, store, blocks: basicBlocks })
+await app.save()
 ```
 
-`JsonProjectStore`：記憶體與 JSON 字串。Laravel：`examples/laravel/`。
+此片段沿用前例的 `createApp`、`blockSection`、`basicBlocks` imports，並假設宿主提供同源 Session API 與 CSRF meta。伺服器仍須驗證身分、權限及文件結構；TypeScript 型別斷言不是執行時驗證。只把確認為「文件不存在」的 404 當作 `null`，不要把 401／403／500 當作空白頁。
+
+App／Editor 沒有自動呼叫 `store.load()`，也沒有高階 `load()` API。`JsonProjectStore` 只提供記憶體與 JSON 字串操作。倉庫的 `examples/laravel/` 提供可執行的活動頁後台，包含 Session 登入、owner 隔離、revision 衝突、文件驗證與持久化圖片；請依該目錄 README 使用目前工作樹建置。範例限制與新保存 API 均不代表已發布的 `0.20.x` 行為。完整保存狀態見[保存契約](/guide/persistence)。
 
 ## AssetStore
 
@@ -135,6 +156,10 @@ createApp({ mount: '#app', assets })
 
 選中圖片區塊後，內容分頁可「選圖」或上傳。  
 shortcode 的 PropSchema 可設 `type: 'media'`，表單同樣接 AssetStore。
+
+`MemoryAssetStore` 的上傳使用 object URL，僅供 demo／當前頁面使用；需要重載後仍能使用的圖片時，宿主必須提供持久化上傳與素材 URL。
+
+媒體庫會顯示載入／上傳狀態；adapter 拋錯或 reject 時保留對話框並提供重試，上傳期間不重複送出。切換選取、重建表單或銷毀編輯器時會關閉所屬選圖視窗；語系切換則保留操作並更新文案。關閉後收到的結果不會再套用圖片，但已送出的上傳仍可能在伺服器完成；`AssetStore` 目前沒有取消請求的介面。HTTP adapter 必須自行檢查非 2xx 回應，不能把失敗當作空列表或成功上傳。
 
 ## 本倉庫
 

@@ -57,6 +57,7 @@ export function createInspector(
 
   let tab: InspectorTab = 'content'
   let device: ResponsiveDevice = opts?.device ?? 'desktop'
+  let destroyed = false
   const tabBtns: Record<InspectorTab, HTMLButtonElement> = {
     content: makeTab('content', uiText(opts?.i18n, 'inspector.tab_content', '內容')),
     style: makeTab('style', uiText(opts?.i18n, 'inspector.tab_style', '樣式')),
@@ -72,6 +73,7 @@ export function createInspector(
     btn.textContent = label
     btn.setAttribute('role', 'tab')
     btn.addEventListener('click', () => {
+      if (destroyed) return
       tab = id
       syncTabs()
       render()
@@ -87,12 +89,18 @@ export function createInspector(
     }
   }
 
-  let currentFormDestroy: (() => void) | null = null
+  const contentDisposers: (() => void)[] = []
+  const contentLocaleRefreshers: (() => void)[] = []
+
+  function disposeContent(): void {
+    for (const dispose of contentDisposers.splice(0)) dispose()
+    contentLocaleRefreshers.length = 0
+  }
 
   function render(): void {
+    if (destroyed) return
     syncTabs()
-    currentFormDestroy?.()
-    currentFormDestroy = null
+    disposeContent()
     body.replaceChildren()
     const id = engine.getSelection()
     if (!id) {
@@ -111,6 +119,14 @@ export function createInspector(
       )
       empty.append(t, tip)
       body.appendChild(empty)
+      contentLocaleRefreshers.push(() => {
+        t.textContent = uiText(opts?.i18n, 'inspector.empty', '尚未選取元件')
+        tip.textContent = uiText(
+          opts?.i18n,
+          'inspector.empty_hint',
+          '在畫布點一下區塊，即可編輯內容、樣式與進階屬性。',
+        )
+      })
       return
     }
     const node = findNode(engine.getTree(), id)
@@ -122,9 +138,14 @@ export function createInspector(
     body.appendChild(head)
 
     if (tab === 'content')
-      renderContent(body, engine, node, opts, (fn) => {
-        currentFormDestroy = fn
-      })
+      renderContent(
+        body,
+        engine,
+        node,
+        opts,
+        (fn) => contentDisposers.push(fn),
+        (fn) => contentLocaleRefreshers.push(fn),
+      )
     else if (tab === 'style') renderStyle(body, engine, node, device, render, opts?.i18n)
     else renderAdvanced(body, engine, node, opts?.i18n)
   }
@@ -136,18 +157,22 @@ export function createInspector(
     tabBtns.content.textContent = uiText(opts?.i18n, 'inspector.tab_content', '內容')
     tabBtns.style.textContent = uiText(opts?.i18n, 'inspector.tab_style', '樣式')
     tabBtns.advanced.textContent = uiText(opts?.i18n, 'inspector.tab_advanced', '進階')
-    render()
+    // Content controls (including an open media picker) retain their current operation.
+    if (tab === 'content') {
+      for (const refresh of contentLocaleRefreshers) refresh()
+    } else render()
   })
   render()
   return {
     setDevice(next) {
-      if (device === next) return
+      if (destroyed || device === next) return
       device = next
       if (tab === 'style') render()
     },
     destroy() {
-      currentFormDestroy?.()
-      currentFormDestroy = null
+      if (destroyed) return
+      destroyed = true
+      disposeContent()
       unsub()
       unsubLocale()
     },
@@ -160,6 +185,7 @@ function renderContent(
   node: ComponentNode,
   opts?: InspectorOptions,
   registerDestroy?: (fn: () => void) => void,
+  registerLocaleRefresh?: (fn: () => void) => void,
 ): void {
   const isRichText = opts?.richText?.supports(node) ?? false
   if (isRichText && opts?.richText) {
@@ -178,17 +204,44 @@ function renderContent(
     hint.textContent = uiText(opts.i18n, 'rich_text.canvas_hint', '請在畫布編輯富文字')
     wrap.append(label, summary, hint)
     container.appendChild(wrap)
+    registerLocaleRefresh?.(() => {
+      const currentNode = findNode(engine.getTree(), node.id) ?? node
+      label.textContent = uiText(opts.i18n, 'rich_text.summary', '富文字摘要')
+      summary.textContent =
+        richTextSummary(opts.richText!.read(currentNode)) ||
+        uiText(opts.i18n, 'rich_text.empty', '空白富文字')
+      hint.textContent = uiText(opts.i18n, 'rich_text.canvas_hint', '請在畫布編輯富文字')
+    })
   } else if (node.type === 'text' || node.type === 'button') {
-    field(container, uiText(opts?.i18n, 'inspector.tab_content', '內容'), () => {
-      const input = document.createElement('input')
-      input.className = 'sigil-input'
-      input.value = node.content ?? ''
-      input.addEventListener('input', () => engine.update(node.id, { content: input.value }))
-      return input
+    const contentField = field(
+      container,
+      uiText(opts?.i18n, 'inspector.tab_content', '內容'),
+      () => {
+        const input = document.createElement('input')
+        input.className = 'sigil-input'
+        input.value = node.content ?? ''
+        input.addEventListener('input', () => engine.update(node.id, { content: input.value }))
+        return input
+      },
+    )
+    registerLocaleRefresh?.(() => {
+      contentField.querySelector('.sigil-field-label')!.textContent = uiText(
+        opts?.i18n,
+        'inspector.tab_content',
+        '內容',
+      )
     })
   }
   if (node.type === 'image') {
-    appendImageFields(container, engine, node, opts?.assets, opts?.i18n)
+    appendImageFields(
+      container,
+      engine,
+      node,
+      opts?.assets,
+      opts?.i18n,
+      registerDestroy,
+      registerLocaleRefresh,
+    )
   }
   if (node.shortcode) {
     const h = document.createElement('h4')
@@ -243,6 +296,13 @@ function renderContent(
       '此節點無可編輯內容欄位，可切到樣式分頁',
     )
     container.appendChild(p)
+    registerLocaleRefresh?.(() => {
+      p.textContent = uiText(
+        opts?.i18n,
+        'inspector.no_content',
+        '此節點無可編輯內容欄位，可切到樣式分頁',
+      )
+    })
   }
 }
 
@@ -252,7 +312,16 @@ function appendImageFields(
   node: ComponentNode,
   assets?: AssetStore,
   i18n?: I18n,
+  registerDestroy?: (fn: () => void) => void,
+  registerLocaleRefresh?: (fn: () => void) => void,
 ): void {
+  let disposed = false
+  let closePicker: (() => void) | null = null
+  registerDestroy?.(() => {
+    disposed = true
+    closePicker?.()
+    closePicker = null
+  })
   const wrap = document.createElement('div')
   wrap.className = 'sigil-field'
 
@@ -271,9 +340,12 @@ function appendImageFields(
   input.className = 'sigil-input'
   input.value = src
   input.placeholder = 'https://…'
-  input.addEventListener('input', () => {
-    const next = input.value
-    engine.update(node.id, { attributes: { ...node.attributes, src: next } })
+  function updateSource(next: string): void {
+    if (disposed) return
+    const current = findNode(engine.getTree(), node.id)
+    if (!current) return
+    engine.update(node.id, { attributes: { ...current.attributes, src: next } })
+    input.value = next
     if (next) {
       preview.src = next
       preview.style.display = ''
@@ -281,7 +353,8 @@ function appendImageFields(
       preview.removeAttribute('src')
       preview.style.display = 'none'
     }
-  })
+  }
+  input.addEventListener('input', () => updateSource(input.value))
 
   const row = document.createElement('div')
   row.className = 'sigil-field-row'
@@ -293,23 +366,28 @@ function appendImageFields(
     pickBtn.className = 'sigil-btn'
     pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
     pickBtn.addEventListener('click', () => {
-      openMediaPicker({
+      if (disposed || closePicker) return
+      closePicker = openMediaPicker({
         assets,
         i18n,
-        currentUrl: node.attributes?.src,
-        onPick: (item) => {
-          engine.update(node.id, {
-            attributes: { ...node.attributes, src: item.url },
-          })
+        currentUrl: findNode(engine.getTree(), node.id)?.attributes?.src,
+        onPick: (item) => updateSource(item.url),
+        onClose: () => {
+          closePicker = null
         },
-        onClose: () => {},
       })
+    })
+    registerLocaleRefresh?.(() => {
+      pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
     })
     row.appendChild(pickBtn)
   }
 
   wrap.append(label, preview, row)
   container.appendChild(wrap)
+  registerLocaleRefresh?.(() => {
+    label.textContent = uiText(i18n, 'inspector.image', '圖片')
+  })
 }
 
 function renderStyle(
@@ -490,7 +568,7 @@ function renderAdvanced(
   }
 }
 
-function field(container: HTMLElement, label: string, control: () => HTMLElement): void {
+function field(container: HTMLElement, label: string, control: () => HTMLElement): HTMLElement {
   const wrap = document.createElement('label')
   wrap.className = 'sigil-field'
   const span = document.createElement('span')
@@ -498,4 +576,5 @@ function field(container: HTMLElement, label: string, control: () => HTMLElement
   span.textContent = label
   wrap.append(span, control())
   container.appendChild(wrap)
+  return wrap
 }

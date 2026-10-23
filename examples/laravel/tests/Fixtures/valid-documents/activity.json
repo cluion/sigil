@@ -1,0 +1,430 @@
+{
+  "version": 1,
+  "meta": {
+    "title": "秋日設計工作坊"
+  },
+  "root": {
+    "id": "activity-root",
+    "type": "section",
+    "name": "活動頁",
+    "style": {
+      "box-sizing": "border-box",
+      "max-width": "1200px",
+      "margin": "0 auto",
+      "padding": "2rem",
+      "display": "flex",
+      "flex-direction": "column",
+      "gap": "1.5rem",
+      "background": "#f1f5f9",
+      "font-family": "system-ui, sans-serif"
+    },
+    "responsiveStyles": {
+      "mobile": {
+        "padding": "0.75rem",
+        "gap": "1rem"
+      }
+    },
+    "children": [
+      {
+        "id": "activity-hero",
+        "type": "section",
+        "name": "主視覺",
+        "attributes": {
+          "aria-label": "主視覺"
+        },
+        "style": {
+          "box-sizing": "border-box",
+          "width": "100%",
+          "min-height": "34rem",
+          "display": "flex",
+          "flex-direction": "column",
+          "align-items": "center",
+          "justify-content": "center",
+          "gap": "1.5rem",
+          "padding": "6rem 3rem",
+          "overflow": "hidden",
+          "color": "#0f172a",
+          "text-align": "center",
+          "background": "linear-gradient(135deg, #f8fafc 0%, #eef2ff 52%, #f5f3ff 100%)",
+          "border": "1px solid #e2e8f0",
+          "border-radius": "1.5rem",
+          "font-family": "ui-sans-serif, system-ui, sans-serif"
+        },
+        "responsiveStyles": {
+          "tablet": {
+            "min-height": "30rem",
+            "padding": "4.5rem 2rem"
+          },
+          "mobile": {
+            "min-height": "26rem",
+            "gap": "1.25rem",
+            "padding": "3.5rem 1.25rem",
+            "border-radius": "1rem"
+          }
+        },
+        "children": [
+          {
+            "id": "c-mvkv4hde-1-ztxx",
+            "type": "text",
+            "tagName": "span",
+            "name": "眉標",
+            "content": "一起動手，讓靈感成形",
+            "style": {
+              "display": "inline-flex",
+              "padding": "0.5rem 0.875rem",
+              "color": "#4338ca",
+              "background": "#ffffff",
+              "border": "1px solid #c7d2fe",
+              "border-radius": "999px",
+              "font-size": "0.875rem",
+              "font-weight": "700",
+              "line-height": "1.25",
+              "letter-spacing": "0.04em"
+            }
+          },
+          {
+            "id": "activity-title",
+            "type": "text",
+            "tagName": "h1",
+            "name": "活動標題",
+            "content": "秋日設計工作坊",
+            "style": {
+              "margin": "0",
+              "max-width": "52rem",
+              "font-size": "3.5rem",
+              "font-weight": "750",
+              "line-height": "1.08",
+              "letter-spacing": "-0.03em"
+            },
+            "responsiveStyles": {
+              "tablet": {
+                "font-size": "2.75rem"
+              },
+              "mobile": {
+                "font-size": "2.25rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-3-7uoe",
+            "type": "text",
+            "tagName": "p",
+            "name": "說明",
+            "content": "用一個下午，探索設計、分享想法，完成自己的第一件作品。",
+            "style": {
+              "margin": "0",
+              "max-width": "42rem",
+              "color": "#475569",
+              "font-size": "1.125rem",
+              "line-height": "1.7"
+            },
+            "responsiveStyles": {
+              "mobile": {
+                "font-size": "1rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-4-1iwo",
+            "type": "button",
+            "name": "主要行動",
+            "attributes": {
+              "href": "#event-info"
+            },
+            "content": "查看活動資訊",
+            "style": {
+              "appearance": "none",
+              "padding": "0.875rem 1.5rem",
+              "color": "#ffffff",
+              "background": "#4f46e5",
+              "border": "0",
+              "border-radius": "999px",
+              "box-shadow": "0 0.75rem 1.75rem rgba(79, 70, 229, 0.24)",
+              "cursor": "pointer",
+              "font-size": "1rem",
+              "font-weight": "700",
+              "line-height": "1.25"
+            },
+            "tagName": "a"
+          }
+        ]
+      },
+      {
+        "id": "activity-image",
+        "type": "image",
+        "attributes": {
+          "src": "http://127.0.0.1:4175/placeholder.svg",
+          "alt": "活動示意圖，請換成你的活動照片"
+        },
+        "name": "活動圖片",
+        "style": {
+          "width": "100%",
+          "height": "auto",
+          "border-radius": "1rem"
+        }
+      },
+      {
+        "id": "activity-info",
+        "type": "section",
+        "children": [
+          {
+            "id": "c-mvkv4hde-7-i87j",
+            "type": "text",
+            "content": "活動資訊",
+            "tagName": "h2",
+            "name": "資訊標題"
+          },
+          {
+            "id": "c-mvkv4hde-8-1djt",
+            "type": "text",
+            "content": "時間｜11 月 14 日 14:00–17:00"
+          },
+          {
+            "id": "c-mvkv4hde-9-7wt8",
+            "type": "text",
+            "content": "地點｜城市創作空間"
+          },
+          {
+            "id": "c-mvkv4hde-a-a9ab",
+            "type": "text",
+            "content": "對象｜對設計有興趣的初學者；不需要事先準備作品。"
+          }
+        ],
+        "name": "活動資訊",
+        "attributes": {
+          "id": "event-info"
+        },
+        "style": {
+          "padding": "2rem",
+          "background": "#ffffff",
+          "border-radius": "1rem"
+        }
+      },
+      {
+        "id": "c-mvkv4hde-b-5zp3",
+        "type": "section",
+        "name": "常見問題",
+        "attributes": {
+          "aria-label": "常見問題"
+        },
+        "style": {
+          "box-sizing": "border-box",
+          "width": "100%",
+          "display": "flex",
+          "flex-direction": "column",
+          "align-items": "center",
+          "gap": "1.25rem",
+          "padding": "5rem 3rem",
+          "overflow": "hidden",
+          "color": "#0f172a",
+          "text-align": "center",
+          "background": "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+          "border": "1px solid #e2e8f0",
+          "border-radius": "1.5rem",
+          "font-family": "ui-sans-serif, system-ui, sans-serif"
+        },
+        "responsiveStyles": {
+          "tablet": {
+            "padding": "4rem 2rem"
+          },
+          "mobile": {
+            "padding": "3.5rem 1rem",
+            "border-radius": "1rem"
+          }
+        },
+        "children": [
+          {
+            "id": "c-mvkv4hde-c-m0xn",
+            "type": "text",
+            "tagName": "span",
+            "name": "FAQ 眉標",
+            "content": "常見問題",
+            "style": {
+              "color": "#4f46e5",
+              "font-size": "0.875rem",
+              "font-weight": "750",
+              "line-height": "1.25",
+              "letter-spacing": "0.08em",
+              "text-transform": "uppercase"
+            }
+          },
+          {
+            "id": "c-mvkv4hde-d-q4a6",
+            "type": "text",
+            "tagName": "h2",
+            "name": "FAQ 標題",
+            "content": "參加前的小提醒",
+            "style": {
+              "margin": "0",
+              "max-width": "48rem",
+              "font-size": "2.75rem",
+              "font-weight": "750",
+              "line-height": "1.12",
+              "letter-spacing": "-0.025em"
+            },
+            "responsiveStyles": {
+              "tablet": {
+                "font-size": "2.375rem"
+              },
+              "mobile": {
+                "font-size": "2rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-e-m2r8",
+            "type": "text",
+            "tagName": "p",
+            "name": "FAQ 說明",
+            "content": "以下內容都可以直接編輯成你的活動說明。",
+            "style": {
+              "margin": "0 0 2rem",
+              "max-width": "42rem",
+              "color": "#64748b",
+              "font-size": "1.0625rem",
+              "line-height": "1.7"
+            },
+            "responsiveStyles": {
+              "mobile": {
+                "margin": "0 0 1.25rem",
+                "font-size": "1rem"
+              }
+            }
+          },
+          {
+            "id": "c-mvkv4hde-f-9ysl",
+            "type": "section",
+            "tagName": "dl",
+            "name": "常見問題列表",
+            "attributes": {
+              "aria-label": "常見問題列表"
+            },
+            "style": {
+              "width": "100%",
+              "max-width": "72rem",
+              "display": "grid",
+              "grid-template-columns": "repeat(2, minmax(0, 1fr))",
+              "gap": "1.25rem",
+              "margin": "0",
+              "text-align": "left"
+            },
+            "responsiveStyles": {
+              "tablet": {
+                "grid-template-columns": "minmax(0, 1fr)"
+              },
+              "mobile": {
+                "gap": "1rem"
+              }
+            },
+            "children": [
+              {
+                "id": "c-mvkv4hde-g-a55v",
+                "type": "section",
+                "tagName": "div",
+                "name": "需要自備工具嗎？問答",
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "0.75rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "1px solid #e2e8f0",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 0.75rem 2rem rgba(15, 23, 42, 0.06)"
+                },
+                "responsiveStyles": {
+                  "mobile": {
+                    "padding": "1.25rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-h-asmi",
+                    "type": "text",
+                    "tagName": "dt",
+                    "name": "需要自備工具嗎？問題",
+                    "content": "需要自備工具嗎？",
+                    "style": {
+                      "color": "#1e1b4b",
+                      "font-size": "1.125rem",
+                      "font-weight": "750",
+                      "line-height": "1.4",
+                      "overflow-wrap": "anywhere"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-i-6lcx",
+                    "type": "text",
+                    "tagName": "dd",
+                    "name": "需要自備工具嗎？答案",
+                    "content": "現場會提供材料與工具，帶著好奇心來就好。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#475569",
+                      "line-height": "1.7",
+                      "overflow-wrap": "anywhere"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c-mvkv4hde-j-0orq",
+                "type": "section",
+                "tagName": "div",
+                "name": "沒有經驗也能參加嗎？問答",
+                "style": {
+                  "box-sizing": "border-box",
+                  "min-width": "0",
+                  "display": "flex",
+                  "flex-direction": "column",
+                  "gap": "0.75rem",
+                  "padding": "1.5rem",
+                  "background": "#ffffff",
+                  "border": "1px solid #e2e8f0",
+                  "border-radius": "1.25rem",
+                  "box-shadow": "0 0.75rem 2rem rgba(15, 23, 42, 0.06)"
+                },
+                "responsiveStyles": {
+                  "mobile": {
+                    "padding": "1.25rem"
+                  }
+                },
+                "children": [
+                  {
+                    "id": "c-mvkv4hde-k-ox9q",
+                    "type": "text",
+                    "tagName": "dt",
+                    "name": "沒有經驗也能參加嗎？問題",
+                    "content": "沒有經驗也能參加嗎？",
+                    "style": {
+                      "color": "#1e1b4b",
+                      "font-size": "1.125rem",
+                      "font-weight": "750",
+                      "line-height": "1.4",
+                      "overflow-wrap": "anywhere"
+                    }
+                  },
+                  {
+                    "id": "c-mvkv4hde-l-0s3e",
+                    "type": "text",
+                    "tagName": "dd",
+                    "name": "沒有經驗也能參加嗎？答案",
+                    "content": "可以，老師會從基礎步驟開始示範。",
+                    "style": {
+                      "margin": "0",
+                      "color": "#475569",
+                      "line-height": "1.7",
+                      "overflow-wrap": "anywhere"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -305,7 +305,7 @@ describe('editor — toHTML', () => {
 })
 
 describe('editor — ProjectStore 注入', () => {
-  it('toJSON 呼叫注入的 store.save', () => {
+  it('toJSON 匯出快照，save 才呼叫注入的 store.save', async () => {
     const saved: SigilDoc[] = []
     const store: ProjectStore = {
       load: () => null,
@@ -324,8 +324,11 @@ describe('editor — ProjectStore 注入', () => {
     })
     const doc = editor.toJSON()
     expect(doc.root.children?.[0]?.content).toBe('a')
+    expect(saved).toHaveLength(0)
+    await editor.save()
     expect(saved).toHaveLength(1)
     expect(saved[0]!.root.id).toBe('r')
+    editor.destroy()
   })
 
   it('主路徑：update → toJSON → toHTML', () => {

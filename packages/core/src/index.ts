@@ -11,6 +11,7 @@ export * from './i18n.js'
 export * from './commands.js'
 export * from './builtin-commands.js'
 export * from './hooks.js'
+export * from './project-persistence.js'
 export type { ProjectStore, AssetStore, AssetItem, TemplateStore, TemplateDef } from './adapters.js'
 
 export { SIGIL_CORE_VERSION } from './version.js'

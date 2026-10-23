@@ -10,8 +10,7 @@ import {
   createCommandRegistry,
   createDefaultEditingCommands,
   defineCommand,
-  runBeforeSave,
-  runAfterSave,
+  createProjectPersistence,
   runOnSelect,
   runAfterLoad,
   runBeforeDestroy,
@@ -86,6 +85,12 @@ const i18nMessages = {
     'media.close': '關閉',
     'media.upload': '上傳圖片',
     'media.empty': '尚無媒體',
+    'media.loading': '正在載入媒體…',
+    'media.load_failed': '媒體載入失敗',
+    'media.retry': '重試',
+    'media.uploading': '正在上傳…',
+    'media.upload_failed': '圖片上傳失敗',
+    'media.retry_upload': '重試上傳',
     'props.title': '屬性',
     'props.empty': '未選取節點',
     'props.content': '內容',
@@ -166,6 +171,12 @@ const i18nMessages = {
     'media.close': 'Close',
     'media.upload': 'Upload image',
     'media.empty': 'No media yet',
+    'media.loading': 'Loading media…',
+    'media.load_failed': 'Failed to load media',
+    'media.retry': 'Retry',
+    'media.uploading': 'Uploading…',
+    'media.upload_failed': 'Image upload failed',
+    'media.retry_upload': 'Retry upload',
     'props.title': 'Properties',
     'props.empty': 'No node selected',
     'props.content': 'Content',
@@ -243,7 +254,12 @@ export interface EditorOptions {
 
 export interface SigilEditor {
   engine: Engine
+  /** Pure detached snapshot; use save() to write to ProjectStore. */
   toJSON(): SigilDoc
+  /** Persist the revision captured at invocation; rejects on failure. */
+  save(): Promise<SigilDoc>
+  isSaving(): boolean
+  isDirty(): boolean
   toHTML(mode?: HtmlMode): string
   /** 執行已註冊命令 */
   runCommand(id: string): Promise<boolean>
@@ -303,13 +319,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   let templateLibrary: TemplateLibraryController | null = null
   let destroyed = false
 
-  async function persist(): Promise<SigilDoc> {
-    let doc = engine.toJSON()
-    doc = await runBeforeSave(hooks, doc, engine)
-    await Promise.resolve(store.save(doc))
-    await runAfterSave(hooks, doc, engine)
-    return doc
-  }
+  const persistence = createProjectPersistence({ engine, store, hooks })
 
   const commandMap = new Map<string, CommandDefinition>()
   for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
@@ -345,8 +355,8 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     return {
       engine,
       getDoc: () => engine.toJSON(),
-      save: () => {
-        void persist()
+      save: async () => {
+        await persistence.save()
       },
       clipboard: {
         get: () => clipboard,
@@ -415,7 +425,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
           id,
           label: commandLabel(cmd),
           run: () => {
-            void commands.run(id, makeCtx())
+            void commands.run(id, makeCtx()).catch(() => {})
           },
         })
       }
@@ -492,7 +502,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     const cmd = commands.match(e, makeCtx())
     if (!cmd) return
     e.preventDefault()
-    void commands.run(cmd.id, makeCtx())
+    void commands.run(cmd.id, makeCtx()).catch(() => {})
   }
   document.addEventListener('keydown', onKeyDown)
 
@@ -509,10 +519,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   return {
     engine,
     toJSON() {
-      // 同步匯出並寫入 store
-      const doc = engine.toJSON()
-      void store.save(doc)
-      return doc
+      return structuredClone(engine.toJSON())
     },
     toHTML(mode?: HtmlMode) {
       return toHTML(engine.toJSON(), {
@@ -522,6 +529,9 @@ export function createEditor(opts: EditorOptions): SigilEditor {
         mode,
       })
     },
+    save: persistence.save,
+    isDirty: persistence.isDirty,
+    isSaving: persistence.isSaving,
     runCommand(id: string) {
       return commands.run(id, makeCtx())
     },
@@ -530,7 +540,9 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     },
     setLocale,
     destroy() {
+      if (destroyed) return
       destroyed = true
+      persistence.destroy()
       runBeforeDestroy(hooks, engine)
       closeMenu?.()
       cleanupTheme()

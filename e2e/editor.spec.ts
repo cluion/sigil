@@ -1,26 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
-
-const placeholderSvg = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="120">
-    <rect width="200" height="120" fill="#e2e8f0" />
-  </svg>
-`
-
-async function prepareDemo(page: Page): Promise<string[]> {
-  const errors: string[] = []
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`))
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`)
-  })
-  await page.route('https://placehold.co/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/svg+xml',
-      body: placeholderSvg,
-    }),
-  )
-  return errors
-}
+import { expect, test } from '@playwright/test'
+import { prepareDemo } from './demo-fixture'
 
 interface DemoNode {
   id: string
@@ -36,6 +15,8 @@ interface DemoApp {
     getTree(): DemoNode
   }
   getLocale(): 'zh' | 'en'
+  isDirty(): boolean
+  isSaving(): boolean
   toJSON(): { root: DemoNode }
 }
 
@@ -106,7 +87,8 @@ test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async
   await expect(inlineEditor).toHaveCount(0)
 
   const exportButton = page.getByRole('button', { name: '匯出', exact: true })
-  await exportButton.click()
+  await exportButton.focus()
+  await exportButton.press('Enter')
   const exportDialog = page.getByRole('dialog', { name: '匯出 HTML', exact: true })
   await expect(exportDialog).toHaveAttribute('aria-modal', 'true')
   const closeButtons = exportDialog.getByRole('button', { name: '關閉', exact: true })
@@ -127,6 +109,63 @@ test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async
       })),
     )
     .toEqual({ page: 0, app: 0 })
+  expect(errors).toEqual([])
+})
+
+test('localStorage 保存：額度不足保留 dirty，重試成功才確認 checkpoint', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+  await page.getByRole('treeitem', { name: '標題文字', exact: true }).click()
+  await page
+    .locator('.sigil-inspector')
+    .getByRole('textbox', { name: '內容', exact: true })
+    .fill('必須保留的本機內容')
+
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem
+    Reflect.set(window, '__restoreStorage', () => {
+      Storage.prototype.setItem = original
+    })
+    Storage.prototype.setItem = function (key, value) {
+      if (this === localStorage && key === 'sigil-demo') {
+        throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+      }
+      return original.call(this, key, value)
+    }
+  })
+  const persist = page.getByRole('button', { name: '寫入 localStorage', exact: true })
+  await persist.click()
+  await expect(page.locator('.sigil-status')).toContainText('存檔失敗')
+  await expect(page.locator('#toolbar')).toContainText('失敗')
+  expect(
+    await page.evaluate(() => {
+      const app = (window as unknown as { __sigil: DemoApp }).__sigil
+      return {
+        dirty: app.isDirty(),
+        saving: app.isSaving(),
+        stored: localStorage.getItem('sigil-demo'),
+      }
+    }),
+  ).toEqual({ dirty: true, saving: false, stored: null })
+
+  await page.evaluate(() => {
+    const restore = Reflect.get(window, '__restoreStorage') as () => void
+    restore()
+    Reflect.deleteProperty(window, '__restoreStorage')
+  })
+  await persist.click()
+  await expect(page.locator('#toolbar')).toContainText('已寫入 LS')
+  await expect(page.getByText('hook:afterSave ok', { exact: true })).toBeVisible()
+  expect(
+    await page.evaluate(() => {
+      const app = (window as unknown as { __sigil: DemoApp }).__sigil
+      return {
+        dirty: app.isDirty(),
+        saving: app.isSaving(),
+        stored: localStorage.getItem('sigil-demo'),
+      }
+    }),
+  ).toEqual({ dirty: false, saving: false, stored: expect.stringContaining('必須保留的本機內容') })
   expect(errors).toEqual([])
 })
 
@@ -190,7 +229,7 @@ test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', 
 
   await expect(rich).toHaveAttribute('contenteditable', 'true')
   await expect(rich).toHaveAttribute('aria-label', '富文字內容')
-  await rich.fill('富文字 E2E')
+  await rich.locator('p').fill('富文字 E2E')
   await rich.locator('p').selectText()
   await frame.getByRole('button', { name: '粗體', exact: true }).click()
   await frame.getByRole('button', { name: '斜體', exact: true }).click()
@@ -215,6 +254,10 @@ test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', 
   await expect(frame.getByText('富文字 E2E', { exact: true })).toHaveCount(2)
 
   await page.getByRole('button', { name: '寫入 localStorage', exact: true }).click()
+  await expect(page.getByText('hook:afterSave ok', { exact: true })).toBeVisible()
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __sigil: DemoApp }).__sigil.isDirty()))
+    .toBe(false)
   await page.getByRole('button', { name: '讀 localStorage', exact: true }).click()
   await expect(frame.locator('[data-sigil-id="rich-demo"] strong em a')).toHaveText('富文字 E2E')
   await expect(frame.getByText('富文字 E2E', { exact: true })).toHaveCount(2)

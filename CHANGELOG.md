@@ -1,5 +1,17 @@
 # Changelog
 
+完整版本記錄以各套件的 CHANGELOG 為準：[App](packages/app/CHANGELOG.md)、[Editor](packages/editor/CHANGELOG.md)、[Core](packages/core/CHANGELOG.md)、[UI](packages/ui/CHANGELOG.md)、[Blocks](packages/blocks/CHANGELOG.md)、[Shortcode](packages/shortcode/CHANGELOG.md)、[Store JSON](packages/store-json/CHANGELOG.md)。本檔下方 `0.1.0`–`0.12.0` 為歷史專案摘要，並非最新版本。工作樹的七個套件目前均宣告 `0.20.0`；未發布變更由 changesets 追蹤。
+
+## Unreleased — 1.0 交付準備
+
+- App／Editor 新增可等待的 `save()` 與 `isSaving()`；`toJSON()` 改為沒有保存副作用的隔離快照。這是下一個 minor 的破壞性變更，既有呼叫者需依[升級指南](docs/guide/upgrading.md)遷移。保存失敗、排隊及保存期間的新編輯不會誤清 dirty。
+- 保留文件 metadata／stylesheets；修正素材選擇器的錯誤重試、關閉與非同步生命週期，以及預覽錨點與宿主 inert 期間的快捷鍵。
+- 修正既有 Undo／Redo／batch 的輸入合併邊界：Undo 後的新編輯會清除舊 Redo 分支，Redo 與批次前後的編輯保留獨立歷史；一般同欄位連打仍在 500ms 內合併。
+- Laravel 範例改為可執行的活動頁後台，提供認證、owner 隔離、revision 衝突、文件驗證、持久化素材及整合測試。舊版參考片段的資料不會自動移轉。
+- 新增三畫面視覺回歸、公開 API 消費端契約、三引擎相容性矩陣與效能量測；修正 demo sanitizer 在有 Trusted Types、缺原生 `setHTML()` 的瀏覽器無法解析富文字的問題。
+- E2E 啟動／執行中取消會先結束子程序，再清理當次暫存資料。
+- 定義 API／瀏覽器／效能邊界與真人試用任務。2026-10-23 首個候選 `f814c8e851c697c415444ee726e71532afdcace5` 的 [CI run 39952171811](https://github.com/cluion/sigil/actions/runs/39952171811) 七個 jobs 成功，三引擎 45／45 案通過；完整 checkout SHA 與驗收範圍見[交付記錄](RELEASING.md)。Hosted 5,000 節點有四項超過 reference 效能預算，不宣稱效能全綠。真人驗收與最終固定版本交付仍待完成，以上變更尚未發布。
+
 ## 0.12.0
 
 - Command-backed context menus on the canvas and layers panel with copy, paste, move up, move down, and delete actions

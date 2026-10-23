@@ -1,2 +1,8 @@
 # pnpm 管理的產物
 pnpm-lock.yaml
+# Third-party and generated Laravel runtime files
+examples/laravel/vendor/
+examples/laravel/public/build/
+examples/laravel/storage/
+examples/laravel/bootstrap/cache/
+examples/laravel/composer.lock
