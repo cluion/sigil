@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "root": {
+    "id": "edited-root",
+    "type": "section",
+    "tagName": "main",
+    "attributes": {},
+    "style": {},
+    "responsiveStyles": {
+      "tablet": {},
+      "mobile": { "padding": "1rem", "width": "calc(100% - 2rem)" }
+    },
+    "className": "activity event-page",
+    "name": "活動頁",
+    "locked": false,
+    "hidden": false,
+    "children": [
+      {
+        "id": "edited-title",
+        "type": "text",
+        "tagName": "h1",
+        "content": "活動 < 10 人 & \"自由參加\"",
+        "children": []
+      },
+      {
+        "id": "edited-image",
+        "type": "image",
+        "attributes": {
+          "src": "/sigil/media/01234567-89ab-cdef-0123-456789abcdef",
+          "alt": "活動照片",
+          "loading": "lazy"
+        }
+      },
+      {
+        "id": "edited-link",
+        "type": "text",
+        "tagName": "a",
+        "content": "聯絡我們",
+        "attributes": { "href": "mailto:events@example.com" }
+      }
+    ]
+  },
+  "meta": { "title": "活動頁", "device": "mobile", "updatedAt": "2026-10-23T10:30:00.000Z" },
+  "stylesheets": [
+    {
+      "id": "event-styles",
+      "rules": ".activity > h1, #edited-title:hover { color: #4f46e5; margin: 0 0 1rem; } .event-page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }"
+    }
+  ]
+}

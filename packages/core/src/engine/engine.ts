@@ -9,6 +9,7 @@ import type { Engine, EngineEvent, EngineOptions, Patch } from './types.js'
  */
 export function createEngine(opts: EngineOptions = {}): Engine {
   const idFactory = opts.idFactory ?? createId
+  const documentFields = opts.doc ? { ...opts.doc } : { version: 1 as const }
   let root: ComponentNode = opts.doc?.root ?? { id: idFactory(), type: 'section', children: [] }
   let selection: string | null = null
   const undoStack: ComponentNode[] = []
@@ -52,7 +53,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       return root
     },
     toJSON() {
-      return { version: 1 as const, root }
+      return { ...documentFields, root }
     },
     getSelection() {
       return selection
@@ -125,12 +126,15 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     },
 
     batch(fn) {
+      // Explicit history boundaries must not reuse a preceding typing merge group.
+      lastMergeKey = null
       batching = true
       batchSnapshot = null
       try {
         fn()
       } finally {
         batching = false
+        lastMergeKey = null
         if (batchSnapshot !== null) {
           undoStack.push(batchSnapshot)
           redoStack.length = 0
@@ -148,6 +152,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     undo() {
       const prev = undoStack.pop()
       if (prev === undefined) return
+      lastMergeKey = null
       redoStack.push(root)
       root = prev
       emit({ type: 'tree', tree: root })
@@ -157,6 +162,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
     redo() {
       const next = redoStack.pop()
       if (next === undefined) return
+      lastMergeKey = null
       undoStack.push(root)
       root = next
       emit({ type: 'tree', tree: root })

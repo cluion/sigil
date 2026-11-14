@@ -3,13 +3,22 @@ import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { createApp, type SigilApp } from '@cluion/sigil-app'
 import { basicBlocks, blockSection, blockText, blockShortcode } from '@cluion/sigil-blocks'
 import { JsonProjectStore, MemoryAssetStore } from '@cluion/sigil-store-json'
-import type { SigilDoc } from '@cluion/sigil-core'
+import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 const mountEl = ref<HTMLElement | null>(null)
 const status = ref('')
 const app = shallowRef<SigilApp | null>(null)
 const store = new JsonProjectStore()
+const projectStore: ProjectStore = {
+  load() {
+    const json = localStorage.getItem('sigil-ex-vue')
+    return json === null ? null : store.importJSON(json)
+  },
+  save(doc) {
+    localStorage.setItem('sigil-ex-vue', store.exportJSON(doc))
+  },
+}
 const assets = new MemoryAssetStore([
   { id: 'v1', url: 'https://placehold.co/160x100/png?text=Vue', name: 'Vue' },
 ])
@@ -45,17 +54,24 @@ function mount(doc: SigilDoc): void {
   app.value = createApp({
     mount: mountEl.value,
     doc,
-    store,
+    store: projectStore,
     assets,
     blocks,
     shortcodes: [greet],
   })
 }
 
-function save(): void {
-  if (!app.value) return
-  localStorage.setItem('sigil-ex-vue', store.exportJSON(app.value.toJSON()))
-  status.value = '已存'
+async function save(): Promise<void> {
+  const currentApp = app.value
+  if (!currentApp) return
+  try {
+    await currentApp.save()
+    if (app.value === currentApp) status.value = '已存'
+  } catch (error) {
+    if (app.value === currentApp) {
+      status.value = `存檔失敗：${error instanceof Error ? error.message : String(error)}`
+    }
+  }
 }
 
 function load(): void {

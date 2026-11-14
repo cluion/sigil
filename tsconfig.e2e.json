@@ -1,7 +1,16 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
-  "include": ["playwright.config.ts", "e2e/**/*.ts"]
+  "include": [
+    "playwright.config.ts",
+    "playwright.visual.config.ts",
+    "playwright.laravel.config.ts",
+    "playwright.compat.config.ts",
+    "examples/laravel/e2e/**/*.ts",
+    "e2e/**/*.ts",
+    "demo/rich-text.ts",
+    "demo/fixtures/**/*.ts"
+  ]
 }

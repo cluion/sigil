@@ -1,4 +1,4 @@
-import type { Engine, ComponentNode, I18n } from '@cluion/sigil-core'
+import { findNode, type Engine, type ComponentNode, type I18n } from '@cluion/sigil-core'
 import { subscribeLocale, uiText } from './i18n.js'
 
 export interface LayersPanelOptions {
@@ -29,6 +29,91 @@ export function createLayersPanel(
   }
   refreshLabel()
 
+  const rowById = new Map<string, HTMLElement>()
+  let renderedTree = engine.getTree()
+  let selectedId = engine.getSelection()
+  let tabStop: HTMLElement | null = null
+
+  function paintSelection(row: HTMLElement, selected: boolean): void {
+    row.classList.toggle('sigil-layer-row--active', selected)
+    row.setAttribute('aria-selected', String(selected))
+    row.style.background = selected ? 'rgba(79,70,229,0.12)' : 'transparent'
+    row.style.color = selected ? '#4f46e5' : 'inherit'
+    row.style.fontWeight = selected ? '600' : ''
+  }
+
+  function syncSelection(): void {
+    const nextId = engine.getSelection()
+    if (selectedId !== nextId) {
+      const previous = selectedId ? rowById.get(selectedId) : null
+      if (previous) paintSelection(previous, false)
+      const next = nextId ? rowById.get(nextId) : null
+      if (next) paintSelection(next, true)
+      selectedId = nextId
+    }
+
+    const active = document.activeElement
+    const focusedRow =
+      active instanceof HTMLElement
+        ? active.closest<HTMLElement>('.sigil-layer-row[data-layer-id]')
+        : null
+    const focusedId =
+      focusedRow && container.contains(focusedRow) ? focusedRow.dataset.layerId : null
+    const nextTabStop =
+      (focusedId ? rowById.get(focusedId) : null) ??
+      (nextId ? rowById.get(nextId) : null) ??
+      rowById.values().next().value
+    if (nextTabStop && tabStop !== nextTabStop) {
+      if (tabStop) tabStop.tabIndex = -1
+      nextTabStop.tabIndex = 0
+      tabStop = nextTabStop
+    }
+  }
+
+  function refreshRow(node: ComponentNode): boolean {
+    const row = rowById.get(node.id)
+    if (!row) return false
+    const label = row.querySelector<HTMLElement>('.sigil-layer-label')
+    const visibility = row.querySelector<HTMLButtonElement>('[data-layer-action="visibility"]')
+    const lock = row.querySelector<HTMLButtonElement>('[data-layer-action="lock"]')
+    if (!label || !visibility || !lock) return false
+    const name = typeLabel(node)
+    label.textContent = name
+    label.title = `${name} · ${node.id}`
+    row.setAttribute('aria-label', name)
+    row.classList.toggle('sigil-layer-row--hidden', !!node.hidden)
+    row.classList.toggle('sigil-layer-row--locked', !!node.locked)
+    row.style.opacity = node.hidden ? '0.55' : ''
+    visibility.textContent = node.hidden ? '○' : '●'
+    const visibilityTitle = node.hidden
+      ? uiText(opts?.i18n, 'layers.show', '顯示')
+      : uiText(opts?.i18n, 'layers.hide', '隱藏')
+    visibility.title = visibilityTitle
+    visibility.setAttribute('aria-label', visibilityTitle)
+    visibility.setAttribute('aria-pressed', String(!!node.hidden))
+    visibility.style.opacity = node.hidden ? '1' : '0.45'
+    lock.textContent = node.locked ? '🔒' : '🔓'
+    const lockTitle = node.locked
+      ? uiText(opts?.i18n, 'layers.unlock', '解鎖')
+      : uiText(opts?.i18n, 'layers.lock', '鎖定')
+    lock.title = lockTitle
+    lock.setAttribute('aria-label', lockTitle)
+    lock.setAttribute('aria-pressed', String(!!node.locked))
+    lock.style.opacity = node.locked ? '1' : '0.45'
+    return true
+  }
+
+  function refreshChangedNode(expectedId?: string): boolean {
+    const tree = engine.getTree()
+    if (renderedTree === tree) return true
+    const changed = singleChangedNode(renderedTree, tree)
+    if (!changed || (expectedId && changed.id !== expectedId) || !refreshRow(changed)) {
+      return false
+    }
+    renderedTree = tree
+    return true
+  }
+
   function render(): void {
     const active = document.activeElement
     const focusedRow =
@@ -42,14 +127,23 @@ export function createLayersPanel(
     const tree = engine.getTree()
     const sel = engine.getSelection()
     container.replaceChildren()
-    container.appendChild(renderNode(tree, sel, 0, engine, opts?.i18n, opts?.onContextMenu))
+    container.appendChild(
+      renderNode(tree, sel, 0, engine, opts?.i18n, opts?.onContextMenu, (row) => {
+        tabStop = row
+      }),
+    )
 
     const rows = [...container.querySelectorAll<HTMLElement>('.sigil-layer-row[data-layer-id]')]
-    const tabStop =
+    rowById.clear()
+    for (const row of rows) rowById.set(row.dataset.layerId!, row)
+    const nextTabStop =
       rows.find((row) => row.dataset.layerId === focusedId) ??
       rows.find((row) => row.dataset.layerId === sel) ??
       rows[0]
-    for (const row of rows) row.tabIndex = row === tabStop ? 0 : -1
+    for (const row of rows) row.tabIndex = row === nextTabStop ? 0 : -1
+    tabStop = nextTabStop ?? null
+    renderedTree = tree
+    selectedId = sel
 
     if (focusedId) {
       const nextRow = rows.find((row) => row.dataset.layerId === focusedId)
@@ -61,7 +155,10 @@ export function createLayersPanel(
   }
 
   const unsub = engine.subscribe((ev) => {
-    if (ev.type === 'selection' || ev.type === 'patch' || ev.type === 'tree') render()
+    if (ev.type === 'selection') syncSelection()
+    else if (ev.type === 'patch') {
+      if (ev.patch.type !== 'update' || !refreshChangedNode(ev.patch.id)) render()
+    } else if (ev.type === 'tree' && !refreshChangedNode()) render()
   })
   const unsubLocale = subscribeLocale(opts?.i18n, () => {
     refreshLabel()
@@ -74,6 +171,41 @@ export function createLayersPanel(
       unsubLocale()
     },
   }
+}
+
+function sameOwnFields(before: ComponentNode, after: ComponentNode): boolean {
+  return (
+    before.type === after.type &&
+    before.tagName === after.tagName &&
+    before.attributes === after.attributes &&
+    before.style === after.style &&
+    before.responsiveStyles === after.responsiveStyles &&
+    before.className === after.className &&
+    before.content === after.content &&
+    before.shortcode === after.shortcode &&
+    before.name === after.name &&
+    before.locked === after.locked &&
+    before.hidden === after.hidden
+  )
+}
+
+function singleChangedNode(before: ComponentNode, after: ComponentNode): ComponentNode | null {
+  if (before.id !== after.id) return null
+  const oldChildren = before.children ?? []
+  const newChildren = after.children ?? []
+  if (oldChildren.length !== newChildren.length) return null
+  let changed: ComponentNode | null = null
+  for (let index = 0; index < oldChildren.length; index++) {
+    const oldChild = oldChildren[index]!
+    const newChild = newChildren[index]!
+    if (oldChild.id !== newChild.id) return null
+    if (oldChild === newChild) continue
+    if (changed) return null
+    changed = singleChangedNode(oldChild, newChild)
+    if (!changed) return null
+  }
+  if (!sameOwnFields(before, after)) return changed ? null : after
+  return changed
 }
 
 function typeLabel(node: ComponentNode): string {
@@ -120,6 +252,7 @@ function renderNode(
   engine: Engine,
   i18n?: I18n,
   onContextMenu?: (id: string, x: number, y: number) => void,
+  onTabStopChange?: (row: HTMLElement) => void,
 ): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'sigil-layer-node'
@@ -167,7 +300,8 @@ function renderNode(
       node.hidden ? uiText(i18n, 'layers.show', '顯示') : uiText(i18n, 'layers.hide', '隱藏'),
       !!node.hidden,
       () => {
-        engine.update(node.id, { hidden: !node.hidden })
+        const current = findNode(engine.getTree(), node.id)
+        if (current) engine.update(node.id, { hidden: !current.hidden })
       },
     ),
   )
@@ -179,7 +313,8 @@ function renderNode(
       node.locked ? uiText(i18n, 'layers.unlock', '解鎖') : uiText(i18n, 'layers.lock', '鎖定'),
       !!node.locked,
       () => {
-        engine.update(node.id, { locked: !node.locked })
+        const current = findNode(engine.getTree(), node.id)
+        if (current) engine.update(node.id, { locked: !current.locked })
       },
     ),
   )
@@ -199,7 +334,8 @@ function renderNode(
   row.addEventListener('dblclick', (e) => {
     e.preventDefault()
     e.stopPropagation()
-    renameNode(engine, node, i18n)
+    const current = findNode(engine.getTree(), node.id)
+    if (current) renameNode(engine, current, i18n)
   })
   row.addEventListener('keydown', (e) => {
     if (e.target !== row) return
@@ -211,7 +347,8 @@ function renderNode(
     }
     if (e.key === 'F2') {
       e.preventDefault()
-      renameNode(engine, node, i18n)
+      const current = findNode(engine.getTree(), node.id)
+      if (current) renameNode(engine, current, i18n)
       return
     }
     if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
@@ -251,19 +388,21 @@ function renderNode(
     e.preventDefault()
     if (!next) return
     for (const candidate of rows) candidate.tabIndex = candidate === next ? 0 : -1
+    onTabStopChange?.(next)
     next.focus()
   })
   row.addEventListener('mouseenter', () => {
-    if (node.id !== sel) row.style.background = 'rgba(15,23,42,0.04)'
+    if (node.id !== engine.getSelection()) row.style.background = 'rgba(15,23,42,0.04)'
   })
   row.addEventListener('mouseleave', () => {
-    row.style.background = node.id === sel ? 'rgba(79,70,229,0.12)' : 'transparent'
+    row.style.background =
+      node.id === engine.getSelection() ? 'rgba(79,70,229,0.12)' : 'transparent'
   })
 
   wrap.appendChild(row)
 
   for (const c of node.children ?? []) {
-    wrap.appendChild(renderNode(c, sel, depth + 1, engine, i18n, onContextMenu))
+    wrap.appendChild(renderNode(c, sel, depth + 1, engine, i18n, onContextMenu, onTabStopChange))
   }
   return wrap
 }

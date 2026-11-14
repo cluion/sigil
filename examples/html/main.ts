@@ -1,7 +1,7 @@
 import { createApp, type SigilApp } from '@cluion/sigil-app'
 import { basicBlocks, blockSection, blockText, blockShortcode } from '@cluion/sigil-blocks'
 import { JsonProjectStore } from '@cluion/sigil-store-json'
-import type { SigilDoc } from '@cluion/sigil-core'
+import type { ProjectStore, SigilDoc } from '@cluion/sigil-core'
 import { defineShortcode } from '@cluion/sigil-shortcode'
 
 const greet = defineShortcode({
@@ -24,6 +24,15 @@ section.children = [blockText('HTML embed'), blockShortcode('greet', { name: 'HT
 const doc: SigilDoc = { version: 1, root: section }
 
 const store = new JsonProjectStore()
+const projectStore: ProjectStore = {
+  load() {
+    const json = localStorage.getItem('sigil-ex-html')
+    return json === null ? null : store.importJSON(json)
+  },
+  save(doc) {
+    localStorage.setItem('sigil-ex-html', store.exportJSON(doc))
+  },
+}
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
 
@@ -35,7 +44,7 @@ const blocks = {
 let app: SigilApp = createApp({
   mount: root,
   doc,
-  store,
+  store: projectStore,
   blocks,
   shortcodes: [greet],
 })
@@ -46,9 +55,16 @@ const status = document.createElement('span')
 const saveBtn = document.createElement('button')
 saveBtn.type = 'button'
 saveBtn.textContent = '寫入 localStorage'
-saveBtn.addEventListener('click', () => {
-  localStorage.setItem('sigil-ex-html', store.exportJSON(app.toJSON()))
-  status.textContent = ' 已寫入'
+saveBtn.addEventListener('click', async () => {
+  const currentApp = app
+  try {
+    await currentApp.save()
+    if (app === currentApp) status.textContent = ' 已寫入'
+  } catch (error) {
+    if (app === currentApp) {
+      status.textContent = ` 寫入失敗：${error instanceof Error ? error.message : String(error)}`
+    }
+  }
 })
 
 const loadBtn = document.createElement('button')
@@ -64,7 +80,7 @@ loadBtn.addEventListener('click', () => {
   app = createApp({
     mount: root,
     doc: store.importJSON(raw),
-    store,
+    store: projectStore,
     blocks,
     shortcodes: [greet],
   })

@@ -70,9 +70,16 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
 
     let field: HTMLElement
     if (s.type === 'media') {
-      field = createMediaField(engine, nodeId, s, currentProps()[s.name], assets, i18n, () => {
-        refreshVisibility()
-      })
+      field = createMediaField(
+        engine,
+        nodeId,
+        s,
+        currentProps()[s.name],
+        assets,
+        i18n,
+        () => refreshVisibility(),
+        (dispose) => disposers.push(dispose),
+      )
     } else {
       field = createField(engine, nodeId, s, currentProps()[s.name], i18n, () => {
         refreshVisibility()
@@ -278,7 +285,15 @@ function createMediaField(
   assets: AssetStore | undefined,
   i18n: I18n | undefined,
   onChanged: () => void,
+  registerDestroy: (dispose: () => void) => void,
 ): HTMLElement {
+  let disposed = false
+  let closePicker: (() => void) | null = null
+  registerDestroy(() => {
+    disposed = true
+    closePicker?.()
+    closePicker = null
+  })
   const wrap = document.createElement('div')
   wrap.className = 'sigil-field'
   const span = document.createElement('span')
@@ -301,6 +316,7 @@ function createMediaField(
   input.value = url
   input.placeholder = 'https://…'
   input.addEventListener('input', () => {
+    if (disposed) return
     const next = input.value
     setProp(engine, nodeId, schema.name, next)
     if (next) {
@@ -320,18 +336,22 @@ function createMediaField(
     pickBtn.className = 'sigil-btn sigil-media-pick'
     pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
     pickBtn.addEventListener('click', () => {
-      openMediaPicker({
+      if (disposed || closePicker) return
+      closePicker = openMediaPicker({
         assets,
         i18n,
         currentUrl: input.value,
         onPick: (item) => {
+          if (disposed) return
           input.value = item.url
           setProp(engine, nodeId, schema.name, item.url)
           preview.src = item.url
           preview.style.display = ''
           onChanged()
         },
-        onClose: () => {},
+        onClose: () => {
+          closePicker = null
+        },
       })
     })
     row.appendChild(pickBtn)

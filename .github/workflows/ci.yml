@@ -22,6 +22,7 @@ jobs:
       - run: pnpm security:check
       - run: pnpm typecheck
       - run: pnpm build
+      - run: pnpm test:public-api
       - run: pnpm publint
       - run: pnpm attw
       - run: pnpm test
@@ -41,8 +42,40 @@ jobs:
       - run: pnpm docs:build
 
   e2e:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: fileinfo, gd, mbstring, pdo_sqlite
+          tools: composer:v2
+          coverage: none
+      - run: pnpm install --frozen-lockfile
+      - run: composer install --no-interaction --prefer-dist --no-progress
+        working-directory: examples/laravel
+      - run: pnpm typecheck:e2e
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm test:compat
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-compatibility-report
+          path: |
+            playwright-report/compat/
+            test-results/compat/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  performance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -51,15 +84,75 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck:e2e
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
+      # Collect measurements on hosted runners; reference-machine budgets are reviewed separately.
+      - run: pnpm test:performance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-report
+          path: test-results/performance/**/results.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  visual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # Same pinned Linux/amd64 image and command as local baseline generation.
+      - run: sh scripts/test-visual.sh
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: visual-report
           path: |
-            playwright-report/
-            test-results/
+            playwright-report/visual/
+            test-results/visual/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  laravel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        php: ['8.3', '8.5']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: fileinfo, gd, mbstring, pdo_sqlite
+          tools: composer:v2
+          coverage: none
+      - run: pnpm install --frozen-lockfile
+      - run: composer install --no-interaction --prefer-dist --no-progress
+        working-directory: examples/laravel
+      - name: Prepare isolated example test configuration
+        working-directory: examples/laravel
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate --no-interaction
+      - run: php scripts/test.php
+        working-directory: examples/laravel
+      - run: pnpm --filter sigil-example-laravel typecheck
+      - run: pnpm test:laravel:adapters
+      - run: pnpm --filter sigil-example-laravel build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:laravel:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: laravel-report-php-${{ matrix.php }}
+          path: |
+            playwright-report/laravel/
+            test-results/laravel/
           if-no-files-found: ignore
           retention-days: 7

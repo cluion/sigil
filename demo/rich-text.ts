@@ -3,6 +3,12 @@ import type { RichTextAdapter } from '@cluion/sigil-app'
 const ALLOWED_ELEMENTS = new Set(['p', 'strong', 'em', 'a', 'br'])
 const DROP_CONTENT = new Set(['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math'])
 
+type ParsePolicy = { createHTML: (input: string) => unknown }
+type TrustedTypesFactory = {
+  createPolicy: (name: string, rules: { createHTML: (input: string) => string }) => ParsePolicy
+}
+const parserPolicies = new WeakMap<TrustedTypesFactory, ParsePolicy>()
+
 /**
  * Demo 專用 allowlist sanitizer
  */
@@ -23,7 +29,16 @@ function parseRichTextInput(input: string): ParentNode {
     container.setHTML(input)
     return container
   }
-  return new DOMParser().parseFromString(input, 'text/html').body
+  const tt = (globalThis as unknown as { trustedTypes?: TrustedTypesFactory }).trustedTypes
+  let policy = tt ? parserPolicies.get(tt) : undefined
+  if (tt && !policy) {
+    // This private policy only permits parsing into an inert document. Its output
+    // is still untrusted: sanitizeNode rebuilds the allowlist before any live DOM use.
+    policy = tt.createPolicy('sigil-demo#parse', { createHTML: (value) => value })
+    parserPolicies.set(tt, policy)
+  }
+  const parserInput = policy ? policy.createHTML(input) : input
+  return new DOMParser().parseFromString(parserInput as string, 'text/html').body
 }
 
 function sanitizeNode(node: Node, target: Document): Node {

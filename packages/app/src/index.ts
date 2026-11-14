@@ -10,8 +10,7 @@ import {
   createCommandRegistry,
   createDefaultEditingCommands,
   defineCommand,
-  runBeforeSave,
-  runAfterSave,
+  createProjectPersistence,
   runOnSelect,
   runAfterLoad,
   runBeforeDestroy,
@@ -81,6 +80,8 @@ const i18nMessages = {
     'app.dirty': '未儲存',
     'app.saved': '已儲存',
     'app.saved_msg': '已寫入 ProjectStore',
+    'app.saving': '儲存中…',
+    'app.saved_pending': '先前修改已儲存；仍有未儲存變更',
     'app.save_fail': '存檔失敗',
     'app.export_title': '匯出 HTML',
     'app.export_hint': '複製或下載正式輸出 HTML（CSP-safe）。',
@@ -133,6 +134,12 @@ const i18nMessages = {
     'media.close': '關閉',
     'media.upload': '上傳圖片',
     'media.empty': '尚無媒體',
+    'media.loading': '正在載入媒體…',
+    'media.load_failed': '媒體載入失敗',
+    'media.retry': '重試',
+    'media.uploading': '正在上傳…',
+    'media.upload_failed': '圖片上傳失敗',
+    'media.retry_upload': '重試上傳',
     'props.title': '屬性',
     'props.empty': '未選取節點',
     'props.content': '內容',
@@ -196,6 +203,8 @@ const i18nMessages = {
     'app.dirty': 'Unsaved',
     'app.saved': 'Saved',
     'app.saved_msg': 'Saved to ProjectStore',
+    'app.saving': 'Saving…',
+    'app.saved_pending': 'Earlier changes saved; newer changes are unsaved',
     'app.save_fail': 'Save failed',
     'app.export_title': 'Export HTML',
     'app.export_hint': 'Copy or download CSP-safe HTML output.',
@@ -248,6 +257,12 @@ const i18nMessages = {
     'media.close': 'Close',
     'media.upload': 'Upload image',
     'media.empty': 'No media yet',
+    'media.loading': 'Loading media…',
+    'media.load_failed': 'Failed to load media',
+    'media.retry': 'Retry',
+    'media.uploading': 'Uploading…',
+    'media.upload_failed': 'Image upload failed',
+    'media.retry_upload': 'Retry upload',
     'props.title': 'Properties',
     'props.empty': 'No node selected',
     'props.content': 'Content',
@@ -320,7 +335,11 @@ export interface AppOptions {
 
 export interface SigilApp {
   engine: Engine
+  /** Pure detached snapshot; use save() to write to ProjectStore. */
   toJSON(): SigilDoc
+  /** Persist the revision captured at invocation; rejects on failure. */
+  save(): Promise<SigilDoc>
+  isSaving(): boolean
   toHTML(mode?: HtmlMode): string
   /** 是否有未存檔變更 */
   isDirty(): boolean
@@ -382,7 +401,6 @@ export function createApp(opts: AppOptions): SigilApp {
     store: sharedStore,
   })
 
-  let dirty = false
   let device: CanvasDevice = 'desktop'
   let mode: CanvasMode = 'edit'
   let helpOpen = false
@@ -395,6 +413,15 @@ export function createApp(opts: AppOptions): SigilApp {
   let templateLibrary: TemplateLibraryController | null = null
   let destroyed = false
   const hooks = opts.hooks
+  let persistenceReady = false
+  const persistence = createProjectPersistence({
+    engine,
+    store,
+    hooks,
+    onStateChange: () => {
+      if (persistenceReady) refreshChrome()
+    },
+  })
 
   function setStatusMessage(render: () => string): void {
     refreshStatusMessage = () => {
@@ -403,21 +430,26 @@ export function createApp(opts: AppOptions): SigilApp {
     refreshStatusMessage()
   }
 
-  async function doSave(): Promise<SigilDoc> {
+  function reportSaveStatus(render: () => string): void {
+    if (destroyed) return
     try {
-      let doc = engine.toJSON()
-      doc = await runBeforeSave(hooks, doc, engine)
-      await Promise.resolve(store.save(doc))
-      await runAfterSave(hooks, doc, engine)
-      dirty = false
-      setStatusMessage(() => i18n.t('app.saved_msg'))
+      setStatusMessage(render)
       refreshChrome()
-      return doc
     } catch {
-      setStatusMessage(() => i18n.t('app.save_fail'))
-      refreshChrome()
-      return engine.toJSON()
+      // Host UI callbacks cannot change the acknowledged storage outcome.
     }
+  }
+
+  async function doSave(): Promise<SigilDoc> {
+    let doc: SigilDoc
+    try {
+      doc = await persistence.save()
+    } catch (error) {
+      reportSaveStatus(() => i18n.t('app.save_fail'))
+      throw error
+    }
+    reportSaveStatus(() => i18n.t(persistence.isDirty() ? 'app.saved_pending' : 'app.saved_msg'))
+    return doc
   }
 
   const commandMap = new Map<string, CommandDefinition>()
@@ -471,8 +503,8 @@ export function createApp(opts: AppOptions): SigilApp {
     return {
       engine,
       getDoc: () => engine.toJSON(),
-      save: () => {
-        void doSave()
+      save: async () => {
+        await doSave()
       },
       clipboard: {
         get: () => clipboard,
@@ -518,7 +550,7 @@ export function createApp(opts: AppOptions): SigilApp {
     const b = btn(
       commandLabel(cmd),
       () => {
-        void commands.run(cmd.id, makeCtx())
+        void commands.run(cmd.id, makeCtx()).catch(() => {})
       },
       !primary,
     )
@@ -878,7 +910,7 @@ export function createApp(opts: AppOptions): SigilApp {
           id,
           label: commandLabel(cmd),
           run: () => {
-            void commands.run(id, makeCtx())
+            void commands.run(id, makeCtx()).catch(() => {})
           },
         })
       }
@@ -978,7 +1010,7 @@ export function createApp(opts: AppOptions): SigilApp {
       if (!cmd) continue
       let disabled = cmd.when ? !cmd.when(ctx) : false
       // 無變更時禁用存檔
-      if (id === 'save') disabled = disabled || !dirty
+      if (id === 'save') disabled = disabled || !persistence.isDirty() || persistence.isSaving()
       b.disabled = disabled
     }
     for (const [k, b] of Object.entries(deviceBtns) as [CanvasDevice, HTMLButtonElement][]) {
@@ -989,7 +1021,10 @@ export function createApp(opts: AppOptions): SigilApp {
     previewBtn.classList.toggle('sigil-btn--active', mode === 'preview')
     editBtn.setAttribute('aria-pressed', String(mode === 'edit'))
     previewBtn.setAttribute('aria-pressed', String(mode === 'preview'))
-    statusDirty.textContent = dirty ? i18n.t('app.dirty') : i18n.t('app.saved')
+    const dirty = persistence.isDirty()
+    statusDirty.textContent = i18n.t(
+      persistence.isSaving() ? 'app.saving' : dirty ? 'app.dirty' : 'app.saved',
+    )
     statusDirty.className = dirty ? 'sigil-status-dirty' : 'sigil-muted'
     const id = engine.getSelection()
     if (!id) statusSel.textContent = i18n.t('status.none')
@@ -1138,7 +1173,6 @@ export function createApp(opts: AppOptions): SigilApp {
   }
 
   const unsub = engine.subscribe((ev) => {
-    if (ev.type === 'tree' || ev.type === 'patch') dirty = true
     if (ev.type === 'selection') runOnSelect(hooks, ev.id, engine)
     if (
       ev.type === 'history' ||
@@ -1149,23 +1183,26 @@ export function createApp(opts: AppOptions): SigilApp {
       refreshChrome()
     }
   })
+  persistenceReady = true
   refreshChrome()
   runAfterLoad(hooks, engine.toJSON(), engine)
 
   function onBeforeUnload(e: BeforeUnloadEvent): void {
-    if (!dirty) return
+    if (!persistence.isDirty() && !persistence.isSaving()) return
     e.preventDefault()
     e.returnValue = ''
   }
   window.addEventListener('beforeunload', onBeforeUnload)
 
   function onKeyDown(e: KeyboardEvent): void {
+    // Hosts can suspend editing while replacing or loading the document.
+    if (mountEl.closest('[inert]')) return
     const t = e.target as HTMLElement | null
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
     const cmd = commands.match(e, makeCtx())
     if (!cmd) return
     e.preventDefault()
-    void commands.run(cmd.id, makeCtx())
+    void commands.run(cmd.id, makeCtx()).catch(() => {})
   }
   document.addEventListener('keydown', onKeyDown)
 
@@ -1179,9 +1216,7 @@ export function createApp(opts: AppOptions): SigilApp {
   const api: SigilApp = {
     engine,
     toJSON() {
-      const doc = engine.toJSON()
-      void doSave()
-      return doc
+      return structuredClone(engine.toJSON())
     },
     toHTML(htmlMode?: HtmlMode) {
       return toHTML(engine.toJSON(), {
@@ -1191,9 +1226,9 @@ export function createApp(opts: AppOptions): SigilApp {
         mode: htmlMode,
       })
     },
-    isDirty() {
-      return dirty
-    },
+    save: doSave,
+    isDirty: persistence.isDirty,
+    isSaving: persistence.isSaving,
     runCommand(id: string) {
       return commands.run(id, makeCtx())
     },
@@ -1202,7 +1237,9 @@ export function createApp(opts: AppOptions): SigilApp {
     },
     setLocale,
     destroy() {
+      if (destroyed) return
       destroyed = true
+      persistence.destroy()
       runBeforeDestroy(hooks, engine)
       closeExportDialog?.()
       closeMenu?.()

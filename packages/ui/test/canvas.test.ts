@@ -125,6 +125,143 @@ describe('createCanvas — preview mode', () => {
   })
 })
 
+describe('createCanvas — preview fragment navigation', () => {
+  async function harness() {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const canvas = createCanvas(engine, container)
+    await waitIframeLoad(canvas.iframe)
+    canvas.setMode('preview')
+    const frame = canvas.iframe.contentDocument!
+    // Happy DOM activates links during bubbling, before the document listener runs.
+    vi.spyOn(frame.defaultView!, 'open').mockReturnValue(null)
+    const link = frame.createElement('a')
+    link.setAttribute('href', '#event-info')
+    const label = frame.createElement('span')
+    label.textContent = 'Details'
+    link.appendChild(label)
+    const destination = frame.createElement('a')
+    destination.id = 'event-info'
+    frame.body.append(link, destination)
+    const scroll = vi.spyOn(destination, 'scrollIntoView').mockImplementation(() => {})
+    const scrollTop = vi.spyOn(frame.defaultView!, 'scrollTo').mockImplementation(() => {})
+    return {
+      canvas,
+      frame,
+      link,
+      destination,
+      scroll,
+      scrollTop,
+      click(init?: MouseEventInit) {
+        const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...init })
+        label.dispatchEvent(event)
+        return event
+      },
+      destroy() {
+        canvas.destroy()
+        container.remove()
+      },
+    }
+  }
+
+  it.each([
+    { attribute: 'id', detail: 1 },
+    { attribute: 'name', detail: 0 },
+  ])(
+    'scrolls to decoded $attribute on pointer or keyboard activation',
+    async ({ attribute, detail }) => {
+      const h = await harness()
+      h.destination.removeAttribute('id')
+      h.destination.setAttribute(attribute, '活動資訊')
+      h.link.setAttribute('href', `#${encodeURIComponent('活動資訊')}`)
+      h.link.setAttribute('target', '_self')
+
+      expect(h.click({ detail }).defaultPrevented).toBe(true)
+      expect(h.scroll).toHaveBeenCalledOnce()
+      expect(h.scrollTop).not.toHaveBeenCalled()
+      h.destroy()
+    },
+  )
+
+  it('empty fragments scroll to the frame top and missing targets never navigate the host', async () => {
+    const h = await harness()
+    h.link.setAttribute('href', '#')
+    expect(h.click().defaultPrevented).toBe(true)
+    expect(h.scrollTop).toHaveBeenCalledExactlyOnceWith(0, 0)
+    h.link.setAttribute('href', '#missing')
+    expect(h.click().defaultPrevented).toBe(true)
+    expect(h.scroll).not.toHaveBeenCalled()
+    expect(h.scrollTop).toHaveBeenCalledOnce()
+    h.destroy()
+  })
+
+  it('malformed encoding falls back to the literal id without throwing', async () => {
+    const h = await harness()
+    h.destination.id = 'bad%escape'
+    h.link.setAttribute('href', '#bad%escape')
+    expect(h.click().defaultPrevented).toBe(true)
+    expect(h.scroll).toHaveBeenCalledOnce()
+    h.destroy()
+  })
+
+  const untouched: {
+    name: string
+    mode?: 'edit'
+    href?: string
+    target?: string
+    download?: boolean
+    event?: MouseEventInit
+  }[] = [
+    { name: 'edit mode', mode: 'edit' },
+    { name: 'absolute URL', href: 'https://example.test/#event-info' },
+    { name: 'relative URL', href: '/another-page#event-info' },
+    { name: 'new tab', target: '_blank' },
+    { name: 'named frame', target: 'another-frame' },
+    { name: 'download', download: true },
+    { name: 'middle button', event: { button: 1 } },
+    { name: 'control modifier', event: { ctrlKey: true } },
+    { name: 'command modifier', event: { metaKey: true } },
+    { name: 'shift modifier', event: { shiftKey: true } },
+    { name: 'alt modifier', event: { altKey: true } },
+  ]
+  it.each(untouched)('leaves $name activation untouched', async (scenario) => {
+    const h = await harness()
+    if (scenario.mode) h.canvas.setMode(scenario.mode)
+    if (scenario.href) h.link.setAttribute('href', scenario.href)
+    if (scenario.target) h.link.setAttribute('target', scenario.target)
+    if (scenario.download) h.link.setAttribute('download', '')
+    expect(h.click(scenario.event).defaultPrevented).toBe(false)
+    expect(h.scroll).not.toHaveBeenCalled()
+    expect(h.scrollTop).not.toHaveBeenCalled()
+    h.destroy()
+  })
+
+  it('respects an already handled event', async () => {
+    const h = await harness()
+    h.link.addEventListener('click', (event) => event.preventDefault())
+    expect(h.click().defaultPrevented).toBe(true)
+    expect(h.scroll).not.toHaveBeenCalled()
+    expect(h.scrollTop).not.toHaveBeenCalled()
+    h.destroy()
+  })
+
+  it('releases document and load listeners when destroyed', async () => {
+    const h = await harness()
+    const removeDocumentListener = vi.spyOn(h.frame, 'removeEventListener')
+    const removeFrameListener = vi.spyOn(h.canvas.iframe, 'removeEventListener')
+    const addDocumentListener = vi.spyOn(h.frame, 'addEventListener')
+    h.destroy()
+
+    expect(removeDocumentListener).toHaveBeenCalledWith('click', expect.any(Function))
+    expect(removeFrameListener).toHaveBeenCalledWith('load', expect.any(Function))
+    h.canvas.iframe.dispatchEvent(new Event('load'))
+    expect(addDocumentListener).not.toHaveBeenCalled()
+    expect(h.click().defaultPrevented).toBe(false)
+    expect(h.scroll).not.toHaveBeenCalled()
+  })
+})
+
 describe('createCanvas — 右鍵選單', () => {
   it('回報命中節點並同步選取', async () => {
     const engine = createEngine({ doc: docWithText })

@@ -1,6 +1,6 @@
 # 安全模型
 
-Sigil 以 CSP 與 Trusted Types 相容為設計目標，但不會把任意 HTML、任意 `SigilDoc` 或第三方 shortcode 自動變成可信內容。本頁定義 0.19.0 的信任邊界、HTML 寫入路徑與宿主責任；它不是安全認證。
+Sigil 以 CSP 與 Trusted Types 相容為設計目標，但不會把任意 HTML、任意 `SigilDoc` 或第三方 shortcode 自動變成可信內容。本頁定義目前工作樹的信任邊界、HTML 寫入路徑與宿主責任；它不是安全認證。未發布變更以 changesets 及[公開 API 契約](/guide/public-api)為準。
 
 ## 信任邊界
 
@@ -54,6 +54,8 @@ Content-Security-Policy:
 ```
 
 實際 CSP 還需依應用程式的 script、style、image、connect 與 frame 來源調整。若自訂 `HtmlPolicy` 的 base name，`trusted-types` 也必須列出對應的 `#template` 與 `#sanitized` policy。語法與 enforcement 行為以 [W3C Trusted Types 規格](https://www.w3.org/TR/trusted-types/)為準。
+
+倉庫 demo 的簡易 sanitizer 另使用私有 `sigil-demo#parse` policy，demo CSP 須列出此名稱。在沒有原生 `setHTML()` 的瀏覽器，它只將 policy 產生的值傳入 `DOMParser` 的獨立文件，再以 `createElement`／`createTextNode` 重建允許的元素與連結。該 policy 本身沒有清理輸入，其值不得寫入 live DOM；它不是 default policy，也不是核心套件的額外要求。這條路徑依 [HTML Standard 的 DOMParser 行為](https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#dom-domparser-parsefromstring)停用解析文件內的腳本，不能推論為所有資源載入均無副作用。未允許 policy 時直接失敗，不退回 raw HTML。
 
 本倉庫的 Playwright server 以 `csp-e2e` mode 送出 enforcement header；全部產品 E2E 都在該 policy 下執行。專用安全案例另外驗證 shortcode template、富文字、匯出、重掛載沒有 violation，且 raw `innerHTML` 字串會被瀏覽器拒絕。
 

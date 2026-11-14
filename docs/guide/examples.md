@@ -10,13 +10,15 @@ pnpm example:react    # React
 pnpm dev              # 完整功能 demo，含商品卡
 ```
 
-| 目錄                  | 說明                                                          |
-| --------------------- | ------------------------------------------------------------- |
-| `demo/`（`pnpm dev`） | 完整產品殼：commands／hooks、圖層、callout dependsOn、商品卡… |
-| `examples/html`       | 純 HTML 最小 embed                                            |
-| `examples/vue`        | Vue 3，onMounted / destroy                                    |
-| `examples/react`      | React，useEffect cleanup                                      |
-| `examples/laravel`    | Laravel ProjectStore 參考，非完整專案                         |
+| 目錄                  | 說明                                                                    |
+| --------------------- | ----------------------------------------------------------------------- |
+| `demo/`（`pnpm dev`） | 完整產品殼：commands／hooks、圖層、callout dependsOn、商品卡…           |
+| `examples/html`       | 純 HTML 最小 embed                                                      |
+| `examples/vue`        | Vue 3，onMounted / destroy                                              |
+| `examples/react`      | React，useEffect cleanup                                                |
+| `examples/laravel`    | 可執行的 Laravel 活動頁後台：登入、版本衝突保護、圖片上傳與公開素材 URL |
+
+Laravel 範例需要 PHP、Composer 與 SQLite，安裝及測試步驟見倉庫 `examples/laravel/README.md`。完整活動頁流程可依[15 分鐘試用任務](/guide/usability-check)驗收；真人結果尚待取得。
 
 ### demo 試 0.5 功能
 

@@ -126,7 +126,7 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
       toolbarGroup: 'end',
       when: (c) => typeof c.save === 'function',
       run: (c) => {
-        void c.save?.()
+        return c.save?.()
       },
     }),
   ]
