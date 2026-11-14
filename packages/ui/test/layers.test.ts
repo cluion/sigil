@@ -253,4 +253,144 @@ describe('createLayersPanel', () => {
     expect(box.getAttribute('aria-label')).toBe('Layers')
     box.remove()
   })
+
+  it('選取只更新受影響列，保留 DOM、焦點與單一 tab stop', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            { id: 'a', type: 'text', name: 'A' },
+            { id: 'b', type: 'text', name: 'B' },
+          ],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    const panel = createLayersPanel(engine, box)
+    const a = box.querySelector<HTMLElement>('.sigil-layer-row[data-layer-id="a"]')!
+    const b = box.querySelector<HTMLElement>('.sigil-layer-row[data-layer-id="b"]')!
+
+    a.focus()
+    engine.select('a')
+    expect(box.querySelector('.sigil-layer-row[data-layer-id="a"]')).toBe(a)
+    expect(box.querySelector('.sigil-layer-row[data-layer-id="b"]')).toBe(b)
+    expect(document.activeElement).toBe(a)
+    expect(a.getAttribute('aria-selected')).toBe('true')
+
+    engine.select('b')
+    expect(a.getAttribute('aria-selected')).toBe('false')
+    expect(b.getAttribute('aria-selected')).toBe('true')
+    expect(b.classList.contains('sigil-layer-row--active')).toBe(true)
+    expect(document.activeElement).toBe(a)
+    expect(
+      [...box.querySelectorAll<HTMLElement>('.sigil-layer-row')].filter(
+        (row) => row.tabIndex === 0,
+      ),
+    ).toEqual([a])
+
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    outside.focus()
+    engine.select('b')
+    expect(
+      [...box.querySelectorAll<HTMLElement>('.sigil-layer-row')].filter(
+        (row) => row.tabIndex === 0,
+      ),
+    ).toEqual([b])
+    expect(box.querySelector('.sigil-layer-row[data-layer-id="a"]')).toBe(a)
+    expect(box.querySelector('.sigil-layer-row[data-layer-id="b"]')).toBe(b)
+
+    panel.destroy()
+    box.remove()
+    outside.remove()
+  })
+
+  it('單節點更新與 Undo／Redo 保留列，操作讀取最新節點狀態', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 't', type: 'text', name: '舊名稱', content: 'old' }],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    const panel = createLayersPanel(engine, box)
+    const row = box.querySelector<HTMLElement>('.sigil-layer-row[data-layer-id="t"]')!
+    const visibility = row.querySelector<HTMLButtonElement>('[data-layer-action="visibility"]')!
+    const lock = row.querySelector<HTMLButtonElement>('[data-layer-action="lock"]')!
+
+    visibility.focus()
+    engine.update('t', { name: '新名稱', hidden: true, locked: true })
+    expect(box.querySelector('.sigil-layer-row[data-layer-id="t"]')).toBe(row)
+    expect(document.activeElement).toBe(visibility)
+    expect(row.getAttribute('aria-label')).toBe('新名稱')
+    expect(row.classList.contains('sigil-layer-row--hidden')).toBe(true)
+    expect(row.classList.contains('sigil-layer-row--locked')).toBe(true)
+    expect(visibility.getAttribute('aria-pressed')).toBe('true')
+    expect(lock.getAttribute('aria-pressed')).toBe('true')
+
+    visibility.click()
+    expect(engine.getTree().children?.[0]?.hidden).toBeUndefined()
+    expect(visibility.getAttribute('aria-pressed')).toBe('false')
+    engine.undo()
+    expect(box.querySelector('.sigil-layer-row[data-layer-id="t"]')).toBe(row)
+    expect(engine.getTree().children?.[0]?.hidden).toBe(true)
+    expect(visibility.getAttribute('aria-pressed')).toBe('true')
+    engine.redo()
+    expect(box.querySelector('.sigil-layer-row[data-layer-id="t"]')).toBe(row)
+    expect(visibility.getAttribute('aria-pressed')).toBe('false')
+
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('最後名稱')
+    row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    expect(prompt).toHaveBeenCalledWith('圖層名稱', '新名稱')
+    expect(row.querySelector('.sigil-layer-label')?.textContent).toBe('最後名稱')
+    prompt.mockRestore()
+
+    panel.destroy()
+    box.remove()
+  })
+
+  it('結構變動與多節點 Undo 仍重建並顯示正確樹', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 'a', type: 'text', name: 'A' }],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const panel = createLayersPanel(engine, box)
+    const oldA = box.querySelector('.sigil-layer-row[data-layer-id="a"]')
+
+    engine.insert('r', { id: 'b', type: 'text', name: 'B' }, 0)
+    expect(
+      [...box.querySelectorAll<HTMLElement>('.sigil-layer-row')].map((row) => row.dataset.layerId),
+    ).toEqual(['r', 'b', 'a'])
+    expect(box.querySelector('.sigil-layer-row[data-layer-id="a"]')).not.toBe(oldA)
+    engine.batch(() => {
+      engine.update('a', { name: 'A2' })
+      engine.update('b', { name: 'B2' })
+    })
+    engine.undo()
+    expect(
+      [...box.querySelectorAll('.sigil-layer-label')].map((label) => label.textContent),
+    ).toEqual(['section', 'B', 'A'])
+    engine.redo()
+    expect(
+      [...box.querySelectorAll('.sigil-layer-label')].map((label) => label.textContent),
+    ).toEqual(['section', 'B2', 'A2'])
+
+    panel.destroy()
+  })
 })

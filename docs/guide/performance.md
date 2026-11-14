@@ -10,7 +10,7 @@
 node scripts/measure-performance.mjs --label=baseline
 ```
 
-工具會使用 `demo/vite.config.ts` 的 source aliases 做 Vite production build，輸出到 `test-results/performance/<時間>-<label>/build/`，建立僅綁定 `127.0.0.1` 的暫時 preview server，再啟動 Playwright Chromium。結束會關閉 browser／server，保留 `results.json`、原始樣本與當次建置。預設量測上限 15 分鐘；中斷或錯誤會保留部分結果並標成 `failed`，不得引用成完整 baseline。
+工具會使用 `demo/vite.config.ts` 的 source aliases 做 Vite production build，輸出到 `test-results/performance/<時間>-<label>/build/`，建立僅綁定 `127.0.0.1` 的暫時 preview server，再啟動 Playwright Chromium。結束會關閉 browser／server，保留 `results.json`、原始樣本與當次建置。預設量測上限 15 分鐘；中斷或錯誤會保留部分結果並標成 `failed`，不得引用成完整 baseline。需長期保留的報告應另存到獨立證據目錄；其他測試工具可能清理自己的輸出目錄。
 
 需要已安裝 Playwright Chromium；工具不自動下載瀏覽器。Sandbox 若限制 loopback 或 browser process，需依執行環境取得本機程序權限。正式比較前應停止其他 build／test、瀏覽器工作與重負載；不要在量測過程修改 runtime。結果記錄開始／結束 source SHA256，若不同即標記失敗。
 
@@ -71,7 +71,7 @@ node scripts/measure-performance.mjs --label=reference --enforce-budgets
 - Production minify、source aliases、1440×900／DPR 1／headless／無 CPU throttle；開始與結束的 1 分鐘 load average 約 4.97／6.13，並非宣稱 OS 無其他背景工作。
 - Mount 每規模 **5 筆**；每項操作 **30 筆**；history 每規模 **100 步、1 次 heap 前後觀測**。
 - 當次 Git HEAD：`ad16f3fd0f6ac7bed8e45a8f1a4db6b0aa740805`，包含未提交 runtime 變更；65 個來源檔的開始／結束 hash 相同：`9bdf8312669cfa99117c55ebc53736a18cfd348fdb544b72a4a71f9ef3117672`。僅 Git SHA 不足以重建這個未提交工作樹。
-- 完整原始樣本與記憶體欄位：`test-results/performance/2026-10-23T11-29-16-635Z-baseline/results.json`。結果為 `completed`、來源穩定且無 browser runtime errors。此路徑是忽略的本機 artifact，不是已發布套件。
+- 2026-10-23 當次完整原始樣本原存於 `test-results/performance/2026-10-23T11-29-16-635Z-baseline/results.json`，結果為 `completed`、來源穩定且無 browser runtime errors。該本機忽略檔已於 2026-11-14 被測試輸出清理，現只保留本節的歷史摘要，不能再以該路徑作為可讀的原始證據。
 
 ### 畫面 ready 延遲
 
@@ -139,7 +139,7 @@ Chromium 同時回報的實驗性 `embedderHeapUsedSize` 也保留在 JSON。5,0
 |  1,000 | 100.3 |  34.1 |  43.1 |  68.9 |  68.1 |  4.2 |  2.8 |       0.333 |
 |  5,000 | 301.3 | 198.6 | 191.5 | 297.8 | 269.4 | 28.8 | 11.9 |       1.285 |
 
-各規模仍確認 Undo／Redo 均為 100 步，歷史共享物件數與首次 baseline 相同。65 個 runtime 來源檔開始／結束 SHA256 相同：`f8279e3cc37c960a55e3781a6b858b34b7a709604c4cfdca241bbf31279b1a31`。原始樣本位於 `test-results/performance/2026-10-23T11-56-11-129Z-post-review/results.json`。5,000 節點 fixture 超過 Laravel 1 MiB、單機樣本及記憶體量測限制仍適用；本次是未提交工作樹驗證。
+各規模仍確認 Undo／Redo 均為 100 步，歷史共享物件數與首次 baseline 相同。65 個 runtime 來源檔開始／結束 SHA256 相同：`f8279e3cc37c960a55e3781a6b858b34b7a709604c4cfdca241bbf31279b1a31`。當次本機原始樣本原存於 `test-results/performance/2026-10-23T11-56-11-129Z-post-review/results.json`，現已不在本地，只保留本節摘要。5,000 節點 fixture 超過 Laravel 1 MiB、單機樣本及記憶體量測限制仍適用；本次是未提交工作樹驗證。
 
 ## 首個候選的 hosted CI 觀測
 
@@ -154,10 +154,29 @@ Chromium 同時回報的實驗性 `embedderHeapUsedSize` 也保留在 JSON。5,0
 | Undo     |     713.9 |            500 |
 | Redo     |     872.8 |            500 |
 
-Hosted job 未啟用預算硬門檻，成功只代表量測完整完成，不能解讀為效能預算全過。這份觀測與 M4 Pro reference 分開保留；硬體與負載不同，不能以單次差異判定回歸或取代 reference 驗收。原始 JSON 位於該 run 的 `performance-report` artifact：`2026-10-23T12-17-57-073Z-baseline/results.json`。本節是首次候選的歷史記錄，不代表後續 commit 已通過自己的 CI。
+Hosted job 未啟用預算硬門檻，成功只代表量測完整完成，不能解讀為效能預算全過。這份觀測與 M4 Pro reference 分開保留；硬體與負載不同，不能以單次差異判定回歸或取代 reference 驗收。原始 JSON 當時位於該 run 的 `performance-report` artifact：`2026-10-23T12-17-57-073Z-baseline/results.json`；artifact 保存期已過，現在無法下載。本節是首次候選的歷史記錄，不代表後續 commit 已通過自己的 CI。
+
+## 2026-11-14 圖層更新優化的本機重測
+
+先在隔離的 `e52127107686da9c296e9bb21c877401061886b8` checkout 重跑原程式，再於修改後工作樹使用**同一台 Apple M4 Pro、Chromium 151.0.7922.34、完整固定協定與原定預算**重跑。兩份報告均為 `completed`／`within-budget`，各規模 5 次 mount、每頁 6 組操作與 100 步 history 均完成；來源在各次量測期間穩定、無 browser runtime errors。修改後尚未 commit，這是本機工作樹驗證。
+
+5,000 節點 ready p95（ms）：
+
+| 操作 | 原程式 | 修改後 |
+| ---- | -----: | -----: |
+| 選取 |  185.6 |   26.5 |
+| 更新 |  178.0 |   65.0 |
+| Undo |  278.1 |  110.9 |
+| Redo |  275.3 |  106.7 |
+
+同一報告的 5,000 節點 mount ready p95 為 **300.0→314.2 ms**，保存／匯出的同步 work p95 為 **25.8→21.9 ms**／**11.7→8.2 ms**；均未超過原定預算。History post-GC JS 增量為 **1.285→0.204 MiB**，每規模僅一次觀測，不據此宣稱長時間記憶體改善。
+
+另用相同 5,000 節點文件、單頁 6 組操作，在 Layers 訂閱者暫時加入計時標記；計時只存在診斷建置中，不進入產品來源。原程式每次事件的圖層處理中位數約 75–78 ms，其中建立 DOM 約 62 ms；修改後單節點選取、更新與歷史事件均低於 0.1 ms。這定位了圖層全量重建在此 workload 的同步成本，但 `readyMs` 仍含兩次 rAF 的排程與呈現機會，並非實際 paint 耗時。
+
+原始結果與診斷樣本保存在本機忽略的 `plan/evidence/2026-11-14-layers/`：`before-results.json`、`after-results.json`、`profile-before.json`、`profile-after.json`。這次改善尚未於 GitHub hosted runner 或其他裝置驗證；不能用 M4 Pro 結果宣稱先前 hosted 超標已消失。
 
 ## 程式路徑與後續判讀
 
-`packages/core/src/model/tree.ts` 使用不可變樹與共享子樹，更新仍需走訪樹；`packages/core/src/engine/engine.ts` 保存歷史 root。`packages/ui/src/layers.ts` 目前在 selection／patch／tree 事件完整重建圖層列，`packages/core/src/renderer/renderer.ts` 對 Undo／Redo 的 tree 事件完整 reconcile。這些是可核對的程式路徑，不等於已取得 CPU profile 的瓶頸歸因。
+`packages/core/src/model/tree.ts` 使用不可變樹與共享子樹，更新仍需走訪樹；`packages/core/src/engine/engine.ts` 保存歷史 root。`packages/ui/src/layers.ts` 現在只更新選取列與單一變動節點；結構變動、多節點歷史差異及語系切換仍完整重建圖層。`packages/core/src/renderer/renderer.ts` 對 Undo／Redo 的 tree 事件仍完整重建畫布，是剩餘的同步工作來源之一；本次沒有對其另做細分 CPU profile。
 
-若互動超標，下一步先量各訂閱者及 layout 的時間分布，優先評估圖層增量更新／虛擬化與 history reconcile；修改後須在相同機器與 protocol 重跑，並保持行為與視覺驗證。跨瀏覽器、低階裝置、冷載入、真後端保存、大型富文字與長時間記憶體趨勢仍需各自的驗收，不能由這次 Chromium baseline 代替。
+若後續環境的 Undo／Redo 仍超標，下一步應先細分 Canvas reconcile 與 layout 的成本，再決定是否重用未變子樹。跨瀏覽器、低階裝置、冷載入、真後端保存、大型富文字與長時間記憶體趨勢仍需各自驗收，不能由這次 Chromium baseline 代替。
