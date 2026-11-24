@@ -98,6 +98,24 @@ async function mount(count: number) {
       },
     },
   })
+  const layers = document.querySelector<HTMLElement>('.sigil-layers-panel')!
+  const initialLayerRows = layers.querySelectorAll('[role="treeitem"]').length
+  // 量測完整展開的圖層工作量，與先前相同節點數的結果對照。
+  const closedBranches = () =>
+    layers.querySelectorAll<HTMLButtonElement>(
+      '[aria-expanded="false"] > [data-layer-action="toggle"]',
+    )
+  let closed = closedBranches()
+  while (closed.length) {
+    for (const button of closed) {
+      button.click()
+      assert(
+        button.parentElement?.getAttribute('aria-expanded') === 'true',
+        'Layer branch did not open',
+      )
+    }
+    closed = closedBranches()
+  }
   const workMs = performance.now() - start
   while (
     document.querySelector('iframe')?.contentDocument?.querySelectorAll('[data-sigil-id]')
@@ -109,14 +127,32 @@ async function mount(count: number) {
   assert(document.querySelectorAll('[role="treeitem"]').length === count, 'Layer count mismatch')
   canvas().body.getBoundingClientRect()
   await ready()
-  return { workMs, readyMs: performance.now() - start, documentBytes, count, targets }
+  return {
+    workMs,
+    readyMs: performance.now() - start,
+    documentBytes,
+    count,
+    initialLayerRows,
+    targets,
+  }
 }
 
 async function measure(
   operation: Operation,
   target: string,
   action: () => unknown,
+  profileIndex?: number,
 ): Promise<Sample> {
+  if (operation === 'update' && profileIndex !== undefined) {
+    const mark = (phase: string) => performance.mark(`sigil-update:${profileIndex}:${phase}`)
+    const start = mark('start').startTime
+    await action()
+    const workMs = mark('work-end').startTime - start
+    await frame()
+    mark('frame-one')
+    await frame()
+    return { operation, target, workMs, readyMs: mark('ready').startTime - start }
+  }
   const start = performance.now()
   await action()
   const workMs = performance.now() - start
@@ -124,7 +160,7 @@ async function measure(
   return { operation, target, workMs, readyMs: performance.now() - start }
 }
 
-async function cycle(index: number): Promise<Sample[]> {
+async function cycle(index: number, profileUpdate = false): Promise<Sample[]> {
   const editor = current()
   const target = targets[index % targets.length]!
   const original = findNode(editor.engine.getTree(), target)?.content
@@ -133,7 +169,12 @@ async function cycle(index: number): Promise<Sample[]> {
   samples.push(await measure('selection', target, () => editor.engine.select(target)))
   assert(editor.engine.getSelection() === target, 'Selection did not apply')
   samples.push(
-    await measure('update', target, () => editor.engine.update(target, { content: updated })),
+    await measure(
+      'update',
+      target,
+      () => editor.engine.update(target, { content: updated }),
+      profileUpdate ? index : undefined,
+    ),
   )
   assert(
     canvas().querySelector(`[data-sigil-id="${target}"]`)?.textContent === updated,

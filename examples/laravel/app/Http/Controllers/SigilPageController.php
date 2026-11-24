@@ -15,6 +15,25 @@ use stdClass;
 
 class SigilPageController extends Controller
 {
+    public function index(Request $request): Response|JsonResponse
+    {
+        $pages = SigilPage::query()
+            ->where('user_id', $request->user()->getAuthIdentifier())
+            ->orderByDesc('updated_at')->orderByDesc('id')
+            ->simplePaginate(10, ['key', 'doc', 'updated_at']);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'pages' => $pages->getCollection()->map(fn (SigilPage $page): array => [
+                    'key' => $page->key,
+                    'title' => $page->activityTitle(),
+                ]),
+            ])->header('Vary', 'Accept')->header('Cache-Control', 'private, no-store');
+        }
+
+        return response()->view('activities', ['pages' => $pages])->header('Vary', 'Accept');
+    }
+
     public function show(Request $request, string $key): JsonResponse|Response
     {
         $page = SigilPage::query()

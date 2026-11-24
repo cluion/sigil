@@ -121,6 +121,7 @@ export const demoRichTextAdapter: RichTextAdapter = {
     doc.body.appendChild(toolbar)
 
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.isComposing || event.keyCode === 229) return
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault()
         context.requestCommit()

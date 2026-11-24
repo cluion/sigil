@@ -163,7 +163,7 @@ function appendPresentationAttributes(
   if (responsiveKey) parts.push(' data-sigil-r="', responsiveKey, '"')
   if (node.className) parts.push(' class="', escapeHtml(node.className), '"')
 
-  const style: Style = { ...node.style }
+  const style: Style = responsiveKey ? {} : { ...node.style }
   if (node.hidden) style.display = 'none'
   const css = serializeInlineDeclarations(style)
   if (css) parts.push(' style="', css, '"')
@@ -181,29 +181,47 @@ function needsStaticShortcodeHost(node: ComponentNode, responsiveKey: string | u
 
 function createResponsiveOutput(root: ComponentNode): ResponsiveOutput {
   const keys = new Map<ComponentNode, string>()
-
+  const selectors = new Map<string, string>()
+  const cssRules: string[] = []
+  const mediaRules: Record<ResponsiveBreakpoint, string[]> = { tablet: [], mobile: [] }
   walk(root, (node) => {
-    const hasResponsiveStyle = BREAKPOINTS.some(
-      (breakpoint) => serializeDeclarations(node.responsiveStyles?.[breakpoint]).length > 0,
-    )
-    if (hasResponsiveStyle) keys.set(node, `r${keys.size}`)
+    if (!node.responsiveStyles) return
+    const tablet = serializeDeclarations(node.responsiveStyles.tablet)
+    const mobile = serializeDeclarations(node.responsiveStyles.mobile)
+    if (!tablet && !mobile) return
+    const desktop = serializeDeclarations(node.style)
+    const signature = JSON.stringify([desktop, tablet, mobile])
+    let key = selectors.get(signature)
+    if (!key) {
+      key = responsiveKey(signature)
+      selectors.set(signature, key)
+      const selector = `[data-sigil-r="${key}"]`
+      if (desktop) cssRules.push(`${selector}{${desktop}}`)
+      if (tablet) mediaRules.tablet.push(`${selector}{${tablet}}`)
+      if (mobile) mediaRules.mobile.push(`${selector}{${mobile}}`)
+    }
+    keys.set(node, key)
   })
 
-  const mediaRules: string[] = []
   for (const breakpoint of BREAKPOINTS) {
-    const rules: string[] = []
-    for (const [node, key] of keys) {
-      const declarations = serializeDeclarations(node.responsiveStyles?.[breakpoint])
-      if (declarations) rules.push(`[data-sigil-r="${key}"]{${declarations}}`)
-    }
+    const rules = mediaRules[breakpoint]
     if (rules.length) {
-      mediaRules.push(
+      cssRules.push(
         `@media (max-width:${RESPONSIVE_BREAKPOINT_WIDTHS[breakpoint]}px){${rules.join('')}}`,
       )
     }
   }
 
-  return { keys, css: mediaRules.join('') }
+  return { keys, css: cssRules.join('') }
+}
+
+// 用樣式內容產生穩定的 64 位識別碼，供多份匯出片段共用同一頁。
+function responsiveKey(signature: string): string {
+  let hash = 0xcbf29ce484222325n
+  for (let i = 0; i < signature.length; i++) {
+    hash = BigInt.asUintN(64, (hash ^ BigInt(signature.charCodeAt(i))) * 0x100000001b3n)
+  }
+  return `r${hash.toString(36)}`
 }
 
 function serializeDeclarations(style: Style | undefined): string {

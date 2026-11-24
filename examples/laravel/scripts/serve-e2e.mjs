@@ -100,6 +100,9 @@ try {
   }
   await runPhp(
     [
+      // Laravel resolves its storage path from $_ENV or $_SERVER during HTTP requests.
+      '-d',
+      'variables_order=EGPCS',
       '-d',
       'upload_max_filesize=4M',
       '-d',

@@ -8,7 +8,7 @@ const reportName = engine ?? 'all'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['editor.spec.ts', 'persistence.spec.ts', 'security.spec.ts'],
+  testMatch: ['editor.spec.ts', 'activity-demo.spec.ts', 'persistence.spec.ts', 'security.spec.ts'],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,

@@ -1,5 +1,6 @@
 import {
   createClearStylePatch,
+  createId,
   createStylePatch,
   findNode,
   getEffectiveStyle,
@@ -41,7 +42,10 @@ export function updateDeviceStyle(
   property: string,
   value: string,
 ): void {
-  if (!findNode(engine.getTree(), id)) return
+  const node = findNode(engine.getTree(), id)
+  if (!node || node.locked) return
+  const style = device === 'desktop' ? node.style : node.responsiveStyles?.[device]
+  if ((style?.[property] ?? '') === value) return
   engine.update(id, createStylePatch(device, property, value))
 }
 
@@ -50,23 +54,23 @@ export function clearDeviceStyles(engine: Engine, id: string, device: Responsive
   engine.update(id, createClearStylePatch(device))
 }
 
-export function deviceLabel(device: ResponsiveDevice): string {
-  if (device === 'desktop') return 'Desktop'
-  if (device === 'tablet') return 'Tablet'
-  return 'Mobile'
+export function deviceLabel(device: ResponsiveDevice, i18n?: I18n): string {
+  const labels = { desktop: '桌面', tablet: '平板', mobile: '手機' }
+  return uiText(i18n, `device.${device}`, labels[device])
 }
 
 export function inheritanceLabel(device: ResponsiveDevice, i18n?: I18n): string {
   if (device === 'desktop') return uiText(i18n, 'style.base', '基礎樣式')
-  if (device === 'tablet') return uiText(i18n, 'style.inherit_desktop', '未覆寫時繼承 Desktop')
-  return uiText(i18n, 'style.inherit_tablet_desktop', '未覆寫時繼承 Tablet，再繼承 Desktop')
+  if (device === 'tablet') return uiText(i18n, 'style.inherit_desktop', '未覆寫時沿用桌面樣式')
+  return uiText(i18n, 'style.inherit_tablet_desktop', '未覆寫時沿用平板或桌面樣式')
 }
 
 type StyleControl = HTMLInputElement | HTMLSelectElement
 
 function sourceText(value: DeviceStyleValue, i18n?: I18n): string {
   if (value.override !== undefined) return uiText(i18n, 'style.override', '覆寫')
-  if (value.source) return `${uiText(i18n, 'style.inherit', '繼承')} ${deviceLabel(value.source)}`
+  if (value.source)
+    return `${uiText(i18n, 'style.inherit', '繼承')} ${deviceLabel(value.source, i18n)}`
   return uiText(i18n, 'style.unset', '未設定')
 }
 
@@ -93,13 +97,20 @@ export function decorateStyleControl(
   property: string,
   initial: DeviceStyleValue,
   i18n?: I18n,
+  observe?: (refreshMetadata: (value: DeviceStyleValue) => void) => void,
+  signal?: AbortSignal,
 ): HTMLElement {
   applyControlMetadata(control, initial, i18n)
-  if (device === 'desktop') return control
+  if (device === 'desktop') {
+    observe?.((value) => applyControlMetadata(control, value, i18n))
+    return control
+  }
 
   const row = document.createElement('div')
   row.className = 'sigil-style-control-row'
   const source = document.createElement('span')
+  source.id = `sigil-style-source-${createId()}`
+  control.setAttribute('aria-describedby', source.id)
   source.className = 'sigil-style-source'
   source.dataset.styleSourceLabel = property
   source.textContent = sourceText(initial, i18n)
@@ -109,34 +120,41 @@ export function decorateStyleControl(
   inherit.className = 'sigil-btn sigil-btn--ghost sigil-style-inherit'
   inherit.dataset.styleReset = property
   inherit.textContent = uiText(i18n, 'style.use_inheritance', '使用繼承')
-  inherit.disabled = initial.override === undefined
+  inherit.disabled = control.disabled || initial.override === undefined
 
+  function refreshMetadata(value: DeviceStyleValue): void {
+    applyControlMetadata(control, value, i18n)
+    source.textContent = sourceText(value, i18n)
+    inherit.disabled = control.disabled || value.override === undefined
+  }
+  observe?.(refreshMetadata)
   const syncMetadata = (): void => {
     const latest = findNode(engine.getTree(), node.id)
-    if (!latest) return
-    const value = getDeviceStyleValue(latest, device, property)
-    applyControlMetadata(control, value, i18n)
-    source.textContent = sourceText(value, i18n)
-    inherit.disabled = value.override === undefined
+    if (latest) refreshMetadata(getDeviceStyleValue(latest, device, property))
   }
-  control.addEventListener('input', syncMetadata)
-  control.addEventListener('change', syncMetadata)
+  if (!observe) {
+    control.addEventListener('input', syncMetadata)
+    control.addEventListener('change', syncMetadata)
+  }
 
-  inherit.addEventListener('click', () => {
-    updateDeviceStyle(engine, node.id, device, property, '')
-    const latest = findNode(engine.getTree(), node.id)
-    if (!latest) return
-    const value = getDeviceStyleValue(latest, device, property)
-    if (control instanceof HTMLInputElement && control.type === 'color') {
-      const color = value.effective
-      control.value = color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color) ? color : '#000000'
-    } else {
-      control.value = ''
-    }
-    applyControlMetadata(control, value, i18n)
-    source.textContent = sourceText(value, i18n)
-    inherit.disabled = true
-  })
+  inherit.addEventListener(
+    'click',
+    () => {
+      updateDeviceStyle(engine, node.id, device, property, '')
+      if (observe) return
+      const latest = findNode(engine.getTree(), node.id)
+      if (!latest) return
+      const value = getDeviceStyleValue(latest, device, property)
+      if (control instanceof HTMLInputElement && control.type === 'color') {
+        const color = value.effective
+        control.value = color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color) ? color : '#000000'
+      } else {
+        control.value = ''
+      }
+      refreshMetadata(value)
+    },
+    { signal },
+  )
 
   row.append(control, source, inherit)
   return row

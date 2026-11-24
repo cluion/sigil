@@ -102,7 +102,12 @@ describe('createBlocksPanel', () => {
       {
         id: 'text',
         label: '文字',
-        create: () => ({ id: `text-${++nextId}`, type: 'text', content: '' }),
+        create: () => ({
+          id: `text-${++nextId}`,
+          type: 'text',
+          tagName: 'a',
+          attributes: { id: 'event-info', href: '#event-info' },
+        }),
       },
     ])
     const item = box.querySelector('[role="button"]') as HTMLElement
@@ -115,6 +120,36 @@ describe('createBlocksPanel', () => {
     item.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
     expect(engine.getTree().children?.map((node) => node.id)).toEqual(['text-1', 'text-2'])
     expect(engine.getSelection()).toBe('text-2')
+    expect(engine.getTree().children?.map((node) => node.attributes)).toEqual([
+      { id: 'event-info', href: '#event-info' },
+      { id: 'event-info-copy', href: '#event-info-copy' },
+    ])
+  })
+
+  it('按下並取消時保留文件，完成一次點擊才建立並選取一個區塊', () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'page', type: 'section', children: [] } },
+    })
+    const box = document.createElement('div')
+    const create = vi.fn(() => ({ id: 'inserted', type: 'text' as const }))
+    const panel = createBlocksPanel(engine, box, document.createElement('iframe'), [
+      { id: 'text', label: '文字', create },
+    ])
+    const item = box.querySelector('button')!
+    const pointer = { button: 0, isPrimary: true, pointerId: 7, clientX: 40, clientY: 40 }
+    item.dispatchEvent(new PointerEvent('pointerdown', pointer))
+    window.dispatchEvent(new PointerEvent('pointercancel', pointer))
+    window.dispatchEvent(new PointerEvent('pointerup', pointer))
+    expect(create).not.toHaveBeenCalled()
+    expect(engine.getTree().children).toHaveLength(0)
+
+    item.dispatchEvent(new PointerEvent('pointerdown', pointer))
+    window.dispatchEvent(new PointerEvent('pointerup', pointer))
+    item.dispatchEvent(new MouseEvent('click', { detail: 1 }))
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(engine.getTree().children).toHaveLength(1)
+    expect(engine.getSelection()).toBe('inserted')
+    panel.destroy()
   })
 
   it('只為有 actions 的項目顯示操作入口並執行重命名', async () => {

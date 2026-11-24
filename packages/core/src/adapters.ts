@@ -27,6 +27,10 @@ export interface AssetItem {
 export interface AssetStore {
   list(): AssetItem[] | Promise<AssetItem[]>
   upload?(file: File): AssetItem | Promise<AssetItem>
+  /** Native file chooser accept value. The upload handler validates the file. */
+  uploadAccept?: string
+  /** User-facing feedback for recognized upload errors. */
+  describeUploadError?(error: unknown): { message: string; retryable: boolean } | undefined
 }
 
 /**

@@ -30,13 +30,23 @@ node scripts/measure-performance.mjs --label=reference --enforce-budgets
 
 此選項只接受完整原定 protocol（100／1,000／5,000 節點，各 5 次 mount、每頁 6 組操作、100 步 history）；不符合時拒絕啟動，完整量測超標時 exit 1。量測本身失敗無論是否 enforce 都 exit 1。沒有承諾 CI 或排程執行的硬體與背景負載不變。
 
+### 大文件更新分段診斷
+
+目前工作樹的 GitHub CI 設定會執行下列命令。原定預算量測完成後，工具另開 5 個全新頁面，載入產品樣式與 5,000 節點文件，使用 Chromium timeline 追蹤每頁 6 組操作。這些額外樣本獨立保存在同一份 `results.json` 的 `updateProfile.pages`；追蹤期間的耗時不計入預算。
+
+```bash
+node scripts/measure-performance.mjs --profile-updates
+```
+
+每頁的 `updates[0]` 是首次文字修改。每筆保留節點 ID、操作完成耗時、操作完成到第一幀和第一幀到第二幀的間隔。三段加總就是 `readyMs`。另附 `timelineMs`，依 Chromium 提供的 frame ID 標示宿主 (`host`)、畫布 (`canvas`) 或無法歸屬的事件 (`unattributed`)。其中 `Layout` 是排版，`LayerTreeHost::WaitForCommitCompletion` 是主執行緒等待合成提交，`renderer.RasterTask` 是該 renderer 的背景點陣化工作所覆蓋的時間。同類事件相交的時段只計一次；不同類別會重疊，不宜相加。第一幀前後也可能有前一項選取操作觸發的繪製。
+
 ## 方法與樣本
 
 - 固定 1440×900 viewport、DPR 1、中文亮色、reduced motion、headless Chromium，不套用 CPU throttling。每個規模獨立暖機一頁，完成 mount 與一組操作後丟棄暖機樣本。
 - 每規模測 5 個新 browser context／page；每頁操作 6 組，因此每個操作有 30 筆樣本。依序交替文件前／中／後的文字節點。各頁循序執行，沒有並行壓力。分位值使用 nearest rank；只有 5 個 mount 的 p95 等於最大樣本，不是高信賴的母體尾端估計。
 - 文件節點數包含 root，固定深度 3；每個 section 最多 20 個文字節點，包含有限的 desktop／mobile 樣式，沒有圖片、網路字型、shortcode、富文字或外部 API。記錄實際 UTF-8 JSON bytes。這個 workload 不代表所有同節點數文件。
 - `workMs` 是呼叫到同步工作／Promise 完成；`readyMs` 再等待兩次 `requestAnimationFrame`。後者代表瀏覽器有呈現機會的時間代理值，並非顯示器實際出光時間；會包含刷新週期量化及排程噪音，不能與純 CPU 時間混用。
-- Mount 從 `createApp()` 前開始，直到 iframe 畫布與圖層節點數正確、layout 可讀且跨過兩個 animation frame。排除導覽、JavaScript 下載／模組初始化與 fixture 文件生成，故不是冷網路載入時間。
+- Mount 從 `createApp()` 前開始，直到 iframe 畫布與圖層節點數正確、layout 可讀且跨過兩個 animation frame。大型文件的圖層預設收合；fixture 會在 mount 計時內展開所有圖層，後續操作也在完整的列數下量測。這個區間排除導覽、JavaScript 下載、模組初始化與 fixture 文件生成。
 - 選取／更新／Undo／Redo 從公開 engine API 發起，包含完整 App、Inspector、Layers 與 Canvas 的同步反應，並驗證畫布內容。沒有把 Playwright 跨程序 RPC、滑鼠 hit testing 或鍵盤事件分派時間算進來。
 - 保存測 `await app.save()`，adapter 同步 `JSON.stringify` 到記憶體；包含保存快照與狀態切換，不含 HTTP、資料庫或磁碟延遲。匯出測 `app.toHTML()` 產生字串，不含對話框與下載。兩者以完成時間比較預算，額外的 ready 時間仍保留在 JSON。
 
@@ -174,6 +184,30 @@ Hosted job 未啟用預算硬門檻，成功只代表量測完整完成，不能
 另用相同 5,000 節點文件、單頁 6 組操作，在 Layers 訂閱者暫時加入計時標記；計時只存在診斷建置中，不進入產品來源。原程式每次事件的圖層處理中位數約 75–78 ms，其中建立 DOM 約 62 ms；修改後單節點選取、更新與歷史事件均低於 0.1 ms。這定位了圖層全量重建在此 workload 的同步成本，但 `readyMs` 仍含兩次 rAF 的排程與呈現機會，並非實際 paint 耗時。
 
 原始結果與診斷樣本保存在本機忽略的 `plan/evidence/2026-11-14-layers/`：`before-results.json`、`after-results.json`、`profile-before.json`、`profile-after.json`。這次改善尚未於 GitHub hosted runner 或其他裝置驗證；不能用 M4 Pro 結果宣稱先前 hosted 超標已消失。
+
+後續 `7cd66a4` 的 [GitHub CI](https://github.com/cluion/sigil/actions/runs/43550449582) 已完成整套量測。5,000 節點的更新 ready p95 為 **251.7 ms**，超出 250 ms 預算，該提交的其他項目在預算內。
+
+## 2026-11-24 畫布根容器描邊
+
+編輯畫布原本在包住整份文件的根容器畫上虛線。在隔離的 `7cd66a4` 加入相同診斷工具後，比較原樣與僅將根容器改為實線的版本。兩組在同一台 Apple M4 Pro、Node 24.18.0、Chromium 151.0.7922.34 上完成原定協定，來源穩定、無 runtime errors，兩次均在完整預算內。瀏覽器的 computed style 確認子容器在兩組都保有虛線。
+
+| 5,000 節點量測                              |   根容器虛線 |   根容器實線 |
+| ------------------------------------------- | -----------: | -----------: |
+| 更新 ready p95（各 30 筆，不開 trace）      |      53.4 ms |      27.5 ms |
+| 各頁首次更新 ready（5 頁範圍，不開 trace）  | 49.9–54.4 ms | 26.7–27.5 ms |
+| 首次更新的畫布 Layout（5 個診斷頁的中位數） |     0.501 ms |     0.444 ms |
+| 首次更新期間的 renderer 點陣化工作（同上）  |    52.995 ms |     1.325 ms |
+| 首次更新期間主執行緒等待合成提交（同上）    |    44.234 ms |     0.007 ms |
+
+這台機器的差異集中在點陣化與合成等待。當次獨立報告保存在本機 `plan/evidence/2026-11-24-canvas/reference-before.json` 及 `reference-after.json`。更新後的 hosted 結果仍須以對應版本的 CI artifact 驗證。
+
+本輪 UI 與匯出流程整合後，另在最終工作樹執行相同完整協定，三個規模均通過預算。5,000 節點的選取、更新、Undo、Redo ready p95 分別為 **25.8、27.7、119.6、108.6 ms**，保存及匯出 work p95 為 **21.4、7.4 ms**。66 個來源檔的雜湊在量測期間維持一致，無瀏覽器執行錯誤。這份報告與上述單一樣式比較分開保存在 `plan/evidence/2026-11-24-canvas/integrated-ux.json`。
+
+## 2026-11-24 桌面工作區改版
+
+新版以相同的完整協定執行 `--enforce-budgets`。在本機 Apple M4 Pro、Chromium 151 上，100、1,000、5,000 節點三種規模均通過原定預算。5,000 節點初次顯示 240 個圖層列，量測時展開至全數 5,000 列；載入 ready p95 為 323.8 ms。30 筆選取、文字更新、Undo 與 Redo 的 ready p95 分別為 32.9、26.5、108.2、109.3 ms。保存和匯出的 work p95 為 20.2、6.6 ms。這些數值適用於本機的固定文件、瀏覽器和量測條件。
+
+活動頁新增連結和響應式排列控制後，同一台機器再次測量。5,000 節點的載入、選取、文字更新、Undo、Redo ready p95 分別為 **317.8、32.3、26.7、107.8、110.2 ms**。儲存與匯出的本機序列化 work p95 為 **20.4、6.1 ms**。三種文件規模均通過預算，每種各測 5 次載入、各項操作 30 筆，並驗證 100 步復原及重做。
 
 ## 程式路徑與後續判讀
 

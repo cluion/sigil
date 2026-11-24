@@ -59,6 +59,11 @@ try {
       )
       cpSync(join(source, file), join(destination, file), { recursive: true })
     }
+    const runtimeEntry = readFileSync(join(destination, manifest.exports['.'].import), 'utf8')
+    assert.ok(
+      !runtimeEntry.replaceAll('\\', '/').includes(root.replaceAll('\\', '/') + '/'),
+      `${manifest.name}: published JavaScript contains the build directory`,
+    )
     assert.ok(
       !existsSync(join(destination, 'src/index.ts')),
       `${manifest.name}: source leaked into the consumer`,

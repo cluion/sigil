@@ -221,7 +221,7 @@ function appendStyleField(
   i18n?: I18n,
 ): void {
   const heading = document.createElement('h4')
-  heading.textContent = `${uiText(i18n, 'style.title', '樣式')} · ${deviceLabel(device)}`
+  heading.textContent = `${uiText(i18n, 'style.title', '樣式')} · ${deviceLabel(device, i18n)}`
   container.appendChild(heading)
 
   const context = document.createElement('p')
@@ -297,8 +297,8 @@ function appendStyleField(
   reset.type = 'button'
   reset.textContent =
     device === 'desktop'
-      ? uiText(i18n, 'style.clear_desktop', '清除 Desktop 樣式')
-      : `${uiText(i18n, 'style.clear', '清除')} ${deviceLabel(device)} ${uiText(i18n, 'style.override', '覆寫')}`
+      ? uiText(i18n, 'style.clear_desktop', '清除桌面樣式')
+      : `${uiText(i18n, 'style.clear', '清除')} ${deviceLabel(device, i18n)} ${uiText(i18n, 'style.override', '覆寫')}`
   reset.addEventListener('click', () => {
     clearDeviceStyles(engine, node.id, device)
     rerender()

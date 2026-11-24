@@ -13,6 +13,32 @@ class SigilPageTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_activity_directory_displays_only_the_owners_saved_titles(): void
+    {
+        $this->withoutVite();
+        $this->get('/activities')->assertRedirect('/login');
+        $this->getJson('/activities')->assertUnauthorized();
+        $owner = $this->user('owner@example.test');
+        $other = $this->user('other@example.test');
+        $doc = $this->doc();
+        $doc->meta->title = '舊的範本名稱';
+        $doc->root->children = [(object) ['id' => 'activity-title', 'type' => 'text', 'content' => '週末攝影工作坊']];
+        $this->actingAs($owner)->putJson('/sigil/pages/own-page', ['baseRevision' => 0, 'doc' => $doc])->assertCreated();
+        $this->actingAs($other)->putJson('/sigil/pages/other-page', ['baseRevision' => 0, 'doc' => $this->doc()])->assertCreated();
+
+        $this->actingAs($owner)->get('/activities')->assertOk()
+            ->assertSee('週末攝影工作坊')->assertSee('/editor/own-page')->assertDontSee('舊的範本名稱')
+            ->assertDontSee('/editor/other-page');
+        $this->getJson('/activities')->assertOk()->assertExactJson([
+            'pages' => [['key' => 'own-page', 'title' => '週末攝影工作坊']],
+        ]);
+        $first = $this->get('/activities/new')->assertRedirect()->headers->get('Location');
+        $second = $this->get('/activities/new')->assertRedirect()->headers->get('Location');
+        $this->assertNotSame($first, $second);
+        $this->get($first)->assertOk();
+        $this->assertDatabaseCount('sigil_pages', 2);
+    }
+
     public function test_reading_a_missing_page_does_not_create_it(): void
     {
         $this->actingAs($this->user())->getJson('/sigil/pages/activity')->assertNotFound();

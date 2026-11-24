@@ -153,6 +153,74 @@ describe('createApp', () => {
     app.destroy()
   })
 
+  it('畫布換圖沿用素材庫、保留替代文字與 Inspector 分頁，取消和復原維持原圖', async () => {
+    const mount = document.createElement('div')
+    document.body.append(mount)
+    const attrs = { src: '/first.png', alt: '春季海報', title: '宣傳照片' }
+    const app = createApp({
+      mount,
+      locale: 'en',
+      theme: 'dark',
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 'photo', type: 'image', attributes: attrs }],
+        },
+      },
+      assets: {
+        list: () => [
+          { id: 'first', url: '/first.png' },
+          { id: 'second', name: 'Second', url: '/second.png' },
+        ],
+      },
+    })
+    try {
+      const frame = mount.querySelector('iframe')!
+      await vi.waitFor(() =>
+        expect(frame.contentDocument?.querySelector('[data-sigil-id="photo"]')).toBeTruthy(),
+      )
+      app.engine.select('photo')
+      const styleTab = mount.querySelectorAll<HTMLButtonElement>(
+        '.sigil-inspector [role="tab"]',
+      )[1]!
+      styleTab.click()
+      const replace = mount.querySelector<HTMLButtonElement>(
+        '.sigil-selection-toolbar [aria-label="Replace image"]',
+      )!
+      expect(replace.textContent).toBe('Replace image')
+      replace.click()
+      const dialog = document.querySelector<HTMLElement>('.sigil-media-backdrop')!
+      expect(dialog.classList.contains('sigil-theme-dark')).toBe(true)
+      await vi.waitFor(() => expect(dialog.querySelector('.sigil-media-card--active')).toBeTruthy())
+      dialog.querySelector<HTMLButtonElement>('.sigil-media-head button')!.click()
+      expect(document.activeElement).toBe(replace)
+      expect(app.engine.canUndo()).toBe(false)
+
+      replace.click()
+      const card = await vi.waitFor(() => {
+        const cards = document.querySelectorAll<HTMLButtonElement>('.sigil-media-card')
+        expect(cards).toHaveLength(2)
+        return cards[1]!
+      })
+      card.click()
+      expect(app.toJSON().root.children?.[0]?.attributes).toEqual({ ...attrs, src: '/second.png' })
+      expect(document.activeElement).toBe(replace)
+      expect(styleTab.getAttribute('aria-selected')).toBe('true')
+      app.engine.undo()
+      expect(app.toJSON().root.children?.[0]?.attributes).toEqual(attrs)
+      expect(app.engine.canUndo()).toBe(false)
+      app.engine.redo()
+      expect(app.toJSON().root.children?.[0]?.attributes?.src).toBe('/second.png')
+      app.setLocale('zh')
+      expect(replace.textContent).toBe('更換圖片')
+    } finally {
+      app.destroy()
+      mount.remove()
+    }
+  })
+
   it('英文 locale 套用 Blocks、Layers 與 Media 主要互動字串', async () => {
     const mount = document.createElement('div')
     const app = createApp({
@@ -343,6 +411,45 @@ describe('createApp', () => {
     app.destroy()
   })
 
+  it.each([
+    { initial: 375, later: 1080, chosen: null, expected: 'mobile' },
+    { initial: 1080, later: 375, chosen: null, expected: 'desktop' },
+    { initial: 0, later: 480, chosen: null, expected: 'mobile' },
+    { initial: 0, later: 481, chosen: null, expected: 'desktop' },
+    { initial: 0, later: 375, chosen: 'tablet', expected: 'tablet' },
+  ])(
+    '僅依首次有效寬度選裝置，保留手動選擇（$initial → $later, $chosen）',
+    ({ initial, later, chosen, expected }) => {
+      vi.stubGlobal('ResizeObserver', undefined)
+      const mount = document.createElement('div')
+      let width = initial
+      vi.spyOn(mount, 'getBoundingClientRect').mockImplementation(() => ({ width }) as DOMRect)
+      const app = createApp({ mount, doc: emptyDoc() })
+      try {
+        const state = () =>
+          mount.querySelector<HTMLButtonElement>('.sigil-topbar [data-device][aria-pressed="true"]')
+            ?.dataset.device
+        expect(state()).toBe(initial > 0 && initial <= 480 ? 'mobile' : 'desktop')
+        if (chosen)
+          mount.querySelector<HTMLButtonElement>(`.sigil-topbar [data-device="${chosen}"]`)!.click()
+        width = later
+        window.dispatchEvent(new Event('resize'))
+        expect(state()).toBe(expected)
+        app.engine.select('r')
+        mount
+          .querySelector<HTMLButtonElement>('.sigil-inspector [role="tab"][id$="-style"]')!
+          .click()
+        expect(
+          mount.querySelector<HTMLElement>('.sigil-responsive-style-context')?.dataset.styleDevice,
+        ).toBe(expected)
+        expect(app.isDirty()).toBe(false)
+      } finally {
+        app.destroy()
+        vi.unstubAllGlobals()
+      }
+    },
+  )
+
   it('Topbar 裝置切換同步 Inspector，樣式寫入該 breakpoint', () => {
     const mount = document.createElement('div')
     const app = createApp({
@@ -447,7 +554,8 @@ describe('createApp', () => {
     expect(dialog.getAttribute('aria-labelledby')).toBe(dialog.querySelector('h3')?.id)
     const ta = dialog.querySelector('textarea') as HTMLTextAreaElement
     expect(ta?.value).toContain('hi')
-    expect(document.activeElement).toBe(ta)
+    expect(dialog.querySelector('details')?.open).toBe(false)
+    expect(document.activeElement?.textContent).toBe('下載 .html')
 
     const closeBtns = [...dialog.querySelectorAll<HTMLButtonElement>('button')].filter((button) =>
       /關閉|Close/.test(button.textContent ?? ''),
@@ -468,6 +576,27 @@ describe('createApp', () => {
     )
     expect(document.querySelector('.sigil-dialog-backdrop')).toBeNull()
     expect(document.activeElement).toBe(exportBtn)
+    app.destroy()
+    mount.remove()
+  })
+
+  it('宿主產生下載標題失敗時保留文件並顯示可用的替代操作', () => {
+    const mount = document.createElement('div')
+    document.body.appendChild(mount)
+    const app = createApp({
+      mount,
+      doc: emptyDoc(),
+      getExportTitle(snapshot) {
+        snapshot.root.name = '宿主修改的快照'
+        throw new Error('Host title unavailable')
+      },
+    })
+    mount.querySelector<HTMLButtonElement>('[data-command-id="export"]')!.click()
+    const dialog = document.querySelector<HTMLElement>('.sigil-dialog-backdrop')!
+    dialog.querySelector<HTMLButtonElement>('.sigil-btn--primary')!.click()
+    expect(dialog.querySelector('[role="status"]')?.textContent).toContain('下載失敗')
+    expect(dialog.querySelector('textarea')?.value).toBe(app.toHTML())
+    expect(app.toJSON().root.name).toBeUndefined()
     app.destroy()
     mount.remove()
   })
@@ -628,17 +757,227 @@ describe('createApp', () => {
     app.destroy()
   })
 
+  it('桌面以頁面與圖層起始，區塊庫保留搜尋並可用鍵盤返回結構', () => {
+    const mount = document.createElement('div')
+    document.body.append(mount)
+    const navigation = document.createElement('a')
+    navigation.textContent = '其他活動'
+    const renderPageNavigation = vi.fn(() => navigation)
+    const app = createApp({
+      mount,
+      doc: { ...emptyDoc(), meta: { title: '工作坊' } },
+      renderPageNavigation,
+      blocks: { text: () => ({ id: 'item', type: 'text', content: 'hello' }) },
+    })
+    try {
+      const left = mount.querySelector<HTMLElement>('.sigil-sidebar')!
+      const right = mount.querySelector<HTMLElement>('.sigil-inspector-wrap')!
+      const rail = mount.querySelector<HTMLElement>('.sigil-workspace-rail')!
+      const structure = rail.querySelector<HTMLButtonElement>('[aria-label="頁面結構"]')!
+      const add = rail.querySelector<HTMLButtonElement>('[aria-label="新增區塊"]')!
+      const library = left.querySelector<HTMLElement>('.sigil-block-library')!
+      const search = library.querySelector<HTMLInputElement>('input')!
+      expect(left.querySelector('[role="tree"]')).toBeTruthy()
+      expect(left.contains(navigation)).toBe(true)
+      expect(right.querySelector('[role="tree"]')).toBeNull()
+      expect(left.querySelector('.sigil-document-name')?.textContent).toBe('工作坊')
+      expect(library.hidden).toBe(true)
+      structure.click()
+      expect(left.hidden).toBe(true)
+      mount.querySelector<HTMLButtonElement>('.sigil-empty-canvas button')!.click()
+      expect(left.hidden).toBe(false)
+      expect(library.hidden).toBe(false)
+      expect(document.activeElement).toBe(search)
+      search.value = 'text'
+      search.dispatchEvent(new Event('input'))
+      library
+        .querySelector<HTMLElement>('[role="button"]')!
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      expect(app.engine.getSelection()).toBe('item')
+      expect(right.querySelector<HTMLInputElement>('.sigil-inspector-body input')?.value).toBe(
+        'hello',
+      )
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      expect(library.hidden).toBe(true)
+      expect(document.activeElement).toBe(add)
+      expect(left.querySelector('[role="treeitem"][aria-selected="true"]')).toBeTruthy()
+      add.click()
+      expect(search.value).toBe('text')
+      app.setDocumentTitle('工作坊 A')
+      app.setLocale('en')
+      expect(add.getAttribute('aria-label')).toBe('Add blocks')
+      expect(left.querySelector('.sigil-document-name')?.textContent).toBe('工作坊 A')
+      app.setDocumentTitle()
+      expect(left.querySelector('.sigil-document-name')?.textContent).toBe('工作坊')
+      expect(renderPageNavigation).toHaveBeenCalledOnce()
+      const style = rail.querySelector<HTMLButtonElement>('[aria-label="Page styles"]')!
+      style.click()
+      expect(app.engine.getSelection()).toBe('r')
+      expect(right.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Style')
+      expect(document.activeElement?.getAttribute('role')).toBe('tab')
+    } finally {
+      app.destroy()
+      expect(navigation.isConnected).toBe(false)
+      mount.remove()
+    }
+  })
+
+  it('素材庫插入圖片可復原，已鎖定頁面、取消與卸載時不插入', async () => {
+    const mount = document.createElement('div')
+    document.body.append(mount)
+    const doc = emptyDoc()
+    const url = 'https://example.test/event.webp'
+    const app = createApp({
+      mount,
+      doc,
+      assets: { list: () => [{ id: 'photo', name: '封面', url }] },
+    })
+    try {
+      const button = mount.querySelector<HTMLButtonElement>(
+        '.sigil-workspace-rail [aria-haspopup="dialog"]',
+      )!
+      expect(button.hidden).toBe(false)
+      button.click()
+      await vi.waitFor(() => expect(document.querySelector('.sigil-media-card')).toBeTruthy())
+      expect(document.querySelector('.sigil-media-head h3')?.textContent).toBe('插入圖片至頁尾')
+      document.querySelector<HTMLButtonElement>('.sigil-media-card')!.click()
+      const image = app.toJSON().root.children?.[0]
+      expect(image).toMatchObject({ type: 'image', attributes: { src: url } })
+      expect(app.engine.getSelection()).toBe(image!.id)
+      expect(document.activeElement).toBe(button)
+      app.engine.undo()
+      expect(app.toJSON().root.children).toEqual([])
+      button.click()
+      await vi.waitFor(() => expect(document.querySelector('.sigil-media-card')).toBeTruthy())
+      app.engine.update('r', { locked: true })
+      document.querySelector<HTMLButtonElement>('.sigil-media-card')!.click()
+      expect(app.toJSON().root.children).toEqual([])
+      expect(button.disabled).toBe(true)
+      expect(mount.querySelector('.sigil-status')?.textContent).toContain('目前無法在頁尾插入圖片')
+      app.engine.update('r', { locked: false })
+      button.click()
+      app.setLocale('en')
+      expect(document.querySelector('.sigil-media-head h3')?.textContent).toBe(
+        'Insert image at end of page',
+      )
+      document.querySelector<HTMLButtonElement>('.sigil-media-head button')!.click()
+      button.click()
+    } finally {
+      app.destroy()
+      expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
+      mount.remove()
+    }
+  })
+
+  it('compact 畫布選取後可直接編輯元件、保留修改並回到原入口', () => {
+    const mount = document.createElement('div')
+    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({ width: 375 } as DOMRect)
+    document.body.appendChild(mount)
+    const app = createApp({
+      mount,
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [{ id: 'h', type: 'text', name: '活動標題', content: '春季市集' }],
+        },
+      },
+    })
+    try {
+      const edit = mount.querySelector<HTMLButtonElement>('.sigil-edit-selection')!
+      const drawer = mount.querySelector<HTMLElement>('[data-compact-panel="settings"]')!
+      const layers = drawer.querySelector<HTMLElement>('.sigil-layers-box')!
+      expect(edit.hidden).toBe(true)
+      app.engine.select('h')
+      expect(edit.hidden).toBe(false)
+      expect(edit.textContent).toBe('編輯 活動標題')
+      edit.click()
+      expect(drawer.dataset.open).toBe('true')
+      expect(drawer.getAttribute('aria-label')).toBe('元件設定')
+      expect(layers.hidden).toBe(true)
+      const content = drawer.querySelector<HTMLInputElement>('input.sigil-input')!
+      expect(document.activeElement).toBe(content)
+      content.value = '夏季市集'
+      content.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(app.toJSON().root.children?.[0]?.content).toBe('夏季市集')
+      content.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      expect(drawer.dataset.open).toBe('false')
+      expect(document.activeElement).toBe(edit)
+      app.setLocale('en')
+      expect(edit.textContent).toBe('Edit 活動標題')
+      mount.querySelector<HTMLButtonElement>('[data-panel-toggle="settings"]')!.click()
+      expect(layers.hidden).toBe(false)
+      expect(drawer.getAttribute('aria-label')).toBe('Layers / Settings')
+    } finally {
+      app.destroy()
+      mount.remove()
+    }
+  })
+
+  it('compact 預設收起次要工具，預覽清空抽屜，回到編輯時保留選取', () => {
+    const mount = document.createElement('div')
+    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({ width: 375 } as DOMRect)
+    document.body.appendChild(mount)
+    const app = createApp({ mount, doc: emptyDoc() })
+    try {
+      const button = (name: string) =>
+        [...mount.querySelectorAll<HTMLButtonElement>('.sigil-topbar button')].find(
+          (b) => (b.getAttribute('aria-label') ?? b.textContent) === name,
+        )!
+      const extra = mount.querySelector<HTMLElement>('.sigil-extra-tools')!
+      const primary = mount.querySelector<HTMLElement>('.sigil-primary-tools')!
+      const tools = button('更多工具')
+      const selected = mount.querySelector<HTMLButtonElement>('.sigil-edit-selection')!
+      expect(extra.hidden).toBe(true)
+      expect(primary.contains(button('存檔'))).toBe(true)
+      expect(extra.contains(button('匯出'))).toBe(true)
+      tools.click()
+      expect(tools.getAttribute('aria-expanded')).toBe('true')
+      expect(extra.hidden).toBe(false)
+      button('手機').click()
+      expect(button('手機').getAttribute('aria-pressed')).toBe('true')
+      extra.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      expect(extra.hidden).toBe(true)
+      expect(document.activeElement).toBe(tools)
+      app.engine.select('r')
+      button('圖層／設定').click()
+      button('預覽').click()
+      expect(
+        mount.querySelector<HTMLElement>('[data-compact-panel="settings"]')!.dataset.open,
+      ).toBe('false')
+      expect(button('圖層／設定').disabled).toBe(true)
+      expect(selected.hidden).toBe(true)
+      expect(document.activeElement).toBe(button('編輯'))
+      button('編輯').click()
+      expect(selected.hidden).toBe(false)
+      expect(selected.textContent).toBe('編輯所選元件')
+      expect(button('圖層／設定').disabled).toBe(false)
+      expect(document.activeElement).toBe(button('預覽'))
+    } finally {
+      app.destroy()
+      mount.remove()
+    }
+  })
+
   it('依容器寬度切換 compact 抽屜，互斥開啟並可 Escape 關閉及還原焦點', () => {
-    let resizeCallback: ResizeObserverCallback | undefined
+    const observers = new Map<Element, ResizeObserverCallback>()
     const disconnectObserver = vi.fn()
     vi.stubGlobal(
       'ResizeObserver',
       class {
-        constructor(callback: ResizeObserverCallback) {
-          resizeCallback = callback
+        constructor(private callback: ResizeObserverCallback) {}
+        observe(target: Element) {
+          observers.set(target, this.callback)
         }
-        observe() {}
-        disconnect = disconnectObserver
+        disconnect() {
+          for (const [target, callback] of observers) {
+            if (callback === this.callback) {
+              disconnectObserver(target)
+              observers.delete(target)
+            }
+          }
+        }
       },
     )
 
@@ -654,11 +993,13 @@ describe('createApp', () => {
     ) as HTMLButtonElement
     const backdrop = mount.querySelector('.sigil-panel-backdrop') as HTMLElement
 
-    resizeCallback?.(
+    const resizeCallback = observers.get(root)!
+    resizeCallback(
       [{ target: root, contentRect: { width: 720 } } as unknown as ResizeObserverEntry],
       {} as ResizeObserver,
     )
     expect(root.dataset.layout).toBe('compact')
+    expect(settings.contains(root.querySelector('[role="tree"]'))).toBe(true)
     expect(blocks.getAttribute('aria-hidden')).toBe('true')
     expect(settings.getAttribute('aria-hidden')).toBe('true')
 
@@ -683,17 +1024,23 @@ describe('createApp', () => {
     expect(blocks.dataset.open).toBe('false')
     expect(document.activeElement).toBe(blocksToggle)
 
-    resizeCallback?.(
+    resizeCallback(
       [{ target: root, contentRect: { width: 1100 } } as unknown as ResizeObserverEntry],
       {} as ResizeObserver,
     )
     expect(root.dataset.layout).toBe('desktop')
+    expect(blocks.contains(root.querySelector('[role="tree"]'))).toBe(true)
     expect(blocks.getAttribute('aria-hidden')).toBe('false')
     expect(settings.getAttribute('aria-hidden')).toBe('false')
+    expect(root.querySelector('.sigil-extra-tools')).toBeNull()
+    for (const id of ['undo', 'redo', 'save', 'export']) {
+      expect(root.querySelector(`.sigil-topbar [data-command-id="${id}"]`)).toBeTruthy()
+    }
+    expect(root.querySelectorAll('.sigil-topbar button[data-device]')).toHaveLength(3)
 
     app.destroy()
     mount.remove()
-    expect(disconnectObserver).toHaveBeenCalledOnce()
+    expect(disconnectObserver).toHaveBeenCalledWith(root)
     vi.unstubAllGlobals()
   })
 })

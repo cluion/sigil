@@ -52,7 +52,11 @@ describe('blocks', () => {
 
   it('normalizeBlocks 接受 Record 與陣列', () => {
     const fromRecord = normalizeBlocks(basicBlocks)
-    expect(fromRecord.length).toBe(5)
+    expect(fromRecord.find((block) => block.id === 'link')?.create()).toMatchObject({
+      type: 'text',
+      tagName: 'a',
+      attributes: { href: '#' },
+    })
     expect(fromRecord[0]!.category).toBe('一般')
 
     const fromDefs = normalizeBlocks(basicBlockDefs)

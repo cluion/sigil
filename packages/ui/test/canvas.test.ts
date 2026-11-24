@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createEngine, createI18n } from '@cluion/sigil-core'
+import { createCommandRegistry, createEngine, createI18n } from '@cluion/sigil-core'
 import { createCanvas } from '../src/canvas.js'
 import type { RichTextAdapter, RichTextEditContext } from '../src/index.js'
 
@@ -90,13 +90,15 @@ describe('createCanvas — preview mode', () => {
     expect(toggle.textContent).toBe('Preview mode')
     expect(canvas.getDevice()).toBe('tablet')
     expect(engine.getTree()).toBe(tree)
+    expect(canvas.iframe.contentDocument?.head.textContent).not.toContain('Drop components here')
+    canvas.setMode('edit')
     expect(canvas.iframe.contentDocument?.head.textContent).toContain(
       'content:"Drop components here"',
     )
 
     canvas.destroy()
     i18n.setLocale('zh')
-    expect(toggle.textContent).toBe('Preview mode')
+    expect(toggle.textContent).toBe('Edit mode')
     container.remove()
   })
 
@@ -262,6 +264,81 @@ describe('createCanvas — preview fragment navigation', () => {
   })
 })
 
+describe('createCanvas — 觸控捲動', () => {
+  function setup() {
+    const engine = createEngine({ doc })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const canvas = createCanvas(engine, container)
+    const overlay = container.querySelector<HTMLElement>('.sigil-canvas-overlay')!
+    vi.spyOn(canvas.iframe, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 20, 350, 600))
+    const win = canvas.iframe.contentWindow!
+    let scrollY = 0
+    vi.spyOn(win, 'scrollY', 'get').mockImplementation(() => scrollY)
+    const scroll = vi
+      .spyOn(win, 'scrollBy')
+      .mockImplementation((options?: ScrollToOptions | number) => {
+        if (typeof options === 'object')
+          scrollY = Math.max(0, Math.min(400, scrollY + (options.top ?? 0)))
+      })
+    function touch(type: string, points: Array<[number, number]>): Event {
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'touches', {
+        value: points.map(([x, y], id) => ({ identifier: id, clientX: x, clientY: y })),
+      })
+      overlay.dispatchEvent(event)
+      return event
+    }
+    function destroy() {
+      canvas.destroy()
+      engine.destroy()
+      container.remove()
+    }
+    return { win, scroll, touch, destroy }
+  }
+
+  it('允許輕點，單指拖動會捲動畫布，碰到外緣的新手勢可捲動宿主', () => {
+    const { win, scroll, touch, destroy } = setup()
+    try {
+      touch('touchstart', [[60, 480]])
+      expect(touch('touchmove', [[62, 479]]).defaultPrevented).toBe(false)
+      expect(scroll).not.toHaveBeenCalled()
+      expect(touch('touchmove', [[60, 380]]).defaultPrevented).toBe(true)
+      expect(win.scrollY).toBe(100)
+      expect(touch('touchmove', [[60, 50]]).defaultPrevented).toBe(true)
+      expect(win.scrollY).toBe(400)
+      touch('touchend', [])
+      touch('touchstart', [[60, 480]])
+      expect(touch('touchmove', [[60, 350]]).defaultPrevented).toBe(false)
+      expect(win.scrollY).toBe(400)
+    } finally {
+      destroy()
+    }
+  })
+
+  it('跳過畫布外、多指及已取消的手勢', () => {
+    const { scroll, touch, destroy } = setup()
+    try {
+      touch('touchstart', [[5, 100]])
+      expect(touch('touchmove', [[50, 60]]).defaultPrevented).toBe(false)
+      touch('touchstart', [[60, 180]])
+      expect(
+        touch('touchmove', [
+          [60, 130],
+          [120, 150],
+        ]).defaultPrevented,
+      ).toBe(false)
+      expect(touch('touchmove', [[60, 100]]).defaultPrevented).toBe(false)
+      touch('touchstart', [[60, 250]])
+      touch('touchcancel', [])
+      expect(touch('touchmove', [[60, 120]]).defaultPrevented).toBe(false)
+      expect(scroll).not.toHaveBeenCalled()
+    } finally {
+      destroy()
+    }
+  })
+})
+
 describe('createCanvas — 右鍵選單', () => {
   it('回報命中節點並同步選取', async () => {
     const engine = createEngine({ doc: docWithText })
@@ -391,6 +468,68 @@ describe('createCanvas — device', () => {
 })
 
 describe('createCanvas — selection chrome', () => {
+  it('獨立畫布採用宿主提供的命令條件，編輯或離開視口時隱藏工具列', async () => {
+    const engine = createEngine({ doc: docWithText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const duplicate = vi.fn()
+    const canDuplicate = vi.fn(() => false)
+    const registry = createCommandRegistry([
+      { id: 'duplicate', run: duplicate, when: canDuplicate },
+    ])
+    const canvas = createCanvas(engine, container, {
+      selectionCommands: {
+        registry,
+        context: () => ({
+          engine,
+          getDoc: () => engine.toJSON(),
+          clipboard: { get: () => null, set: () => {} },
+        }),
+      },
+    })
+    await waitIframeLoad(canvas.iframe)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const frame = canvas.iframe.contentDocument!
+    const title = frame.querySelector('[data-sigil-id="t1"]')!
+    const bounds = vi
+      .spyOn(title, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(25, 60, 90, 20))
+    for (const el of [container, canvas.iframe]) {
+      Object.defineProperties(el, { clientWidth: { value: 400 }, clientHeight: { value: 320 } })
+    }
+    const toolbar = container.querySelector<HTMLElement>('[role="toolbar"]')!
+    const button = toolbar.querySelector<HTMLButtonElement>('[aria-label="複製元件"]')!
+    const paint = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    engine.select('t1')
+    await paint()
+    expect(toolbar.hidden).toBe(false)
+    expect(button.disabled).toBe(true)
+    button.click()
+    expect(duplicate).not.toHaveBeenCalled()
+    canDuplicate.mockReturnValue(true)
+    engine.select('t1')
+    button.click()
+    expect(duplicate).toHaveBeenCalledOnce()
+    bounds.mockReturnValue(new DOMRect(25, -90, 90, 20))
+    frame.dispatchEvent(new Event('scroll'))
+    await paint()
+    expect(toolbar.hidden).toBe(true)
+    bounds.mockReturnValue(new DOMRect(25, 60, 90, 20))
+    frame.dispatchEvent(new Event('scroll'))
+    await paint()
+    expect(toolbar.hidden).toBe(false)
+    canvas.startEditing('t1')
+    expect(toolbar.hidden).toBe(true)
+    canvas.commitEditing()
+    await paint()
+    expect(toolbar.hidden).toBe(false)
+    canvas.setMode('preview')
+    expect(toolbar.hidden).toBe(true)
+    canvas.destroy()
+    expect(toolbar.isConnected).toBe(false)
+    container.remove()
+  })
+
   it('選取後標記 data-sigil-selected 與類型 badge', async () => {
     const engine = createEngine({ doc: docWithText })
     const container = document.createElement('div')
@@ -404,19 +543,18 @@ describe('createCanvas — selection chrome', () => {
     const d = iframe.contentDocument
     const el = d?.querySelector('[data-sigil-id="t1"]')
     expect(el?.getAttribute('data-sigil-selected')).toBe('1')
-    const badge = d?.querySelector('[data-sigil-type-badge]') as HTMLElement
+    const badge = container.querySelector('[data-sigil-type-badge]') as HTMLElement
     expect(badge).toBeTruthy()
-    expect(badge.style.display).not.toBe('none')
     expect(badge.textContent).toBe('text')
     engine.update('t1', { name: '標題' })
     await new Promise((r) => setTimeout(r, 0))
     await new Promise((r) => requestAnimationFrame(() => r(undefined)))
-    expect((d?.querySelector('[data-sigil-type-badge]') as HTMLElement).textContent).toBe('標題')
+    expect(badge.textContent).toBe('標題')
     destroy()
     container.remove()
   })
 
-  it('選取 image 也顯示類型 badge（iframe 內 fixed）', async () => {
+  it('選取 image 顯示名稱，工具列位於文件之外', async () => {
     const engine = createEngine({
       doc: {
         version: 1,
@@ -445,11 +583,57 @@ describe('createCanvas — selection chrome', () => {
     const el = d?.querySelector('[data-sigil-id="img1"]')
     expect(el?.tagName.toLowerCase()).toBe('img')
     expect(el?.getAttribute('data-sigil-selected')).toBe('1')
-    const badge = d?.querySelector('[data-sigil-type-badge]') as HTMLElement
-    expect(badge.style.display).not.toBe('none')
+    const badge = container.querySelector('[data-sigil-type-badge]') as HTMLElement
     expect(badge.textContent).toBe('image')
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="更換圖片"]')!.hidden).toBe(true)
     destroy()
     container.remove()
+  })
+
+  it('雙擊圖片與畫布按鈕共用換圖操作，鎖定或預覽時不得操作', async () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: { id: 'root', type: 'section', children: [{ id: 'photo', type: 'image' }] },
+      },
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const close = vi.fn()
+    const open = vi.fn(() => close)
+    const canvas = createCanvas(engine, container, { onReplaceImage: open })
+    try {
+      const frame = canvas.iframe
+      await waitIframeLoad(frame)
+      await vi.waitFor(() => expect(frame.contentDocument?.querySelector('img')).toBeTruthy())
+      const doc = frame.contentDocument!
+      vi.spyOn(doc, 'elementFromPoint').mockReturnValue(doc.querySelector('img'))
+      const overlay = container.querySelector<HTMLElement>('.sigil-canvas-overlay')!
+      const button = container.querySelector<HTMLButtonElement>('[aria-label="更換圖片"]')!
+      overlay.dispatchEvent(new MouseEvent('dblclick'))
+      expect(engine.getSelection()).toBe('photo')
+      expect(open).toHaveBeenCalledExactlyOnceWith('photo', button)
+      engine.update('photo', { locked: true })
+      expect(close).toHaveBeenCalledOnce()
+      expect(button.disabled).toBe(true)
+      overlay.dispatchEvent(new MouseEvent('dblclick'))
+      expect(open).toHaveBeenCalledTimes(1)
+
+      engine.update('photo', { locked: false })
+      button.click()
+      expect(open).toHaveBeenCalledTimes(2)
+      canvas.setMode('preview')
+      expect(close).toHaveBeenCalledTimes(2)
+      overlay.dispatchEvent(new MouseEvent('dblclick'))
+      button.click()
+      expect(open).toHaveBeenCalledTimes(2)
+      canvas.setMode('edit')
+      engine.select('root')
+      expect(button.hidden).toBe(true)
+    } finally {
+      canvas.destroy()
+      container.remove()
+    }
   })
 
   it('取消選取清除標記與 badge', async () => {
@@ -464,9 +648,7 @@ describe('createCanvas — selection chrome', () => {
     await new Promise((r) => setTimeout(r, 0))
     const d = iframe.contentDocument
     expect(d?.querySelector('[data-sigil-selected]')).toBeNull()
-    const badge = d?.querySelector('[data-sigil-type-badge]') as HTMLElement | null
-    // 可能尚未建立，或已隱藏
-    if (badge) expect(badge.style.display).toBe('none')
+    expect(container.querySelector<HTMLElement>('[role="toolbar"]')?.hidden).toBe(true)
     destroy()
     container.remove()
   })
@@ -488,6 +670,32 @@ describe('createCanvas — selection chrome', () => {
 })
 
 describe('createCanvas — inline 文字編輯', () => {
+  it('locked content cannot be edited and locking an active node discards its draft', async () => {
+    const engine = createEngine({ doc: docWithText })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const dirty = vi.fn()
+    const canvas = createCanvas(engine, container, { onEditingDirtyChange: dirty })
+    try {
+      await waitIframeLoad(canvas.iframe)
+      canvas.startEditing('t1')
+      const frame = canvas.iframe.contentDocument!
+      const title = frame.querySelector<HTMLElement>('[data-sigil-id="t1"]')!
+      title.textContent = 'temporary'
+      title.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(dirty).toHaveBeenLastCalledWith(true)
+      engine.update('t1', { locked: true })
+      expect(dirty).toHaveBeenLastCalledWith(false)
+      canvas.startEditing('t1')
+      expect(canvas.getEditingId()).toBeNull()
+      expect(frame.querySelector('[data-sigil-id="t1"]')?.textContent).toBe('hello')
+      expect(engine.getTree().children?.[0]?.content).toBe('hello')
+    } finally {
+      canvas.destroy()
+      container.remove()
+    }
+  })
+
   it('startEditing text 節點 → contenteditable + iframe pointerEvents auto', async () => {
     const engine = createEngine({ doc: docWithText })
     const container = document.createElement('div')
@@ -552,7 +760,44 @@ describe('createCanvas — inline 文字編輯', () => {
     await new Promise((r) => setTimeout(r, 0))
 
     expect(engine.getTree().children?.[0]?.content).toBe('hello')
+    expect(iframe.contentDocument?.querySelector('[data-sigil-id="t1"]')?.textContent).toBe('hello')
     destroy()
+    container.remove()
+  })
+
+  it('組字時保留選字鍵；一般 Enter 提交，Escape 還原畫布與模型', async () => {
+    const engine = createEngine({ doc: docWithText })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const canvas = createCanvas(engine, container)
+    await waitIframeLoad(canvas.iframe)
+    const frame = canvas.iframe.contentDocument!
+    const title = () => frame.querySelector<HTMLElement>('[data-sigil-id="t1"]')!
+    canvas.startEditing('t1')
+    title().textContent = '春季'
+    for (const options of [
+      { key: 'Enter', isComposing: true },
+      { key: 'Escape', isComposing: true },
+      { key: 'Enter', keyCode: 229 },
+    ]) {
+      const key = new KeyboardEvent('keydown', { ...options, bubbles: true, cancelable: true })
+      expect(title().dispatchEvent(key)).toBe(true)
+      expect(canvas.getEditingId()).toBe('t1')
+      expect(engine.getTree().children?.[0]?.content).toBe('hello')
+    }
+    title().textContent = '春季活動'
+    title().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(canvas.getEditingId()).toBeNull()
+    expect(engine.getTree().children?.[0]?.content).toBe('春季活動')
+    canvas.startEditing('t1')
+    title().textContent = '未送出的文字'
+    title().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(canvas.getEditingId()).toBeNull()
+    expect(title().textContent).toBe('春季活動')
+    expect(engine.getTree().children?.[0]?.content).toBe('春季活動')
+    engine.undo()
+    expect(title().textContent).toBe('hello')
+    canvas.destroy()
     container.remove()
   })
 
@@ -648,9 +893,25 @@ describe('createCanvas — 富文字編輯 session', () => {
     const element = canvas.iframe.contentDocument?.querySelector(
       '[data-sigil-id="rt1"]',
     ) as HTMLElement
+    element.textContent = '尚在選字'
+    for (const options of [{ isComposing: true }, { keyCode: 229 }]) {
+      const candidateKey = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        ...options,
+        bubbles: true,
+        cancelable: true,
+      })
+      expect(element.dispatchEvent(candidateKey)).toBe(true)
+      expect(canvas.getEditingId()).toBe('rt1')
+      expect(harness.destroy).not.toHaveBeenCalled()
+    }
     element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(canvas.getEditingId()).toBeNull()
     expect(engine.getTree().children?.[0]?.content).toBe('<p><strong>hello</strong></p>')
+    expect(canvas.iframe.contentDocument?.activeElement?.getAttribute('data-sigil-id')).toBe('rt1')
+    expect(canvas.iframe.contentDocument?.activeElement?.textContent).toBe(
+      '<p><strong>hello</strong></p>',
+    )
 
     canvas.startEditing('rt1')
     canvas.destroy()
@@ -705,6 +966,59 @@ describe('createCanvas — 富文字編輯 session', () => {
     expect(harness.destroy).toHaveBeenCalledTimes(2)
     canvas.destroy()
     container.remove()
+  })
+
+  it('protects rich drafts from normalization and read failures, then retries in one undo step', async () => {
+    const engine = createEngine({ doc: docWithRichText })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const harness = richTextHarness()
+    const normalized = '<p>normalized</p>'
+    harness.setValue(normalized)
+    const dirty = vi.fn()
+    const canvas = createCanvas(engine, container, {
+      richText: harness.adapter,
+      onEditingDirtyChange: dirty,
+    })
+    try {
+      await waitIframeLoad(canvas.iframe)
+      canvas.startEditing('rt1')
+      canvas.commitEditing({ forSave: true })
+      expect(engine.canUndo()).toBe(false)
+      canvas.startEditing('rt1')
+      const element = harness.getContext()!.element
+      const next = '<p><em>草稿</em></p>'
+      harness.setValue(next)
+      element.append(element.ownerDocument.createElement('em'))
+      await vi.waitFor(() => expect(dirty).toHaveBeenLastCalledWith(true))
+      expect(engine.canUndo()).toBe(false)
+      const error = new Error('Editor snapshot unavailable')
+      harness.getValue.mockImplementationOnce(() => {
+        throw error
+      })
+      expect(() => canvas.commitEditing({ forSave: true })).toThrow(error)
+      expect(canvas.getEditingId()).toBe('rt1')
+      expect(harness.destroy).toHaveBeenCalledTimes(1)
+      expect(engine.canUndo()).toBe(false)
+      element.dispatchEvent(new Event('compositionstart', { bubbles: true }))
+      expect(() => canvas.commitEditing({ forSave: true })).toThrow()
+      const escape = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      })
+      expect(element.dispatchEvent(escape)).toBe(true)
+      element.dispatchEvent(new Event('compositionend', { bubbles: true }))
+      canvas.commitEditing({ forSave: true })
+      expect(dirty).toHaveBeenLastCalledWith(false)
+      expect(engine.getTree().children?.[0]?.content).toBe(next)
+      engine.undo()
+      expect(engine.toJSON()).toEqual(docWithRichText)
+      expect(engine.canUndo()).toBe(false)
+    } finally {
+      canvas.destroy()
+      container.remove()
+    }
   })
 
   it('start／focus／getValue／destroy 例外會復原畫布並回報', async () => {

@@ -58,7 +58,7 @@ php artisan sigil:user editor@example.test --name="Content Editor"
 php artisan serve --host=127.0.0.1 --port=4175
 ```
 
-開啟 [活動頁編輯器](http://127.0.0.1:4175/editor/activity)，使用剛建立的帳號登入。此命令是本機開發伺服器，不是正式部署方式。`.env.example` 的 `SESSION_SECURE_COOKIE=false` 對應本機 HTTP；正式 HTTPS 宿主需要自己的部署與安全設定。
+開啟 [我的活動頁](http://127.0.0.1:4175/activities)，使用剛建立的帳號登入。清單只列出自己已儲存的頁面，最近儲存的排在最前面。此命令是本機開發伺服器，不是正式部署方式。`.env.example` 的 `SESSION_SECURE_COOKIE=false` 對應本機 HTTP；正式 HTTPS 宿主需要自己的部署與安全設定。
 
 修改前端時，在另一個終端機從儲存庫根目錄執行：
 
@@ -70,11 +70,13 @@ pnpm --filter sigil-example-laravel dev
 
 ## 完成一張活動頁
 
-1. 首次開啟未存在的 page key 時，按「建立活動頁」將範本實際保存後再開始編輯；只有讀取頁面不會建立資料。
-2. 修改活動標題、圖片、內容與常見問題，切換手機尺寸並預覽。
+1. 在「我的活動頁」按「新增活動頁」，填寫活動名稱，再按「建立活動頁」儲存範本。之後可從編輯器左上角回到「我的活動頁」，以儲存後的活動標題找回頁面。直接開啟既有的 `/editor/{key}` 網址仍受支援。
+2. 在畫布點選活動標題或圖片。在手機上，點底部的「編輯」和元件名稱會直接打開內容欄位；「更多工具」可切換裝置。樣式面板的「內距」可以選擇緊湊、標準、寬鬆，也可輸入自訂值。
 3. 選取圖片區塊，從素材面板上傳或選取圖片。素材保存成功後才會回傳持久化網址。
-4. 按儲存，等待成功狀態，再重新整理確認內容與圖片仍存在。匯出 HTML 是下載檔案，不會發布網站或複製圖片素材。
+4. 按儲存，等待成功狀態，再重新整理確認內容與圖片仍存在。按「預覽」檢查連結及排版。手機可從「更多工具」匯出 HTML。「下載 .html」會將本活動使用的範本圖與本站上傳照片放進檔案，可離線開啟。自己貼入的其他圖片網址需要連線。
 5. 在另一個分頁開啟相同 page key，先讓一個分頁儲存，再從舊版本儲存，確認衝突提示與本機內容保留。
+
+桌面編輯器的「圖層」面板會顯示目前活動。展開「切換活動頁」可直接切到最近儲存的十張活動頁，也可開啟完整清單。選取畫布元件後可直接複製、刪除或選取父層。左側「新增區塊」支援點選加入頁尾及拖放到指定位置。
 
 `/editor/activity` 的 `activity` 是文件 key，也可開啟 `/editor/summer-event`。key 限英數開頭，後續可含英數、點、底線及連字號，總長最多 120 字元。同一 key 在不同帳號下是不同文件。
 
@@ -84,13 +86,14 @@ pnpm --filter sigil-example-laravel dev
 
 所有文件與素材清單／上傳路由都在 `routes/web.php` 的 `auth` group，使用 session 與 Laravel CSRF middleware。前端請求使用同源 credentials，寫入另帶 Blade 提供的 `X-CSRF-TOKEN`。
 
-| 請求                      | 成功回應                            | 行為                                           |
-| ------------------------- | ----------------------------------- | ---------------------------------------------- |
-| `GET /sigil/pages/{key}`  | `{ "revision": 1, "doc": { ... } }` | 僅讀取登入者的文件；不存在才回 404             |
-| `PUT /sigil/pages/{key}`  | `{ "revision": 2 }`                 | 請求為 `{ "baseRevision": 1, "doc": { ... } }` |
-| `GET /sigil/assets`       | `AssetItem[]`                       | 僅列出登入者上傳的素材，不暴露磁碟路徑         |
-| `POST /sigil/assets`      | `AssetItem`，HTTP 201               | multipart form 的 `file` 欄位                  |
-| `GET /sigil/media/{uuid}` | 圖片 bytes                          | **公開讀取**；知道網址者不必登入               |
+| 請求                             | 成功回應                                          | 行為                                           |
+| -------------------------------- | ------------------------------------------------- | ---------------------------------------------- |
+| `GET /activities`（Accept JSON） | `{ "pages": [{ "key": "...", "title": "..." }] }` | 只列出登入者的活動，預設為最近十張             |
+| `GET /sigil/pages/{key}`         | `{ "revision": 1, "doc": { ... } }`               | 僅讀取登入者的文件；不存在才回 404             |
+| `PUT /sigil/pages/{key}`         | `{ "revision": 2 }`                               | 請求為 `{ "baseRevision": 1, "doc": { ... } }` |
+| `GET /sigil/assets`              | `AssetItem[]`                                     | 僅列出登入者上傳的素材，不暴露磁碟路徑         |
+| `POST /sigil/assets`             | `AssetItem`，HTTP 201                             | multipart form 的 `file` 欄位                  |
+| `GET /sigil/media/{uuid}`        | 圖片 bytes                                        | **公開讀取**；知道網址者不必登入               |
 
 首次保存使用 `baseRevision: 0`，成功建立後回傳 revision 1 與 HTTP 201；owner 與 key 的唯一約束防止兩個首次保存互相覆寫。後續更新以同一條 SQL 同時檢查 owner、key、revision 並更新，成功回 HTTP 200。舊 revision 回 409，其他資料庫故障保留為伺服器錯誤，不偽裝成衝突或不存在。
 
@@ -124,7 +127,9 @@ HTTP adapter 只將載入時的 404 視為新文件；其他錯誤中止載入�
 
 僅接受實際可解碼的 PNG、JPEG、WebP，單檔最多 4 MiB、寬高各最多 4096 px；拒絕 SVG、偽造圖片及超限檔案。檔名使用隨機 UUID，bytes 存在 `storage/app/private/sigil-media/`，透過 controller 回傳圖片內容及正確 MIME、`nosniff` header，不需要 `storage:link`。
 
-**上傳圖片對外可讀，請只使用可公開的素材。** 隨機網址不是權限控制；只有素材清單與上傳操作限本人。資料庫寫入失敗會清理該次上傳的檔案。此範例未提供素材刪除、配額、遠端物件儲存、掃毒或備份排程。部署者必須同時保存 SQLite 資料庫與圖片檔案；單獨複製 HTML 或資料庫不會帶走圖片。
+**上傳圖片對外可讀，請只使用可公開的素材。** 只有素材清單與上傳操作限本人。資料庫寫入失敗會清理該次上傳的檔案。要備份可繼續編輯的活動，請同時保存 SQLite 資料庫與圖片檔案。
+
+下載 HTML 時，範例會讀取頁面用到的本站上傳照片和內建封面，將圖片內容寫入下載檔。每張最多 4 MiB，內嵌素材的原始大小合計最多 16 MiB。相同圖片只讀取一次，每個使用位置各計入一次。若準備失敗，可重試，或選「依原網址下載」。原網址版及複製的 HTML 片段若含有本站相對路徑，請放回原網站使用。
 
 ## 驗證與安全邊界
 
@@ -169,7 +174,7 @@ pnpm test:laravel:e2e
 
 啟動器只綁定 `127.0.0.1:4185`，每次建立新的暫存 SQLite、storage 與測試帳號，結束後清理。它不重用既有伺服器或開發資料庫；測試用密碼只對該次暫存帳號有效。PHP server 明確設定 `upload_max_filesize=4M`、`post_max_size=8M`。
 
-本機證據（SQLite、macOS Chromium）：
+2026-10-23 的本機證據（SQLite、macOS Chromium）：
 
 - Feature **23 案／174 assertions**、文件驗證 Unit **124 案／236 assertions**、前端 adapters **55 案**通過。
 - 最低 PHP 版本以 **8.3.36** 實際執行安全測試入口，**147 案／410 assertions** 全數通過，`composer check-platform-reqs` 通過；同一版本的 **5 個端到端／真 HTTP 案例**亦全部通過。
@@ -177,7 +182,9 @@ pnpm test:laravel:e2e
 - 真 HTTP 上傳超過 2 MiB 的合法 PNG 成功，匿名讀取可取得相同原始 bytes；缺失或錯誤 CSRF token 被拒，非法文件不覆寫既存版本。
 - 在不含原有 `.env`、vendor、node_modules 或資料庫的暫存來源副本，完成依 lock 安裝、建置、migration、stdin 建帳與 HTTP 登入；pnpm 使用複製的快取，並非全冷快取下載驗收。Composer audit 未回報已知公告或 abandoned packages。
 
-三個引擎的活動頁各 **3／3** 通過；連同 demo、保存及安全流程的完整矩陣為 **45／45**，實際版本與平台見[瀏覽器支援](../../docs/guide/browser-support.md)。[效能量測](../../docs/guide/performance.md)另有 100／1,000／5,000 節點的本機證據；5,000 節點 fixture 超過此範例的 1 MiB 接收界限，不能據此宣稱該文件可在 Laravel 保存。
+2026-11-24，PHP 8.3.37 與 8.5.13 各通過 **148 案／429 assertions**。兩個版本各通過 **8／8** 個 Chromium 活動頁及真實 HTTP 案例，包含儲存後重新開啟、下載 HTML 後在手機尺寸點選頁內連結，以及切回桌面確認排列。
+
+2026-11-24 的工作樹中，三個引擎的活動頁各 **6／6** 通過；連同 demo、保存及安全流程的完整矩陣為 **78／78**，實際版本與平台見[瀏覽器支援](../../docs/guide/browser-support.md)。[效能量測](../../docs/guide/performance.md)另有 100／1,000／5,000 節點的本機證據；5,000 節點 fixture 超過此範例的 1 MiB 接收界限，不能據此宣稱該文件可在 Laravel 保存。
 
 2026-10-23 首個候選的 [CI run 39952171811](https://github.com/cluion/sigil/actions/runs/39952171811) 七個 jobs 全部成功，包含 PHP 8.3／8.5 各自的 PHP、adapters、型別／build 與 5 案瀏覽器／真 HTTP 驗證；Linux 三引擎矩陣為 45／45，零 skipped／flaky／retry。候選 head 與實際 merge checkout 的完整 SHA 見[交付記錄](../../RELEASING.md)；後續 commit 須確認自己的 CI。
 

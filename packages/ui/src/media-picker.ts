@@ -12,7 +12,7 @@ const FOCUSABLE_SELECTOR = [
 
 function focusableElements(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
-    (element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
+    (element) => !element.closest('[hidden], [inert], [aria-hidden="true"]'),
   )
 }
 
@@ -50,11 +50,15 @@ export interface MediaPickerOptions {
 export function openMediaPicker(opts: MediaPickerOptions): () => void {
   const previousFocus = document.activeElement
   let closed = false
+  const lifetime = new AbortController()
+  lifetime.signal.addEventListener('abort', close)
   let listState: 'idle' | 'loading' | 'ready' | 'empty' | 'error' = 'idle'
   let uploadState: 'idle' | 'loading' | 'error' = 'idle'
   let failedUpload: File | null = null
+  let uploadError: ReturnType<NonNullable<AssetStore['describeUploadError']>>
   const backdrop = document.createElement('div')
   backdrop.className = 'sigil-media-backdrop'
+  backdrop.classList.toggle('sigil-theme-dark', !!previousFocus?.closest('.sigil-theme-dark'))
   backdrop.setAttribute('role', 'dialog')
   backdrop.setAttribute('aria-modal', 'true')
   backdrop.tabIndex = -1
@@ -78,6 +82,15 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
   const grid = document.createElement('div')
   grid.className = 'sigil-media-grid'
 
+  const search = document.createElement('input')
+  search.className = 'sigil-input sigil-media-search'
+  search.type = 'search'
+  search.hidden = true
+  const cards: { button: HTMLButtonElement; name: string }[] = []
+  let currentBadge: HTMLElement | undefined
+  let noMatches = false
+  search.addEventListener('input', filterItems)
+
   const listStatus = document.createElement('p')
   listStatus.className = 'sigil-media-status sigil-muted'
   listStatus.setAttribute('role', 'status')
@@ -91,6 +104,11 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
 
   const actions = document.createElement('div')
   actions.className = 'sigil-media-actions'
+  const tools = document.createElement('div')
+  tools.className = 'sigil-media-tools'
+  tools.append(search, actions)
+  const feedback = document.createElement('div')
+  feedback.className = 'sigil-media-feedback'
 
   let uploadBtn: HTMLButtonElement | null = null
   let fileInput: HTMLInputElement | null = null
@@ -99,11 +117,11 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
   if (opts.assets.upload) {
     fileInput = document.createElement('input')
     fileInput.type = 'file'
-    fileInput.accept = 'image/*'
+    fileInput.accept = opts.assets.uploadAccept ?? 'image/*'
     fileInput.hidden = true
     uploadBtn = document.createElement('button')
     uploadBtn.type = 'button'
-    uploadBtn.className = 'sigil-btn'
+    uploadBtn.className = 'sigil-btn sigil-media-upload'
     uploadBtn.addEventListener('click', () => {
       if (!closed && uploadState !== 'loading') fileInput?.click()
     })
@@ -124,10 +142,11 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
     uploadRetry.addEventListener('click', () => {
       if (failedUpload) void uploadFile(failedUpload)
     })
-    actions.append(uploadBtn, fileInput, uploadStatus, uploadRetry)
+    actions.append(uploadBtn, fileInput)
+    feedback.append(uploadStatus, uploadRetry)
   }
 
-  panel.append(head, listStatus, listRetry, grid, actions)
+  panel.append(head, tools, listStatus, listRetry, feedback, grid)
   backdrop.appendChild(panel)
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) close()
@@ -151,22 +170,31 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
     if (
       (focused === listRetry && listState !== 'error') ||
       (uploadBtn && focused === uploadBtn && uploadState === 'loading') ||
-      (uploadRetry && focused === uploadRetry && uploadState !== 'error')
+      (uploadRetry && focused === uploadRetry && !failedUpload)
     ) {
       // Keep focus inside the dialog before its current control becomes unavailable.
       closeBtn.focus()
     }
     title.textContent = uiText(opts.i18n, 'media.title', '媒體庫')
     closeBtn.textContent = uiText(opts.i18n, 'media.close', '關閉')
-    listStatus.hidden = listState === 'ready'
-    listStatus.textContent =
-      listState === 'error'
-        ? uiText(opts.i18n, 'media.load_failed', '媒體載入失敗')
-        : listState === 'empty'
-          ? uiText(opts.i18n, 'media.empty', '尚無媒體')
-          : listState === 'ready'
-            ? ''
-            : uiText(opts.i18n, 'media.loading', '正在載入媒體…')
+    search.placeholder = uiText(opts.i18n, 'media.search', '搜尋圖片名稱')
+    search.setAttribute('aria-label', search.placeholder)
+    tools.hidden = search.hidden && !uploadBtn
+    feedback.hidden = uploadState === 'idle'
+    if (currentBadge) currentBadge.textContent = uiText(opts.i18n, 'media.current', '使用中')
+    listStatus.hidden = listState === 'ready' && !noMatches
+    if (listState === 'error')
+      listStatus.textContent = uiText(opts.i18n, 'media.load_failed', '媒體載入失敗')
+    else if (listState === 'empty')
+      listStatus.textContent = uiText(opts.i18n, 'media.empty', '尚無媒體')
+    else if (noMatches)
+      listStatus.textContent = uiText(
+        opts.i18n,
+        'media.empty_search',
+        '沒有符合的圖片，請試試其他名稱。',
+      )
+    else if (listState === 'ready') listStatus.textContent = ''
+    else listStatus.textContent = uiText(opts.i18n, 'media.loading', '正在載入媒體…')
     listRetry.hidden = listState !== 'error'
     listRetry.textContent = uiText(opts.i18n, 'media.retry', '重試')
     grid.setAttribute('aria-busy', String(listState === 'loading'))
@@ -182,15 +210,26 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
       uploadStatus.hidden = uploadState === 'idle'
       uploadStatus.textContent =
         uploadState === 'error'
-          ? uiText(opts.i18n, 'media.upload_failed', '圖片上傳失敗')
+          ? uploadError?.message || uiText(opts.i18n, 'media.upload_failed', '圖片上傳失敗')
           : uploadState === 'loading'
             ? uiText(opts.i18n, 'media.uploading', '正在上傳…')
             : ''
     }
     if (uploadRetry) {
-      uploadRetry.hidden = uploadState !== 'error'
+      uploadRetry.hidden = !failedUpload
       uploadRetry.textContent = uiText(opts.i18n, 'media.retry_upload', '重試上傳')
     }
+  }
+
+  function filterItems(): void {
+    const query = search.value.trim().toLowerCase()
+    let matches = 0
+    for (const { button, name } of cards) {
+      button.hidden = !name.includes(query)
+      if (!button.hidden) matches++
+    }
+    noMatches = cards.length > 0 && !matches
+    refreshText()
   }
 
   function pick(item: AssetItem): void {
@@ -205,14 +244,16 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
   async function uploadFile(file: File): Promise<void> {
     if (closed || uploadState === 'loading' || !opts.assets.upload) return
     failedUpload = null
+    uploadError = undefined
     uploadState = 'loading'
     refreshText()
     let item: AssetItem
     try {
       item = await opts.assets.upload(file)
-    } catch {
+    } catch (error) {
       if (closed) return
-      failedUpload = file
+      uploadError = opts.assets.describeUploadError?.(error)
+      failedUpload = uploadError?.retryable === false ? null : file
       uploadState = 'error'
       refreshText()
       return
@@ -241,23 +282,35 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
     }
     if (closed) return
     grid.replaceChildren()
+    cards.length = 0
+    currentBadge = undefined
     listState = items.length ? 'ready' : 'empty'
     for (const item of items) {
       const card = document.createElement('button')
       card.type = 'button'
       card.className = 'sigil-media-card'
-      if (item.url === opts.currentUrl) card.classList.add('sigil-media-card--active')
       const img = document.createElement('img')
       img.src = item.thumbUrl ?? item.url
-      img.alt = item.name ?? item.id
+      img.alt = ''
       img.loading = 'lazy'
       const label = document.createElement('span')
+      label.className = 'sigil-media-name'
       label.textContent = item.name ?? item.id
       card.append(img, label)
+      if (item.url === opts.currentUrl && !currentBadge) {
+        card.classList.add('sigil-media-card--active')
+        card.setAttribute('aria-current', 'true')
+        currentBadge = document.createElement('span')
+        currentBadge.className = 'sigil-media-current'
+        currentBadge.setAttribute('aria-hidden', 'true')
+        card.append(currentBadge)
+      }
       card.addEventListener('click', () => pick(item))
+      cards.push({ button: card, name: label.textContent.toLowerCase() })
       grid.appendChild(card)
     }
-    refreshText()
+    search.hidden = cards.length < 2
+    filterItems()
   }
 
   const unsubLocale = subscribeLocale(opts.i18n, refreshText)
@@ -266,6 +319,7 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
   function close(): void {
     if (closed) return
     closed = true
+    lifetime.signal.removeEventListener('abort', close)
     failedUpload = null
     unsubLocale()
     document.removeEventListener('keydown', onKeyDown)
@@ -274,5 +328,6 @@ export function openMediaPicker(opts: MediaPickerOptions): () => void {
     opts.onClose()
   }
 
-  return close
+  // Controls may retain the handle after the dialog closes and releases its asset cards.
+  return lifetime.abort.bind(lifetime)
 }

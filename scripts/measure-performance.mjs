@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 import { build, preview } from 'vite'
 import { assessBudgetStatus, matchesReferenceProtocol } from './performance-budget.mjs'
+import { profileUpdates } from './measure-performance-profile.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const options = {
@@ -18,7 +19,12 @@ const options = {
   label: 'baseline',
 }
 let enforceBudgets = false
+let profileLargeUpdates = false
 for (const argument of process.argv.slice(2)) {
+  if (argument === '--profile-updates') {
+    profileLargeUpdates = true
+    continue
+  }
   if (argument === '--enforce-budgets') {
     enforceBudgets = true
     continue
@@ -39,6 +45,9 @@ for (const argument of process.argv.slice(2)) {
     if (!Number.isInteger(options[key]) || options[key] < 1 || options[key] > maximum)
       throw new Error(`Invalid ${key}`)
   }
+}
+if (profileLargeUpdates && !options.nodes.includes(5000)) {
+  throw new Error('--profile-updates requires a 5000-node workload')
 }
 if (enforceBudgets && !matchesReferenceProtocol(options)) {
   throw new Error(
@@ -96,7 +105,7 @@ async function runtimeHash() {
     )) {
       const filename = path.join(directory, entry.name)
       if (entry.isDirectory()) await walk(filename)
-      else if (/\.(ts|css)$/.test(entry.name)) {
+      else if (/\.(ts|css|html)$/.test(entry.name)) {
         hash.update(path.relative(root, filename))
         hash.update(await readFile(filename))
         files++
@@ -330,6 +339,21 @@ try {
       )
     }
     console.log(`[performance] ${nodes} nodes: ${JSON.stringify(workload.summary)}`)
+  }
+  if (profileLargeUpdates) {
+    result.updateProfile = { nodes: 5000, pages: [] }
+    for (let run = 0; run < options.mounts; run++) {
+      const { context, page } = await pageFor()
+      try {
+        await page.evaluate(() => window.__sigilPerformance.mount(5000))
+        const profile = await profileUpdates(context, page, options.samples)
+        result.updateProfile.pages.push({ run, ...profile })
+        await persist()
+        console.log(`[performance] 5000 nodes: profiled page ${run + 1}/${options.mounts}`)
+      } finally {
+        await context.close()
+      }
+    }
   }
   result.environment.finalSource = await runtimeHash()
   result.environment.runtimeStable =

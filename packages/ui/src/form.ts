@@ -337,6 +337,7 @@ function createMediaField(
     pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
     pickBtn.addEventListener('click', () => {
       if (disposed || closePicker) return
+      pickBtn.focus({ preventScroll: true })
       closePicker = openMediaPicker({
         assets,
         i18n,

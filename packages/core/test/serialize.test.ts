@@ -268,15 +268,18 @@ describe('toHTML — responsive styles', () => {
         },
       },
     }
-    expect(toHTML(doc)).toBe(
+    const html = toHTML(doc)
+    const key = html.match(/<section data-sigil-r="([^"]+)"/)?.[1]
+    expect(html).toBe(
       '<style data-sigil-responsive>' +
-        '@media (max-width:768px){[data-sigil-r="r0"]{color:blue;padding:8px}}' +
-        '@media (max-width:480px){[data-sigil-r="r0"]{color:green}}' +
-        '</style><section data-sigil-r="r0" style="color:red"></section>',
+        `[data-sigil-r="${key}"]{color:red}` +
+        `@media (max-width:768px){[data-sigil-r="${key}"]{color:blue;padding:8px}}` +
+        `@media (max-width:480px){[data-sigil-r="${key}"]{color:green}}` +
+        `</style><section data-sigil-r="${key}"></section>`,
     )
   })
 
-  it('只標記有 responsive 規則的節點，key 依樹順序穩定', () => {
+  it('只標記有 responsive 規則的節點，相同樣式輸出穩定的 key', () => {
     const doc: SigilDoc = {
       version: 1,
       root: {
@@ -294,9 +297,11 @@ describe('toHTML — responsive styles', () => {
       },
     }
     const html = toHTML(doc)
-    expect(html).toContain('@media (max-width:480px){[data-sigil-r="r0"]{font-size:12px}}')
+    const key = html.match(/<span data-sigil-r="([^"]+)"/)?.[1]
+    expect(toHTML(doc)).toBe(html)
+    expect(html).toContain(`@media (max-width:480px){[data-sigil-r="${key}"]{font-size:12px}}`)
     expect(html).toContain('<span>plain</span>')
-    expect(html).toContain('<span data-sigil-r="r0">small</span>')
+    expect(html).toContain(`<span data-sigil-r="${key}">small</span>`)
   })
 
   it('static shortcode 有樣式時建立 host，hydrated host 保留 presentation', () => {
@@ -316,13 +321,12 @@ describe('toHTML — responsive styles', () => {
       },
     }
     const staticHtml = toHTML(doc, { shortcodeResolver: resolver })
-    expect(staticHtml).toContain(
-      '<div data-sigil-r="r0" class="card-host" style="color:red"><b>card</b></div>',
-    )
+    const key = staticHtml.match(/<div data-sigil-r="([^"]+)"/)?.[1]
+    expect(staticHtml).toContain(`[data-sigil-r="${key}"]{color:red}`)
+    expect(staticHtml).toContain(`<div data-sigil-r="${key}" class="card-host"><b>card</b></div>`)
     const hydratedHtml = toHTML(doc, { shortcodeResolver: resolver, mode: 'hydrated' })
-    expect(hydratedHtml).toContain(
-      'data-props="{}" data-sigil-r="r0" class="card-host" style="color:red"',
-    )
+    expect(hydratedHtml).toContain(`[data-sigil-r="${key}"]{color:red}`)
+    expect(hydratedHtml).toContain(`data-props="{}" data-sigil-r="${key}" class="card-host">`)
   })
 
   it('responsive CSS value 不可跳出 style/rule', () => {

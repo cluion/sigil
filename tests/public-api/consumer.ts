@@ -7,6 +7,7 @@ import {
 import { createEditor, type EditorOptions, type SigilEditor } from '@cluion/sigil'
 import {
   createEngine,
+  resolveHtmlIdConflicts,
   createProjectPersistence,
   createDefaultPolicy,
   createRenderer,
@@ -36,6 +37,7 @@ import {
   createCanvas,
   createTemplateLibraryController,
   type CanvasHandle,
+  type CanvasSelectionCommands,
   type RichTextAdapter,
   type RichTextSession,
   type BlocksInput as UIBlocksInput,
@@ -126,6 +128,11 @@ export const synchronousAssets: AssetStore = {
 export const asynchronousAssets: AssetStore = {
   list: async () => [],
   upload: async (file) => ({ id: file.name, url: '/public/image.png' }),
+  uploadAccept: 'image/png',
+  describeUploadError: (error) =>
+    error instanceof RangeError
+      ? { message: 'Choose a smaller image.', retryable: false }
+      : undefined,
 }
 export const readOnlyAssets: AssetStore = { list: () => [] }
 export const synchronousTemplates: TemplateStore = {
@@ -152,6 +159,7 @@ export const memoryAdapters: [ProjectStore, AssetStore, TemplateStore, TemplateS
 ]
 export const asset: AssetItem = { id: 'image', url: '/image.png', name: 'Image' }
 export const template: TemplateDef = { id: 'template', label: 'Template', node: blockSection() }
+export const insertable: ComponentNode = resolveHtmlIdConflicts(template.node, doc.root)
 export const recordBlocks: BlocksInput = basicBlocks
 export const definitionBlocks: UIBlocksInput = [
   ...basicBlockDefs,
@@ -229,6 +237,12 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
     mount,
     doc,
     store: asynchronousProjectStore,
+    getExportTitle: (snapshot) => snapshot.meta?.title,
+    prepareDownload: async (snapshot, signal) => {
+      signal.throwIfAborted()
+      return snapshot
+    },
+    renderPageNavigation: () => document.createElement('nav'),
     assets: asynchronousAssets,
     templates: asynchronousTemplates,
     blocks: definitionBlocks,
@@ -252,6 +266,7 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
     hooks,
   }
   const app: SigilApp = createApp(options)
+  app.setDocumentTitle('Workshop')
   const editor: SigilEditor = createEditor(editorOptions)
   const engine = createEngine({ doc })
   const eventListener = (event: EngineEvent): void => {
@@ -264,13 +279,22 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
     policy,
   })
   const renderer = createRenderer({ htmlPolicy: policy, shortcodeResolver: resolver })
+  const selectionCommands: CanvasSelectionCommands = {
+    registry: createCommandRegistry(),
+    context: () => context,
+  }
   const canvas: CanvasHandle = createCanvas(engine, mount, {
     rendererOptions: { htmlPolicy: policy },
     richText,
+    selectionCommands,
+    onEditingDirtyChange: (dirty) => {
+      void dirty
+    },
   })
   const frame: HTMLIFrameElement = canvas.iframe
   void frame
   canvas.setDevice('mobile')
+  canvas.commitEditing({ forSave: true })
   canvas.setMode('preview')
   const persistence = createProjectPersistence({ engine, store: synchronousProjectStore, hooks })
   const save: Promise<SigilDoc> = persistence.save()

@@ -106,6 +106,7 @@ test('CSP／Trusted Types：可信路徑、sanitizer 與 raw sink 能力', async
 
   // createApp() 再次掛載時必須重用同 realm、同名稱的 Trusted Types policies。
   await page.getByRole('button', { name: '中/EN', exact: true }).click()
+  await page.getByRole('button', { name: 'Add blocks', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Insert 文字', exact: true })).toBeVisible()
   expect(await readViolations(page)).toEqual([])
   expect(runtimeErrors).toEqual([])

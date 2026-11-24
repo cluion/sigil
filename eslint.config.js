@@ -9,6 +9,7 @@ export default tseslint.config(
       '**/coverage/**',
       'playwright-report/**',
       'test-results/**',
+      'plan/evidence/**',
       '**/*.d.ts',
       'examples/laravel/vendor/**',
       'examples/laravel/public/build/**',

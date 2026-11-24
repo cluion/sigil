@@ -50,6 +50,57 @@ function setup(save: ProjectStore['save'] = vi.fn(), hooks?: EditorHooks) {
 }
 
 describe('Editor persistence contract', () => {
+  it('saves from its own property field and leaves native editing keys and host fields alone', async () => {
+    const storeSave = vi.fn()
+    const { subject, mount } = setup(storeSave)
+    subject.engine.select('text')
+    const input = [...mount.querySelectorAll('label')]
+      .find((el) => el.textContent?.startsWith('內容'))!
+      .querySelector('input')!
+    input.value = '右側面板'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    const key = (name: string) =>
+      new KeyboardEvent('keydown', { key: name, metaKey: true, bubbles: true, cancelable: true })
+    expect(input.dispatchEvent(key('z'))).toBe(true)
+    input.dispatchEvent(new Event('compositionstart', { bubbles: true }))
+    expect(input.dispatchEvent(key('s'))).toBe(true)
+    input.dispatchEvent(new Event('compositionend', { bubbles: true }))
+    input.readOnly = true
+    expect(input.dispatchEvent(key('s'))).toBe(true)
+    input.readOnly = false
+    const hostInput = document.createElement('input')
+    mount.append(hostInput)
+    expect(hostInput.dispatchEvent(key('s'))).toBe(true)
+    expect(storeSave).not.toHaveBeenCalled()
+    expect(input.dispatchEvent(key('s'))).toBe(false)
+    await vi.waitFor(() =>
+      expect(storeSave).toHaveBeenCalledExactlyOnceWith(documentWith('右側面板')),
+    )
+  })
+
+  it('saves the active canvas edit while keeping read-only snapshots and Undo consistent', async () => {
+    const storeSave = vi.fn()
+    const { subject, mount } = setup(storeSave)
+    const frame = mount.querySelector('iframe')!
+    const selector = '[data-sigil-id="text"]'
+    await vi.waitFor(() => expect(frame.contentDocument?.querySelector(selector)).toBeTruthy())
+    const text = frame.contentDocument!.querySelector<HTMLElement>(selector)!
+    vi.spyOn(frame.contentDocument!, 'elementFromPoint').mockReturnValue(text)
+    mount.querySelector('.sigil-canvas-overlay')!.dispatchEvent(new MouseEvent('dblclick'))
+    expect(text.getAttribute('contenteditable')).toBe('true')
+
+    text.textContent = '現場攝影課'
+    text.dispatchEvent(new Event('input', { bubbles: true }))
+    expect(subject.isDirty()).toBe(true)
+    expect(subject.toJSON()).toEqual(documentWith())
+    expect(storeSave).not.toHaveBeenCalled()
+    await expect(subject.save()).resolves.toEqual(documentWith('現場攝影課'))
+    expect(storeSave).toHaveBeenCalledExactlyOnceWith(documentWith('現場攝影課'))
+    expect(subject.isDirty()).toBe(false)
+    await subject.runCommand('undo')
+    expect(subject.toJSON()).toEqual(documentWith())
+  })
+
   it('toJSON returns a synchronous snapshot without writing or invoking save hooks', async () => {
     const save = vi.fn()
     const beforeSave = vi.fn()

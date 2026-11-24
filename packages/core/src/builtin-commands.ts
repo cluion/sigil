@@ -1,4 +1,5 @@
 import { findNode, findParent, cloneWithNewIds } from './model/tree.js'
+import { resolveHtmlIdConflicts } from './model/html-ids.js'
 // findNode 用於鎖定檢查
 import { defineCommand, type CommandDefinition } from './commands.js'
 
@@ -29,6 +30,43 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
       when: (c) => c.engine.canRedo(),
       run: (c) => {
         c.engine.redo()
+      },
+    }),
+    defineCommand({
+      id: 'select-parent',
+      label: 'Select parent',
+      when: (c) => {
+        const id = c.engine.getSelection()
+        return !!id && !!findParent(c.engine.getTree(), id)
+      },
+      run: (c) => {
+        const id = c.engine.getSelection()
+        const parent = id && findParent(c.engine.getTree(), id)
+        if (parent) c.engine.select(parent.id)
+      },
+    }),
+    defineCommand({
+      id: 'duplicate',
+      label: 'Duplicate component',
+      when: (c) => {
+        const id = c.engine.getSelection()
+        if (!id || id === c.engine.getTree().id) return false
+        const node = findNode(c.engine.getTree(), id)
+        const parent = findParent(c.engine.getTree(), id)
+        return !!node && !node.locked && !!parent && !parent.locked
+      },
+      run: (c) => {
+        const id = c.engine.getSelection()
+        if (!id) return
+        const parent = findParent(c.engine.getTree(), id)
+        if (!parent?.children || parent.locked) return
+        const index = parent.children.findIndex((child) => child.id === id)
+        const source = parent.children[index]
+        if (source && !source.locked) {
+          const copy = resolveHtmlIdConflicts(cloneWithNewIds(source), c.engine.getTree())
+          c.engine.insert(parent.id, copy, index + 1)
+          c.engine.select(copy.id)
+        }
       },
     }),
     defineCommand({
@@ -69,7 +107,7 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
         const id = c.engine.getSelection()
         const parent = id ? findParent(c.engine.getTree(), id) : null
         const pid = parent ? parent.id : c.engine.getTree().id
-        c.engine.insert(pid, cloneWithNewIds(clip))
+        c.engine.insert(pid, resolveHtmlIdConflicts(cloneWithNewIds(clip), c.engine.getTree()))
       },
     }),
     defineCommand({

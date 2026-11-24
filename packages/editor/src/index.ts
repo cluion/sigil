@@ -76,12 +76,23 @@ const i18nMessages = {
     'blocks.template_remove_failed': '範本刪除失敗',
     'blocks.retry': '重試',
     'layers.title': '圖層',
+    'layers.expand': '展開子圖層',
+    'layers.collapse': '收合子圖層',
+    'canvas.component_actions': '元件操作',
+    'canvas.select_parent': '選取父層',
+    'canvas.duplicate': '複製元件',
+    'canvas.replace_image': '更換圖片',
+    'canvas.delete': '刪除元件',
+    'canvas.command_failed': '操作失敗，請再試一次。',
     'layers.show': '顯示',
     'layers.hide': '隱藏',
     'layers.lock': '鎖定',
     'layers.unlock': '解鎖',
     'layers.rename_prompt': '圖層名稱',
     'media.title': '媒體庫',
+    'media.search': '搜尋圖片名稱',
+    'media.current': '使用中',
+    'media.empty_search': '沒有符合的圖片，請試試其他名稱。',
     'media.close': '關閉',
     'media.upload': '上傳圖片',
     'media.empty': '尚無媒體',
@@ -104,6 +115,13 @@ const i18nMessages = {
     'inspector.empty_hint': '在畫布點一下區塊，即可編輯內容、樣式與進階屬性。',
     'inspector.no_content': '此節點無可編輯內容欄位，可切到樣式分頁',
     'inspector.image': '圖片',
+    'inspector.embedded_image': '已嵌入圖片',
+    'inspector.replace_image_url': '貼上圖片網址以更換',
+    'link.section': '連到頁內區段',
+    'link.address': '連結網址',
+    'link.apply': '套用',
+    'link.choose': '選擇區段…',
+    'link.invalid': '請輸入有效的網址或選擇頁內區段。',
     'inspector.layout': '版面',
     'inspector.typography': '文字',
     'inspector.appearance': '外觀',
@@ -116,15 +134,18 @@ const i18nMessages = {
     'form.load_failed': '載入失敗',
     'form.label_separator': '：',
     'style.base': '基礎樣式',
-    'style.inherit_desktop': '未覆寫時繼承 Desktop',
-    'style.inherit_tablet_desktop': '未覆寫時繼承 Tablet，再繼承 Desktop',
+    'device.desktop': '桌面',
+    'device.tablet': '平板',
+    'device.mobile': '手機',
+    'style.inherit_desktop': '未覆寫時沿用桌面樣式',
+    'style.inherit_tablet_desktop': '未覆寫時沿用平板或桌面樣式',
     'style.override': '覆寫',
     'style.inherit': '繼承',
     'style.unset': '未設定',
     'style.unset_short': '未設',
     'style.use_inheritance': '使用繼承',
     'style.clear': '清除',
-    'style.clear_desktop': '清除 Desktop 樣式',
+    'style.clear_desktop': '清除桌面樣式',
     'rich_text.summary': '富文字摘要',
     'rich_text.empty': '空白富文字',
     'rich_text.canvas_hint': '請在畫布編輯富文字',
@@ -162,12 +183,23 @@ const i18nMessages = {
     'blocks.template_remove_failed': 'Failed to delete template',
     'blocks.retry': 'Retry',
     'layers.title': 'Layers',
+    'layers.expand': 'Expand children',
+    'layers.collapse': 'Collapse children',
+    'canvas.component_actions': 'Component actions',
+    'canvas.select_parent': 'Select parent',
+    'canvas.duplicate': 'Duplicate component',
+    'canvas.replace_image': 'Replace image',
+    'canvas.delete': 'Delete component',
+    'canvas.command_failed': 'Action failed. Please try again.',
     'layers.show': 'Show',
     'layers.hide': 'Hide',
     'layers.lock': 'Lock',
     'layers.unlock': 'Unlock',
     'layers.rename_prompt': 'Layer name',
     'media.title': 'Media library',
+    'media.search': 'Search images by name',
+    'media.current': 'In use',
+    'media.empty_search': 'No matching images. Try another name.',
     'media.close': 'Close',
     'media.upload': 'Upload image',
     'media.empty': 'No media yet',
@@ -191,6 +223,13 @@ const i18nMessages = {
       'Select a block on the canvas to edit its content, styles, and advanced properties.',
     'inspector.no_content': 'This node has no editable content fields. Use the Style tab instead.',
     'inspector.image': 'Image',
+    'inspector.embedded_image': 'Embedded image',
+    'inspector.replace_image_url': 'Paste an image URL to replace it',
+    'link.section': 'Link to section',
+    'link.address': 'Link address',
+    'link.apply': 'Apply',
+    'link.choose': 'Choose a section…',
+    'link.invalid': 'Enter a valid address or choose a section on this page.',
     'inspector.layout': 'Layout',
     'inspector.typography': 'Typography',
     'inspector.appearance': 'Appearance',
@@ -203,6 +242,9 @@ const i18nMessages = {
     'form.load_failed': 'Failed to load',
     'form.label_separator': ': ',
     'style.base': 'Base styles',
+    'device.desktop': 'Desktop',
+    'device.tablet': 'Tablet',
+    'device.mobile': 'Mobile',
     'style.inherit_desktop': 'Inherits Desktop when not overridden',
     'style.inherit_tablet_desktop': 'Inherits Tablet, then Desktop, when not overridden',
     'style.override': 'Override',
@@ -318,8 +360,14 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   let clipboard: ComponentNode | null = null
   let templateLibrary: TemplateLibraryController | null = null
   let destroyed = false
+  let pendingCanvasEdit = false
 
   const persistence = createProjectPersistence({ engine, store, hooks })
+
+  async function save(): Promise<SigilDoc> {
+    canvas.commitEditing({ forSave: true })
+    return persistence.save()
+  }
 
   const commandMap = new Map<string, CommandDefinition>()
   for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
@@ -348,7 +396,19 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       }),
     )
   }
-  for (const c of opts.commands ?? []) commandMap.set(c.id, c)
+  for (const command of opts.commands ?? []) {
+    if (command.id === 'save') {
+      commandMap.set(command.id, {
+        ...command,
+        run(ctx) {
+          canvas.commitEditing({ forSave: true })
+          return command.run(ctx)
+        },
+      })
+    } else {
+      commandMap.set(command.id, command)
+    }
+  }
   const commands = createCommandRegistry([...commandMap.values()])
 
   function makeCtx(): CommandContext {
@@ -356,7 +416,7 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       engine,
       getDoc: () => engine.toJSON(),
       save: async () => {
-        await persistence.save()
+        await save()
       },
       clipboard: {
         get: () => clipboard,
@@ -445,9 +505,13 @@ export function createEditor(opts: EditorOptions): SigilEditor {
   }
 
   const canvas = createCanvas(engine, canvasBox, {
+    selectionCommands: { registry: commands, context: makeCtx },
     rendererOptions: { shortcodeResolver, htmlPolicy: policy },
     richText: opts.richText,
     i18n,
+    onEditingDirtyChange(dirty) {
+      pendingCanvasEdit = dirty
+    },
     onContextMenu: (_id, x, y) => openSelectionMenu(x, y),
   })
   const props = createPropsPanel(engine, propsBox, {
@@ -496,11 +560,29 @@ export function createEditor(opts: EditorOptions): SigilEditor {
     if (ev.type === 'selection') runOnSelect(hooks, ev.id, engine)
   })
 
+  let composingField: EventTarget | null = null
+  function onFieldComposition(e: Event): void {
+    composingField = e.type === 'compositionstart' ? e.target : null
+  }
+  propsBox.addEventListener('compositionstart', onFieldComposition)
+  propsBox.addEventListener('compositionend', onFieldComposition)
+  propsBox.addEventListener('focusout', onFieldComposition)
+
   function onKeyDown(e: KeyboardEvent): void {
+    if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || layout.closest('[inert]'))
+      return
     const t = e.target as HTMLElement | null
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+    if (t instanceof Element && t.closest('[role="dialog"], [role="menu"], [inert]')) return
+    const field =
+      t instanceof HTMLElement && (t.matches('input, textarea, select') || t.isContentEditable)
+    if (field) {
+      if (!propsBox.contains(t) || composingField === t || !(e.ctrlKey || e.metaKey)) return
+      if (t.matches(':disabled, [readonly], [aria-readonly="true"]')) return
+      const id = engine.getSelection()
+      if (id && findNode(engine.getTree(), id)?.locked) return
+    }
     const cmd = commands.match(e, makeCtx())
-    if (!cmd) return
+    if (!cmd || (field && cmd.id !== 'save')) return
     e.preventDefault()
     void commands.run(cmd.id, makeCtx()).catch(() => {})
   }
@@ -529,8 +611,8 @@ export function createEditor(opts: EditorOptions): SigilEditor {
         mode,
       })
     },
-    save: persistence.save,
-    isDirty: persistence.isDirty,
+    save,
+    isDirty: () => pendingCanvasEdit || persistence.isDirty(),
     isSaving: persistence.isSaving,
     runCommand(id: string) {
       return commands.run(id, makeCtx())
@@ -547,6 +629,9 @@ export function createEditor(opts: EditorOptions): SigilEditor {
       closeMenu?.()
       cleanupTheme()
       document.removeEventListener('keydown', onKeyDown)
+      propsBox.removeEventListener('compositionstart', onFieldComposition)
+      propsBox.removeEventListener('compositionend', onFieldComposition)
+      propsBox.removeEventListener('focusout', onFieldComposition)
       unsubSel()
       unsubDevice()
       templateLibrary?.destroy()

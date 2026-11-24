@@ -86,7 +86,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       # Collect measurements on hosted runners; reference-machine budgets are reviewed separately.
-      - run: pnpm test:performance
+      - run: pnpm test:performance --profile-updates
       - uses: actions/upload-artifact@v4
         if: always()
         with:

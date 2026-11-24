@@ -10,6 +10,6 @@ export default defineConfig({
   build: {
     outDir: 'public/build',
     manifest: 'manifest.json',
-    rollupOptions: { input: 'resources/js/sigil-editor.ts' },
+    rollupOptions: { input: ['resources/js/sigil-editor.ts', 'resources/css/editor.css'] },
   },
 })

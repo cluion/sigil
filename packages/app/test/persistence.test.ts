@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { EditorHooks, ProjectStore, SigilDoc } from '@cluion/sigil-core'
-import { createApp } from '../src/index.js'
+import { createApp, type AppOptions } from '../src/index.js'
 
 function documentWith(content = 'initial'): SigilDoc {
   return {
@@ -29,7 +29,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function setup(save: ProjectStore['save'] = vi.fn(), hooks?: EditorHooks) {
+function setup(
+  save: ProjectStore['save'] = vi.fn(),
+  hooks?: EditorHooks,
+  commands?: AppOptions['commands'],
+) {
   const mount = document.createElement('div')
   document.body.append(mount)
   const subject = createApp({
@@ -37,6 +41,7 @@ function setup(save: ProjectStore['save'] = vi.fn(), hooks?: EditorHooks) {
     doc: documentWith(),
     store: { load: () => null, save },
     hooks,
+    commands,
   })
   let disposed = false
   function destroy() {
@@ -49,7 +54,179 @@ function setup(save: ProjectStore['save'] = vi.fn(), hooks?: EditorHooks) {
   return { subject, mount, destroy }
 }
 
+async function editText(mount: HTMLElement): Promise<HTMLElement> {
+  const iframe = mount.querySelector('iframe')!
+  await vi.waitFor(() =>
+    expect(iframe.contentDocument?.querySelector('[data-sigil-id="text"]')).toBeTruthy(),
+  )
+  const frame = iframe.contentDocument!
+  const text = frame.querySelector<HTMLElement>('[data-sigil-id="text"]')!
+  vi.spyOn(frame, 'elementFromPoint').mockReturnValue(text)
+  mount
+    .querySelector('.sigil-canvas-overlay')!
+    .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+  expect(text.getAttribute('contenteditable')).toBe('true')
+  return text
+}
+
+function typeText(text: HTMLElement, value: string): void {
+  text.textContent = value
+  text.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+function press(text: HTMLElement, options: KeyboardEventInit): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { ...options, bubbles: true, cancelable: true })
+  text.dispatchEvent(event)
+  return event
+}
+
 describe('App persistence contract', () => {
+  it.each(['API', 'button', 'shortcut'])(
+    '%s saves visible text as one undoable change before blur',
+    async (source) => {
+      const save = vi.fn()
+      const { subject, mount } = setup(save)
+      const text = await editText(mount)
+      const button = mount.querySelector<HTMLButtonElement>('[data-command-id="save"]')!
+      typeText(text, '春')
+      typeText(text, '春季工作坊')
+      expect(subject.toJSON()).toEqual(documentWith())
+      expect(subject.engine.canUndo()).toBe(false)
+      expect(subject.isDirty()).toBe(true)
+      expect(button.disabled).toBe(false)
+      expect(mount.querySelector('.sigil-status-dirty')?.textContent).toBe('未儲存')
+      if (source === 'API') await subject.save()
+      else if (source === 'button') button.click()
+      else expect(press(text, { key: 's', metaKey: true }).defaultPrevented).toBe(true)
+      await vi.waitFor(() => expect(subject.isDirty()).toBe(false))
+      expect(save).toHaveBeenCalledExactlyOnceWith(documentWith('春季工作坊'))
+      expect(button.disabled).toBe(true)
+      subject.engine.undo()
+      expect(subject.toJSON()).toEqual(documentWith())
+      expect(subject.engine.canUndo()).toBe(false)
+    },
+  )
+
+  it('clears draft status on text reversal or Escape without a write or history entry', async () => {
+    const save = vi.fn()
+    const { subject, mount } = setup(save)
+    const text = await editText(mount)
+    typeText(text, 'later')
+    typeText(text, 'initial')
+    expect(subject.isDirty()).toBe(false)
+    typeText(text, 'different')
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
+    press(text, { key: 'Escape' })
+    expect(subject.isDirty()).toBe(false)
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true)
+    expect(subject.engine.canUndo()).toBe(false)
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('can undo two consecutive inline sessions separately back to the saved checkpoint', async () => {
+    const { subject, mount } = setup()
+    vi.spyOn(Date, 'now').mockReturnValue(1000)
+    typeText(await editText(mount), '已儲存標題')
+    await subject.save()
+    const next = await editText(mount)
+    typeText(next, '第二次標題')
+    press(next, { key: 'Enter' })
+    expect(subject.toJSON()).toEqual(documentWith('第二次標題'))
+    subject.engine.undo()
+    expect(subject.toJSON()).toEqual(documentWith('已儲存標題'))
+    expect(subject.isDirty()).toBe(false)
+    subject.engine.undo()
+    expect(subject.toJSON()).toEqual(documentWith())
+    expect(subject.engine.canUndo()).toBe(false)
+  })
+
+  it('only forwards the enabled host save binding and gives it the committed snapshot', async () => {
+    let enabled = false
+    const save = vi.fn()
+    const { subject, mount } = setup(undefined, undefined, [
+      {
+        id: 'save',
+        shortcut: ['mod+shift+s', 's'],
+        when: () => enabled,
+        run: (ctx) => save(ctx.getDoc()),
+      },
+    ])
+    const text = await editText(mount)
+    typeText(text, '自訂儲存')
+    const binding = { key: 's', ctrlKey: true, shiftKey: true }
+    expect(press(text, binding).defaultPrevented).toBe(false)
+    enabled = true
+    expect(press(text, { key: 's' }).defaultPrevented).toBe(false)
+    for (const key of ['s', 'z', 'c', 'v', 'Backspace']) {
+      expect(press(text, { key, ctrlKey: key !== 'Backspace' }).defaultPrevented).toBe(false)
+    }
+    mount.setAttribute('inert', '')
+    expect(press(text, binding).defaultPrevented).toBe(false)
+    mount.removeAttribute('inert')
+    expect(save).not.toHaveBeenCalled()
+    expect(subject.engine.canUndo()).toBe(false)
+    expect(press(text, binding).defaultPrevented).toBe(true)
+    expect(save).toHaveBeenCalledExactlyOnceWith(documentWith('自訂儲存'))
+  })
+
+  it('routes only the configured save from its editable Inspector, preserving native and host fields', async () => {
+    const write = vi.fn()
+    const { subject, mount } = setup(write, undefined, [
+      {
+        id: 'save',
+        shortcut: ['mod+shift+s', 's'],
+        run: (ctx) => ctx.save?.(),
+      },
+    ])
+    subject.engine.select('text')
+    const field = mount.querySelector<HTMLInputElement>('.sigil-inspector input')!
+    field.focus()
+    field.value = '右欄即時標題'
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    const binding = { key: 's', metaKey: true, shiftKey: true }
+    expect(press(field, { key: 's' }).defaultPrevented).toBe(false)
+    expect(press(field, { key: 's', metaKey: true }).defaultPrevented).toBe(false)
+    expect(press(field, { key: 'z', metaKey: true }).defaultPrevented).toBe(false)
+    field.dispatchEvent(new Event('compositionstart', { bubbles: true }))
+    expect(press(field, binding).defaultPrevented).toBe(false)
+    field.dispatchEvent(new Event('compositionend', { bubbles: true }))
+    expect(press(field, { ...binding, isComposing: true }).defaultPrevented).toBe(false)
+    field.readOnly = true
+    expect(press(field, binding).defaultPrevented).toBe(false)
+    field.readOnly = false
+    field.addEventListener('keydown', (event) => event.preventDefault(), { once: true })
+    press(field, binding)
+    const hostInput = document.createElement('input')
+    mount.append(hostInput)
+    expect(press(hostInput, binding).defaultPrevented).toBe(false)
+    await Promise.resolve()
+    expect(write).not.toHaveBeenCalled()
+    expect(press(field, binding).defaultPrevented).toBe(true)
+    await vi.waitFor(() =>
+      expect(write).toHaveBeenCalledExactlyOnceWith(documentWith('右欄即時標題')),
+    )
+    expect(subject.isDirty()).toBe(false)
+    expect(document.activeElement).toBe(field)
+  })
+
+  it('retains unfinished composition for IME confirmation and allows a later explicit save', async () => {
+    const save = vi.fn()
+    const { subject, mount } = setup(save)
+    const text = await editText(mount)
+    text.dispatchEvent(new Event('compositionstart', { bubbles: true }))
+    typeText(text, 'ㄓ')
+    expect(press(text, { key: 's', ctrlKey: true }).defaultPrevented).toBe(false)
+    await expect(subject.save()).rejects.toThrow()
+    expect(save).not.toHaveBeenCalled()
+    expect(subject.engine.canUndo()).toBe(false)
+    expect(text.getAttribute('contenteditable')).toBe('true')
+    typeText(text, '中文')
+    text.dispatchEvent(new Event('compositionend', { bubbles: true }))
+    expect(press(text, { key: 's', ctrlKey: true, keyCode: 229 }).defaultPrevented).toBe(false)
+    await expect(subject.save()).resolves.toEqual(documentWith('中文'))
+    expect(save).toHaveBeenCalledExactlyOnceWith(documentWith('中文'))
+  })
+
   it('suspends document shortcuts while its host is inert during a reload', async () => {
     const save = vi.fn()
     const { subject, mount } = setup(save)

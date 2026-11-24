@@ -5,6 +5,7 @@
     "packages/core",
     "packages/shortcode",
     "packages/editor",
+    "packages/app",
     "packages/ui",
     "packages/blocks",
     "packages/store-json"
@@ -26,6 +27,7 @@
   "githubPages": false,
   "hideGenerator": true,
   "router": "module",
+  "entryFileName": "index.md",
   "outputs": [
     {
       "name": "markdown",

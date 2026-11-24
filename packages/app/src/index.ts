@@ -1,6 +1,7 @@
 import {
   createEngine,
   createDefaultPolicy,
+  escapeHtml,
   toHTML,
   createEventBus,
   createStore,
@@ -11,6 +12,7 @@ import {
   createDefaultEditingCommands,
   defineCommand,
   createProjectPersistence,
+  RESPONSIVE_BREAKPOINT_WIDTHS,
   runOnSelect,
   runAfterLoad,
   runBeforeDestroy,
@@ -35,6 +37,7 @@ import {
   createLayersPanel,
   createInspector,
   createTemplateLibraryController,
+  openMediaPicker,
   applyTheme,
   nextTheme,
   openContextMenu,
@@ -52,7 +55,8 @@ import {
   createShortcodeResolver,
   type ShortcodeDefinition,
 } from '@cluion/sigil-shortcode'
-import { templateToBlockDef } from '@cluion/sigil-blocks'
+import { blockImage, templateToBlockDef } from '@cluion/sigil-blocks'
+import exportPageTemplate from './export-page.html?raw'
 import { ensureTokens } from './tokens.js'
 
 const i18nMessages = {
@@ -66,6 +70,18 @@ const i18nMessages = {
     'app.layers': '圖層',
     'app.panels': '面板',
     'app.panel_settings': '圖層／設定',
+    'app.tools': '更多工具',
+    'app.more': '更多',
+    'app.edit_selection': '編輯所選元件',
+    'app.component_settings': '元件設定',
+    'app.structure': '頁面結構',
+    'app.current_page': '目前頁面',
+    'app.untitled_page': '未命名頁面',
+    'app.add_blocks': '新增區塊',
+    'app.page_styles': '頁面樣式',
+    'app.assets': '素材庫',
+    'app.insert_image': '插入圖片至頁尾',
+    'app.insert_unavailable': '目前無法在頁尾插入圖片。',
     'app.close_panel': '關閉面板',
     'app.save': '存檔',
     'app.export': '匯出',
@@ -84,7 +100,13 @@ const i18nMessages = {
     'app.saved_pending': '先前修改已儲存；仍有未儲存變更',
     'app.save_fail': '存檔失敗',
     'app.export_title': '匯出 HTML',
-    'app.export_hint': '複製或下載正式輸出 HTML（CSP-safe）。',
+    'app.export_hint': '下載可直接開啟的網頁檔，或複製 HTML 片段嵌入其他頁面。',
+    'app.export_source': 'HTML 片段',
+    'app.export_preparing': '正在準備下載檔…',
+    'app.download_original': '依原網址下載',
+    'app.download_original_started': '已開始下載使用原網址的 HTML。',
+    'app.export_fail': '下載失敗，請再試一次，或複製下方的 HTML 片段。',
+    'app.copy_manual': '請複製已選取的 HTML 片段。',
     'app.copy': '複製',
     'app.paste': '貼上',
     'app.move_up': '上移',
@@ -94,9 +116,8 @@ const i18nMessages = {
     'app.copied': '已複製',
     'app.download': '下載 .html',
     'app.close': '關閉',
-    'app.empty_title': '從左側拖入區塊開始',
-    'app.empty_body':
-      '拖放「區塊」到畫布，或聚焦區塊後按 Enter／Space 加入。選取後可在右側改內容與樣式。',
+    'app.empty_title': '這是一張空白頁面',
+    'app.empty_body': '點選區塊加入頁面，或將區塊拖到畫布上的指定位置。',
     'app.empty_tip': '快捷鍵 Ctrl/Cmd+S 存檔 · 匯出可下載 HTML',
     'app.save_as_template': '存為範本',
     'app.template_name': '範本名稱',
@@ -125,12 +146,23 @@ const i18nMessages = {
     'blocks.template_remove_failed': '範本刪除失敗',
     'blocks.retry': '重試',
     'layers.title': '圖層',
+    'layers.expand': '展開子圖層',
+    'layers.collapse': '收合子圖層',
+    'canvas.component_actions': '元件操作',
+    'canvas.select_parent': '選取父層',
+    'canvas.duplicate': '複製元件',
+    'canvas.replace_image': '更換圖片',
+    'canvas.delete': '刪除元件',
+    'canvas.command_failed': '操作失敗，請再試一次。',
     'layers.show': '顯示',
     'layers.hide': '隱藏',
     'layers.lock': '鎖定',
     'layers.unlock': '解鎖',
     'layers.rename_prompt': '圖層名稱',
     'media.title': '媒體庫',
+    'media.search': '搜尋圖片名稱',
+    'media.current': '使用中',
+    'media.empty_search': '沒有符合的圖片，請試試其他名稱。',
     'media.close': '關閉',
     'media.upload': '上傳圖片',
     'media.empty': '尚無媒體',
@@ -146,6 +178,22 @@ const i18nMessages = {
     'props.node_id_open': '（',
     'props.node_id_close': '）',
     'style.title': '樣式',
+    'style.property.margin': '外距',
+    'style.property.padding': '內距',
+    'style.spacing.compact': '緊湊',
+    'style.spacing.standard': '標準',
+    'style.spacing.spacious': '寬鬆',
+    'style.property.width': '寬度',
+    'style.property.height': '高度',
+    'style.property.display': '顯示方式',
+    'style.property.font-size': '字級',
+    'style.property.font-weight': '字重',
+    'style.property.text-align': '文字對齊',
+    'style.property.color': '文字顏色',
+    'style.property.background-color': '背景顏色',
+    'style.property.border': '邊框',
+    'style.property.border-radius': '圓角',
+    'style.property.box-shadow': '陰影',
     'inspector.tab_content': '內容',
     'inspector.tab_style': '樣式',
     'inspector.tab_advanced': '進階',
@@ -153,6 +201,14 @@ const i18nMessages = {
     'inspector.empty_hint': '在畫布點一下區塊，即可編輯內容、樣式與進階屬性。',
     'inspector.no_content': '此節點無可編輯內容欄位，可切到樣式分頁',
     'inspector.image': '圖片',
+    'inspector.embedded_image': '已嵌入圖片',
+    'inspector.replace_image_url': '貼上圖片網址以更換',
+    'link.section': '連到頁內區段',
+    'link.address': '連結網址',
+    'link.apply': '套用',
+    'link.choose': '選擇區段…',
+    'link.invalid': '請輸入有效的網址或選擇頁內區段。',
+    'inspector.image_alt': '替代文字',
     'inspector.layout': '版面',
     'inspector.typography': '文字',
     'inspector.appearance': '外觀',
@@ -165,15 +221,19 @@ const i18nMessages = {
     'form.load_failed': '載入失敗',
     'form.label_separator': '：',
     'style.base': '基礎樣式',
-    'style.inherit_desktop': '未覆寫時繼承 Desktop',
-    'style.inherit_tablet_desktop': '未覆寫時繼承 Tablet，再繼承 Desktop',
+    'device.desktop': '桌面',
+    'device.group': '畫布裝置',
+    'device.tablet': '平板',
+    'device.mobile': '手機',
+    'style.inherit_desktop': '未覆寫時沿用桌面樣式',
+    'style.inherit_tablet_desktop': '未覆寫時沿用平板或桌面樣式',
     'style.override': '覆寫',
     'style.inherit': '繼承',
     'style.unset': '未設定',
     'style.unset_short': '未設',
     'style.use_inheritance': '使用繼承',
     'style.clear': '清除',
-    'style.clear_desktop': '清除 Desktop 樣式',
+    'style.clear_desktop': '清除桌面樣式',
     'rich_text.summary': '富文字摘要',
     'rich_text.empty': '空白富文字',
     'rich_text.canvas_hint': '請在畫布編輯富文字',
@@ -189,6 +249,18 @@ const i18nMessages = {
     'app.layers': 'Layers',
     'app.panels': 'Panels',
     'app.panel_settings': 'Layers / Settings',
+    'app.tools': 'More tools',
+    'app.more': 'More',
+    'app.edit_selection': 'Edit selection',
+    'app.component_settings': 'Component settings',
+    'app.structure': 'Page structure',
+    'app.current_page': 'Current page',
+    'app.untitled_page': 'Untitled page',
+    'app.add_blocks': 'Add blocks',
+    'app.page_styles': 'Page styles',
+    'app.assets': 'Assets',
+    'app.insert_image': 'Insert image at end of page',
+    'app.insert_unavailable': 'An image cannot be inserted at the end of this page.',
     'app.close_panel': 'Close panel',
     'app.save': 'Save',
     'app.export': 'Export',
@@ -207,7 +279,14 @@ const i18nMessages = {
     'app.saved_pending': 'Earlier changes saved; newer changes are unsaved',
     'app.save_fail': 'Save failed',
     'app.export_title': 'Export HTML',
-    'app.export_hint': 'Copy or download CSP-safe HTML output.',
+    'app.export_hint':
+      'Download a page you can open in your browser, or copy HTML to embed elsewhere.',
+    'app.export_source': 'HTML fragment',
+    'app.export_preparing': 'Preparing download…',
+    'app.download_original': 'Download with original URLs',
+    'app.download_original_started': 'Started downloading HTML with the original URLs.',
+    'app.export_fail': 'Download failed. Try again or copy the HTML fragment below.',
+    'app.copy_manual': 'Copy the selected HTML fragment.',
     'app.copy': 'Copy',
     'app.paste': 'Paste',
     'app.move_up': 'Move Up',
@@ -217,9 +296,8 @@ const i18nMessages = {
     'app.copied': 'Copied',
     'app.download': 'Download .html',
     'app.close': 'Close',
-    'app.empty_title': 'Drag a block from the left',
-    'app.empty_body':
-      'Drop blocks onto the canvas, or focus one and press Enter or Space. Select it to edit content and styles on the right.',
+    'app.empty_title': 'This page is empty',
+    'app.empty_body': 'Choose a block to add it, or drag it to a position on the canvas.',
     'app.empty_tip': 'Ctrl/Cmd+S to save · Export downloads HTML',
     'app.save_as_template': 'Save as Template',
     'app.template_name': 'Template name',
@@ -248,12 +326,23 @@ const i18nMessages = {
     'blocks.template_remove_failed': 'Failed to delete template',
     'blocks.retry': 'Retry',
     'layers.title': 'Layers',
+    'layers.expand': 'Expand children',
+    'layers.collapse': 'Collapse children',
+    'canvas.component_actions': 'Component actions',
+    'canvas.select_parent': 'Select parent',
+    'canvas.duplicate': 'Duplicate component',
+    'canvas.replace_image': 'Replace image',
+    'canvas.delete': 'Delete component',
+    'canvas.command_failed': 'Action failed. Please try again.',
     'layers.show': 'Show',
     'layers.hide': 'Hide',
     'layers.lock': 'Lock',
     'layers.unlock': 'Unlock',
     'layers.rename_prompt': 'Layer name',
     'media.title': 'Media library',
+    'media.search': 'Search images by name',
+    'media.current': 'In use',
+    'media.empty_search': 'No matching images. Try another name.',
     'media.close': 'Close',
     'media.upload': 'Upload image',
     'media.empty': 'No media yet',
@@ -269,6 +358,22 @@ const i18nMessages = {
     'props.node_id_open': ' (',
     'props.node_id_close': ')',
     'style.title': 'Styles',
+    'style.property.margin': 'Margin',
+    'style.property.padding': 'Padding',
+    'style.spacing.compact': 'Compact',
+    'style.spacing.standard': 'Standard',
+    'style.spacing.spacious': 'Spacious',
+    'style.property.width': 'Width',
+    'style.property.height': 'Height',
+    'style.property.display': 'Display',
+    'style.property.font-size': 'Font size',
+    'style.property.font-weight': 'Font weight',
+    'style.property.text-align': 'Text alignment',
+    'style.property.color': 'Text color',
+    'style.property.background-color': 'Background color',
+    'style.property.border': 'Border',
+    'style.property.border-radius': 'Corner radius',
+    'style.property.box-shadow': 'Shadow',
     'inspector.tab_content': 'Content',
     'inspector.tab_style': 'Style',
     'inspector.tab_advanced': 'Advanced',
@@ -277,6 +382,14 @@ const i18nMessages = {
       'Select a block on the canvas to edit its content, styles, and advanced properties.',
     'inspector.no_content': 'This node has no editable content fields. Use the Style tab instead.',
     'inspector.image': 'Image',
+    'inspector.embedded_image': 'Embedded image',
+    'inspector.replace_image_url': 'Paste an image URL to replace it',
+    'link.section': 'Link to section',
+    'link.address': 'Link address',
+    'link.apply': 'Apply',
+    'link.choose': 'Choose a section…',
+    'link.invalid': 'Enter a valid address or choose a section on this page.',
+    'inspector.image_alt': 'Alternative text',
     'inspector.layout': 'Layout',
     'inspector.typography': 'Typography',
     'inspector.appearance': 'Appearance',
@@ -289,6 +402,10 @@ const i18nMessages = {
     'form.load_failed': 'Failed to load',
     'form.label_separator': ': ',
     'style.base': 'Base styles',
+    'device.desktop': 'Desktop',
+    'device.group': 'Canvas device',
+    'device.tablet': 'Tablet',
+    'device.mobile': 'Mobile',
     'style.inherit_desktop': 'Inherits Desktop when not overridden',
     'style.inherit_tablet_desktop': 'Inherits Tablet, then Desktop, when not overridden',
     'style.override': 'Override',
@@ -309,6 +426,12 @@ export interface AppOptions {
   mount: string | HTMLElement
   doc?: SigilDoc
   store?: ProjectStore
+  /** 依匯出快照指定下載頁面的標題；未提供時使用文件標題。 */
+  getExportTitle?: (doc: SigilDoc) => string | undefined
+  /** Prepare a copy of the dialog snapshot for the downloaded HTML. Closing the dialog aborts the signal. */
+  prepareDownload?: (doc: SigilDoc, signal: AbortSignal) => SigilDoc | Promise<SigilDoc>
+  /** 建立由宿主管理的頁面導覽，顯示於桌面的文件結構面板。 */
+  renderPageNavigation?: () => HTMLElement
   /** 媒體庫 */
   assets?: AssetStore
   /** Record 工廠或 defineBlock 列表 */
@@ -349,6 +472,8 @@ export interface SigilApp {
   getLocale(): Locale
   /** 原地切換介面語系，不重建 engine */
   setLocale(locale: Locale): void
+  /** 更新工作區所顯示的頁名；省略時使用文件 metadata。 */
+  setDocumentTitle(title?: string): void
   destroy(): void
 }
 
@@ -402,10 +527,15 @@ export function createApp(opts: AppOptions): SigilApp {
   })
 
   let device: CanvasDevice = 'desktop'
+  let initialDeviceResolved = false
   let mode: CanvasMode = 'edit'
   let helpOpen = false
   let compactLayout = false
   let activePanel: CompactPanel | null = null
+  let desktopPanel: 'structure' | 'blocks' | null = 'structure'
+  let workspaceTitle: string | undefined
+  let closeAssetLibrary: (() => void) | null = null
+  let panelTrigger: HTMLButtonElement | null = null
   let clipboard: ComponentNode | null = null
   let closeExportDialog: (() => void) | null = null
   let refreshExportDialog: (() => void) | null = null
@@ -414,6 +544,7 @@ export function createApp(opts: AppOptions): SigilApp {
   let destroyed = false
   const hooks = opts.hooks
   let persistenceReady = false
+  let inlineDirty = false
   const persistence = createProjectPersistence({
     engine,
     store,
@@ -440,7 +571,21 @@ export function createApp(opts: AppOptions): SigilApp {
     }
   }
 
+  function isDirty(): boolean {
+    return inlineDirty || persistence.isDirty()
+  }
+
+  function commitForSave(): void {
+    try {
+      canvas.commitEditing({ forSave: true })
+    } catch (error) {
+      reportSaveStatus(() => i18n.t('app.save_fail'))
+      throw error
+    }
+  }
+
   async function doSave(): Promise<SigilDoc> {
+    commitForSave()
     let doc: SigilDoc
     try {
       doc = await persistence.save()
@@ -448,7 +593,7 @@ export function createApp(opts: AppOptions): SigilApp {
       reportSaveStatus(() => i18n.t('app.save_fail'))
       throw error
     }
-    reportSaveStatus(() => i18n.t(persistence.isDirty() ? 'app.saved_pending' : 'app.saved_msg'))
+    reportSaveStatus(() => i18n.t(isDirty() ? 'app.saved_pending' : 'app.saved_msg'))
     return doc
   }
 
@@ -494,7 +639,20 @@ export function createApp(opts: AppOptions): SigilApp {
       }),
     )
   }
-  for (const c of opts.commands ?? []) commandMap.set(c.id, c)
+  for (const c of opts.commands ?? []) {
+    commandMap.set(
+      c.id,
+      c.id === 'save'
+        ? {
+            ...c,
+            run(ctx) {
+              commitForSave()
+              return c.run(ctx)
+            },
+          }
+        : c,
+    )
+  }
   const commands = createCommandRegistry([...commandMap.values()])
   /** Topbar 上的命令按鈕，refreshChrome 依 when／dirty 更新 disabled */
   const cmdButtons = new Map<string, HTMLButtonElement>()
@@ -610,12 +768,9 @@ export function createApp(opts: AppOptions): SigilApp {
   const blocksToggle = btn(i18n.t('app.blocks'), () => toggleCompactPanel('blocks'), true)
   blocksToggle.dataset.panelToggle = 'blocks'
   blocksToggle.setAttribute('aria-controls', blocksDrawerId)
-  const settingsToggle = btn(
-    i18n.t('app.panel_settings'),
-    () => toggleCompactPanel('settings'),
-    true,
-  )
+  const settingsToggle = btn(i18n.t('app.layers'), () => toggleCompactPanel('settings'), true)
   settingsToggle.dataset.panelToggle = 'settings'
+  settingsToggle.setAttribute('aria-label', i18n.t('app.panel_settings'))
   settingsToggle.setAttribute('aria-controls', settingsDrawerId)
   compactControls.append(blocksToggle, settingsToggle)
 
@@ -634,14 +789,14 @@ export function createApp(opts: AppOptions): SigilApp {
     mountCommandButton(cmd, hist)
   }
 
-  const sep1 = el('div', 'sigil-topbar-sep')
-
   const devices = document.createElement('div')
-  devices.className = 'sigil-topbar-group'
+  devices.className = 'sigil-topbar-group sigil-topbar-switch'
+  devices.setAttribute('role', 'group')
+  devices.setAttribute('aria-label', i18n.t('device.group'))
   const deviceBtns: Record<CanvasDevice, HTMLButtonElement> = {
-    desktop: btn('Desktop', () => setDevice('desktop'), true),
-    tablet: btn('Tablet', () => setDevice('tablet'), true),
-    mobile: btn('Mobile', () => setDevice('mobile'), true),
+    desktop: btn(i18n.t('device.desktop'), () => setDevice('desktop'), true),
+    tablet: btn(i18n.t('device.tablet'), () => setDevice('tablet'), true),
+    mobile: btn(i18n.t('device.mobile'), () => setDevice('mobile'), true),
   }
   for (const [key, button] of Object.entries(deviceBtns)) button.dataset.device = key
   devices.append(deviceBtns.desktop, deviceBtns.tablet, deviceBtns.mobile)
@@ -649,12 +804,10 @@ export function createApp(opts: AppOptions): SigilApp {
   const sep2 = el('div', 'sigil-topbar-sep')
 
   const modes = document.createElement('div')
-  modes.className = 'sigil-topbar-group'
+  modes.className = 'sigil-topbar-group sigil-topbar-switch'
   const editBtn = btn(i18n.t('canvas.edit'), () => setMode('edit'), true)
   const previewBtn = btn(i18n.t('canvas.preview'), () => setMode('preview'), true)
   modes.append(editBtn, previewBtn)
-
-  const spacer = el('div', 'sigil-topbar-spacer')
 
   // main 自訂命令
   const customBar = document.createElement('div')
@@ -707,28 +860,72 @@ export function createApp(opts: AppOptions): SigilApp {
   helpBtn.dataset.commandId = 'help'
   actions.append(helpBtn)
 
-  const topbarParts: HTMLElement[] = [
-    brand,
-    compactControls,
-    hist,
-    sep1,
-    devices,
-    sep2,
-    modes,
-    spacer,
-  ]
-  if (customBar.childNodes.length) topbarParts.push(customBar)
-  topbarParts.push(actions)
-  topbar.append(...topbarParts)
+  const desktopStart = el('div', 'sigil-desktop-start')
+  const desktopCanvasTools = el('div', 'sigil-desktop-canvas-tools')
+  const desktopEnd = el('div', 'sigil-desktop-end')
+
+  const primaryTools = el('div', 'sigil-primary-tools')
+  const extraTools = el('div', 'sigil-extra-tools')
+  extraTools.id = `sigil-tools-${panelIdSuffix}`
+  extraTools.hidden = true
+  const moreTools = btn(
+    i18n.t('app.more'),
+    () => {
+      closeCompactPanel(false)
+      showExtraTools(extraTools.hidden)
+    },
+    true,
+  )
+  moreTools.setAttribute('aria-controls', extraTools.id)
+  moreTools.setAttribute('aria-label', i18n.t('app.tools'))
+  moreTools.setAttribute('aria-expanded', 'false')
+  const saveButton = cmdButtons.get('save')
 
   // —— Body ——
   const body = el('div', 'sigil-body')
+
+  const rail = document.createElement('nav')
+  rail.className = 'sigil-workspace-rail'
+  rail.setAttribute('aria-label', i18n.t('app.panels'))
+  const structureToggle = btn('', () => toggleDesktopPanel('structure'), true)
+  const libraryToggle = btn('', () => toggleDesktopPanel('blocks'), true)
+  const assetsToggle = btn('', () => openAssets(), true)
+  const pageStylesToggle = btn(
+    '',
+    () => {
+      engine.select(engine.getTree().id)
+      const style = inspectorBox.querySelector<HTMLButtonElement>('[role="tab"][id$="-style"]')
+      style?.click()
+      style?.focus()
+    },
+    true,
+  )
+  const structureLabel = addRailIcon(
+    structureToggle,
+    'm3 7 9-4 9 4-9 4-9-4Zm0 5 9 4 9-4M3 17l9 4 9-4',
+  )
+  const libraryLabel = addRailIcon(
+    libraryToggle,
+    'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM17.5 14v7M14 17.5h7',
+  )
+  const assetsLabel = addRailIcon(assetsToggle, 'M3 4h18v16H3zM3 16l6-6 5 5 3-3 4 4M15 8h.01')
+  const stylesLabel = addRailIcon(
+    pageStylesToggle,
+    'M4 7h5m4 0h7M4 17h9m4 0h3M9 4h4v6H9zM13 14h4v6h-4z',
+  )
+  assetsToggle.setAttribute('aria-haspopup', 'dialog')
+  assetsToggle.hidden = !opts.assets
+  rail.append(structureToggle, libraryToggle, assetsToggle, pageStylesToggle)
+  libraryToggle.hidden = !opts.templates && !Object.keys(opts.blocks ?? {}).length
 
   const sidebar = el('aside', 'sigil-sidebar')
   sidebar.id = blocksDrawerId
   sidebar.dataset.compactPanel = 'blocks'
   sidebar.setAttribute('aria-label', i18n.t('app.blocks'))
   const blocksHead = el('div', 'sigil-panel-head')
+  const blockLibrary = el('div', 'sigil-block-library')
+  blockLibrary.id = `sigil-library-${panelIdSuffix}`
+  libraryToggle.setAttribute('aria-controls', blockLibrary.id)
   const blocksTitle = document.createElement('h3')
   blocksTitle.className = 'sigil-sidebar-title'
   blocksTitle.textContent = i18n.t('app.blocks')
@@ -737,7 +934,18 @@ export function createApp(opts: AppOptions): SigilApp {
   blocksClose.setAttribute('aria-label', i18n.t('app.close_panel'))
   blocksHead.append(blocksTitle, blocksClose)
   const blocksBox = document.createElement('div')
-  sidebar.append(blocksHead, blocksBox)
+  blockLibrary.append(blocksHead, blocksBox)
+  const structure = el('section', 'sigil-document-structure')
+  structure.id = `sigil-structure-${panelIdSuffix}`
+  structureToggle.setAttribute('aria-controls', structure.id)
+  const documentSummary = el('div', 'sigil-document-summary')
+  const pageLabel = el('h3', 'sigil-sidebar-title')
+  const pageName = el('p', 'sigil-document-name')
+  documentSummary.append(pageLabel, pageName)
+  if (opts.renderPageNavigation) documentSummary.append(opts.renderPageNavigation())
+  const structureHeading = el('h3', 'sigil-sidebar-title sigil-structure-heading')
+  structure.append(documentSummary, structureHeading)
+  sidebar.append(structure, blockLibrary)
 
   const canvasWrap = el('div', 'sigil-canvas-wrap')
   const canvasBox = el('div', 'sigil-canvas-host')
@@ -750,10 +958,21 @@ export function createApp(opts: AppOptions): SigilApp {
   const emptyBody = document.createElement('p')
   emptyBody.className = 'sigil-empty-canvas-body'
   emptyBody.textContent = i18n.t('app.empty_body')
+  emptyBody.hidden = libraryToggle.hidden
+  const emptyAdd = btn(i18n.t('app.add_blocks'), () => {
+    if (compactLayout) toggleCompactPanel('blocks', emptyAdd)
+    else {
+      desktopPanel = 'blocks'
+      refreshCompactPanels()
+      blocksBox.querySelector('input')?.focus()
+    }
+  })
+  emptyAdd.hidden = libraryToggle.hidden
+  emptyAdd.classList.add('sigil-btn--primary')
   const emptyTip = document.createElement('p')
   emptyTip.className = 'sigil-empty-canvas-tip'
   emptyTip.textContent = i18n.t('app.empty_tip')
-  emptyGuide.append(emptyTitle, emptyBody, emptyTip)
+  emptyGuide.append(emptyTitle, emptyBody, emptyAdd, emptyTip)
   canvasBox.appendChild(emptyGuide)
 
   canvasWrap.append(canvasBox)
@@ -800,14 +1019,19 @@ export function createApp(opts: AppOptions): SigilApp {
   panelBackdrop.setAttribute('aria-hidden', 'true')
   panelBackdrop.addEventListener('click', () => closeCompactPanel())
 
-  body.append(sidebar, canvasWrap, right, panelBackdrop)
+  body.append(rail, sidebar, canvasWrap, right, panelBackdrop)
 
   // —— Status ——
   const status = el('footer', 'sigil-status')
   const statusSel = document.createElement('span')
+  const editSelection = btn('', () => toggleCompactPanel('settings', editSelection))
+  editSelection.classList.add('sigil-edit-selection')
+  editSelection.setAttribute('aria-controls', settingsDrawerId)
+  editSelection.hidden = true
   const statusDirty = document.createElement('span')
   const statusMsg = document.createElement('span')
-  status.append(statusSel, statusDirty, statusMsg)
+  statusMsg.setAttribute('role', 'status')
+  status.append(statusSel, editSelection, statusDirty, statusMsg)
 
   root.append(topbar, body, status)
 
@@ -817,6 +1041,117 @@ export function createApp(opts: AppOptions): SigilApp {
 
   function getPanelToggle(panel: CompactPanel): HTMLButtonElement {
     return panel === 'blocks' ? blocksToggle : settingsToggle
+  }
+
+  function showExtraTools(open: boolean): void {
+    extraTools.hidden = !open
+    moreTools.setAttribute('aria-expanded', String(open))
+  }
+
+  function arrangeToolbar(): void {
+    showExtraTools(false)
+    if (compactLayout) {
+      primaryTools.append(compactControls, modes)
+      if (saveButton) primaryTools.append(saveButton)
+      primaryTools.append(moreTools)
+      extraTools.append(brand, hist, devices)
+      if (customBar.childNodes.length) extraTools.append(customBar)
+      extraTools.append(actions)
+      topbar.replaceChildren(primaryTools, extraTools)
+    } else {
+      if (saveButton) actions.prepend(saveButton)
+      desktopStart.append(brand, compactControls, hist)
+      desktopCanvasTools.append(devices, sep2, modes)
+      if (customBar.childNodes.length) desktopEnd.append(customBar)
+      desktopEnd.append(actions)
+      topbar.replaceChildren(desktopStart, desktopCanvasTools, desktopEnd)
+    }
+  }
+
+  function displayPageName(): void {
+    const name =
+      workspaceTitle || engine.toJSON().meta?.title?.trim() || i18n.t('app.untitled_page')
+    pageName.textContent = name
+    pageName.title = name
+  }
+
+  function refreshWorkspaceText(): void {
+    rail.setAttribute('aria-label', i18n.t('app.panels'))
+    structureToggle.title = i18n.t('app.structure')
+    structureToggle.setAttribute('aria-label', structureToggle.title)
+    structureLabel.textContent = i18n.t('app.layers')
+    libraryToggle.title = i18n.t('app.add_blocks')
+    libraryToggle.setAttribute('aria-label', libraryToggle.title)
+    libraryLabel.textContent = i18n.t('app.blocks')
+    assetsToggle.title = i18n.t('app.insert_image')
+    assetsLabel.textContent = i18n.t('app.assets')
+    pageStylesToggle.setAttribute('aria-label', i18n.t('app.page_styles'))
+    pageStylesToggle.title = i18n.t('app.page_styles')
+    stylesLabel.textContent = i18n.t('inspector.tab_style')
+    pageLabel.textContent = i18n.t('app.current_page')
+    structureHeading.textContent = i18n.t('app.layers')
+    displayPageName()
+  }
+
+  function toggleDesktopPanel(panel: 'structure' | 'blocks'): void {
+    if (compactLayout) return
+    desktopPanel = desktopPanel === panel ? null : panel
+    refreshCompactPanels()
+    if (desktopPanel === 'blocks') blocksBox.querySelector('input')?.focus()
+    if (desktopPanel === 'structure')
+      layersBox.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+  }
+
+  function canInsertAsset(): boolean {
+    const root = engine.getTree()
+    return mode === 'edit' && !root.locked && (root.type === 'section' || root.type === 'column')
+  }
+
+  function openAssets(): void {
+    if (
+      !opts.assets ||
+      compactLayout ||
+      closeAssetLibrary ||
+      !canInsertAsset() ||
+      mountEl.closest('[inert]')
+    )
+      return
+    assetsToggle.focus({ preventScroll: true })
+    closeAssetLibrary = openMediaPicker({
+      assets: opts.assets,
+      i18n: {
+        ...i18n,
+        t: (key) => i18n.t(key === 'media.title' ? 'app.insert_image' : key),
+      },
+      onPick(item) {
+        if (destroyed) return
+        if (!canInsertAsset() || mountEl.closest('[inert]')) {
+          setStatusMessage(() => i18n.t('app.insert_unavailable'))
+          return
+        }
+        const image = blockImage(item.url)
+        engine.insert(engine.getTree().id, image)
+        engine.select(image.id)
+      },
+      onClose() {
+        closeAssetLibrary = null
+      },
+    })
+  }
+
+  function refreshSelection(): void {
+    const id = engine.getSelection()
+    const node = id ? findNode(engine.getTree(), id) : undefined
+    const name = node?.name?.trim()
+    statusSel.textContent = node ? `${name || node.type} · ${node.id}` : i18n.t('status.none')
+    const canEditHere = compactLayout && mode === 'edit' && !activePanel && !!node
+    statusSel.hidden = canEditHere
+    editSelection.hidden = !canEditHere
+    if (canEditHere) {
+      editSelection.textContent = name
+        ? `${i18n.t('canvas.edit')} ${name}`
+        : i18n.t('app.edit_selection')
+    }
   }
 
   function refreshCompactPanels(): void {
@@ -832,39 +1167,129 @@ export function createApp(opts: AppOptions): SigilApp {
       drawer.setAttribute('aria-hidden', String(compactLayout && !open))
       toggle.setAttribute('aria-expanded', String(open))
       toggle.classList.toggle('sigil-btn--active', open)
+      toggle.disabled = compactLayout && mode === 'preview'
     }
 
     panelBackdrop.hidden = !compactLayout || activePanel === null
+    canvasWrap.inert = !panelBackdrop.hidden
+    rail.hidden = compactLayout
+    sidebar.hidden = !compactLayout && desktopPanel === null
+    structure.hidden = compactLayout || desktopPanel !== 'structure'
+    blockLibrary.hidden = !compactLayout && desktopPanel !== 'blocks'
+    structureToggle.setAttribute('aria-expanded', String(!structure.hidden))
+    libraryToggle.setAttribute('aria-expanded', String(!blockLibrary.hidden && !compactLayout))
+    sidebar.setAttribute(
+      'aria-label',
+      i18n.t(compactLayout || desktopPanel === 'blocks' ? 'app.blocks' : 'app.structure'),
+    )
+    if (compactLayout && layersBox.parentElement !== right)
+      right.insertBefore(layersBox, inspectorBox)
+    if (!compactLayout && layersBox.parentElement !== structure) structure.append(layersBox)
+    const directSettings = activePanel === 'settings' && panelTrigger === editSelection
+    layersBox.hidden = directSettings
+    layersTitle.textContent = i18n.t(
+      !compactLayout || directSettings ? 'app.component_settings' : 'app.layers',
+    )
+    right.setAttribute(
+      'aria-label',
+      i18n.t(!compactLayout || directSettings ? 'app.component_settings' : 'app.panel_settings'),
+    )
+    refreshSelection()
   }
 
   function setCompactLayout(next: boolean): void {
     if (compactLayout === next && root.dataset.layout) return
+    const focused = document.activeElement
+    const assetDialogWasOpen = !!closeAssetLibrary
+    const focusedLayer = layersBox.contains(focused)
+    const focusedPanel =
+      focusedLayer ||
+      right.contains(focused) ||
+      focused === structureToggle ||
+      focused === pageStylesToggle
+        ? 'settings'
+        : sidebar.contains(focused) || focused === libraryToggle
+          ? 'blocks'
+          : null
+    if (!next && (focusedLayer || focused === settingsToggle)) desktopPanel = 'structure'
+    else if (
+      !next &&
+      (blocksBox.contains(focused) || focused === blocksClose || focused === blocksToggle)
+    )
+      desktopPanel = libraryToggle.hidden ? 'structure' : 'blocks'
+    if (next) closeAssetLibrary?.()
     compactLayout = next
-    if (!next) activePanel = null
+    activePanel = null
+    panelTrigger = null
+    arrangeToolbar()
     refreshCompactPanels()
+    if (next && focusedPanel) (mode === 'preview' ? editBtn : getPanelToggle(focusedPanel)).focus()
+    else if (next && focused && extraTools.contains(focused)) moreTools.focus()
+    else if (
+      !next &&
+      (focused === blocksClose || focused === settingsClose || focused === editSelection)
+    ) {
+      const panel = focused === blocksClose ? sidebar : right
+      panel
+        .querySelector<HTMLElement>(
+          'input, [role="treeitem"][tabindex="0"], [role="tab"][aria-selected="true"]',
+        )
+        ?.focus()
+    } else if (!next && focused === blocksToggle)
+      (libraryToggle.hidden ? structureToggle : libraryToggle).focus()
+    else if (!next && focused === settingsToggle) structureToggle.focus()
+    else if (!next && focusedLayer && focused instanceof HTMLElement)
+      focused.focus({ preventScroll: true })
+    else if (next && (focused === assetsToggle || assetDialogWasOpen)) moreTools.focus()
+    else if (!next && focused === moreTools) editBtn.focus()
+    else if (focused instanceof HTMLElement && topbar.contains(focused)) {
+      if (next && (focused === editBtn || focused === previewBtn)) currentModeAction().focus()
+      else focused.focus({ preventScroll: true })
+    }
   }
 
-  function toggleCompactPanel(panel: CompactPanel): void {
-    if (!compactLayout) return
+  function toggleCompactPanel(panel: CompactPanel, trigger = getPanelToggle(panel)): void {
+    if (!compactLayout || mode === 'preview') return
     if (activePanel === panel) {
       closeCompactPanel()
       return
     }
+    showExtraTools(false)
     activePanel = panel
+    panelTrigger = trigger
     refreshCompactPanels()
+    if (trigger === editSelection) {
+      const control =
+        inspectorBox.querySelector<HTMLElement>('.sigil-img-preview + .sigil-field-row button') ??
+        inspectorBox.querySelector<HTMLElement>(
+          '[role="tabpanel"] input:not([disabled]), [role="tabpanel"] textarea:not([disabled]), [role="tabpanel"] select:not([disabled])',
+        ) ??
+        inspectorBox.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      ;(control ?? settingsClose).focus()
+    } else (panel === 'blocks' ? blocksClose : settingsClose).focus()
   }
 
   function closeCompactPanel(restoreFocus = true): void {
     if (!compactLayout || !activePanel) return
     const previous = activePanel
+    const trigger = panelTrigger
     activePanel = null
+    panelTrigger = null
     refreshCompactPanels()
-    if (restoreFocus) getPanelToggle(previous).focus()
+    if (restoreFocus)
+      (trigger && !trigger.closest('[hidden], [inert]')
+        ? trigger
+        : getPanelToggle(previous)
+      ).focus()
   }
 
   function updateLayoutFromWidth(width: number): void {
     if (width <= 0) return
     setCompactLayout(width < COMPACT_LAYOUT_BREAKPOINT)
+    if (!initialDeviceResolved) {
+      initialDeviceResolved = true
+      if (width <= RESPONSIVE_BREAKPOINT_WIDTHS.mobile) setDevice('mobile')
+    }
   }
 
   function measureLayout(): void {
@@ -874,22 +1299,31 @@ export function createApp(opts: AppOptions): SigilApp {
 
   let layoutObserver: ResizeObserver | null = null
   const onWindowResize = (): void => measureLayout()
-  if (typeof ResizeObserver !== 'undefined') {
-    layoutObserver = new ResizeObserver((entries) => {
-      const entry = entries.find((candidate) => candidate.target === root) ?? entries[0]
-      updateLayoutFromWidth(entry?.contentRect.width ?? 0)
-    })
-    layoutObserver.observe(root)
-  } else {
-    window.addEventListener('resize', onWindowResize)
-  }
+  arrangeToolbar()
+  refreshWorkspaceText()
   refreshCompactPanels()
-  measureLayout()
 
   function onCompactPanelKeyDown(e: KeyboardEvent): void {
-    if (e.key !== 'Escape' || !compactLayout || !activePanel) return
-    e.preventDefault()
-    closeCompactPanel()
+    if (e.key !== 'Escape') return
+    const target = e.target instanceof Element ? e.target : document.activeElement
+    if (!target || !root.contains(target)) return
+    if (!compactLayout) {
+      if (desktopPanel === 'blocks' && (sidebar.contains(target) || target === libraryToggle)) {
+        e.preventDefault()
+        desktopPanel = 'structure'
+        refreshCompactPanels()
+        libraryToggle.focus()
+      }
+      return
+    }
+    if (activePanel) {
+      e.preventDefault()
+      closeCompactPanel()
+    } else if (!extraTools.hidden && (target === moreTools || extraTools.contains(target))) {
+      e.preventDefault()
+      showExtraTools(false)
+      moreTools.focus()
+    }
   }
   document.addEventListener('keydown', onCompactPanelKeyDown)
 
@@ -930,14 +1364,20 @@ export function createApp(opts: AppOptions): SigilApp {
   }
 
   const canvas = createCanvas(engine, canvasBox, {
+    selectionCommands: { registry: commands, context: makeCtx },
+    onEditingDirtyChange(dirty) {
+      inlineDirty = dirty
+      if (persistenceReady && !destroyed) refreshChrome()
+    },
+    onReplaceImage: opts.assets
+      ? (id, trigger) => inspector.replaceImage?.(id, trigger)
+      : undefined,
     rendererOptions: { shortcodeResolver, htmlPolicy: policy },
     richText: opts.richText,
     i18n,
     chrome: false,
     onContextMenu: (_id, x, y) => openSelectionMenu(x, y),
   })
-  // empty guide 不攔截 pointer
-  emptyGuide.style.pointerEvents = 'none'
   const inspector = createInspector(engine, inspectorBox, {
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
     richText: opts.richText?.resolver,
@@ -982,14 +1422,27 @@ export function createApp(opts: AppOptions): SigilApp {
   }
 
   function setDevice(next: CanvasDevice): void {
+    initialDeviceResolved = true
     device = next
+    canvasWrap.dataset.device = next
     canvas.setDevice(next)
     refreshChrome()
   }
   function setMode(next: CanvasMode): void {
     mode = next
+    if (next === 'preview') closeAssetLibrary?.()
     canvas.setMode(next)
+    if (compactLayout) {
+      closeCompactPanel(false)
+      showExtraTools(false)
+      refreshCompactPanels()
+    }
     refreshChrome()
+    if (compactLayout) currentModeAction().focus()
+  }
+
+  function currentModeAction(): HTMLButtonElement {
+    return mode === 'edit' ? previewBtn : editBtn
   }
 
   function isCanvasEmpty(): boolean {
@@ -999,8 +1452,8 @@ export function createApp(opts: AppOptions): SigilApp {
 
   function refreshEmptyGuide(): void {
     const empty = isCanvasEmpty()
-    emptyGuide.hidden = !empty
-    emptyGuide.setAttribute('aria-hidden', String(!empty))
+    emptyGuide.hidden = !empty || mode === 'preview'
+    emptyGuide.setAttribute('aria-hidden', String(emptyGuide.hidden))
   }
 
   function refreshChrome(): void {
@@ -1010,7 +1463,7 @@ export function createApp(opts: AppOptions): SigilApp {
       if (!cmd) continue
       let disabled = cmd.when ? !cmd.when(ctx) : false
       // 無變更時禁用存檔
-      if (id === 'save') disabled = disabled || !persistence.isDirty() || persistence.isSaving()
+      if (id === 'save') disabled = disabled || !isDirty() || persistence.isSaving()
       b.disabled = disabled
     }
     for (const [k, b] of Object.entries(deviceBtns) as [CanvasDevice, HTMLButtonElement][]) {
@@ -1021,25 +1474,29 @@ export function createApp(opts: AppOptions): SigilApp {
     previewBtn.classList.toggle('sigil-btn--active', mode === 'preview')
     editBtn.setAttribute('aria-pressed', String(mode === 'edit'))
     previewBtn.setAttribute('aria-pressed', String(mode === 'preview'))
-    const dirty = persistence.isDirty()
+    const dirty = isDirty()
+    assetsToggle.disabled = !canInsertAsset()
+    pageStylesToggle.disabled = mode === 'preview' || !!engine.getTree().locked
     statusDirty.textContent = i18n.t(
       persistence.isSaving() ? 'app.saving' : dirty ? 'app.dirty' : 'app.saved',
     )
     statusDirty.className = dirty ? 'sigil-status-dirty' : 'sigil-muted'
-    const id = engine.getSelection()
-    if (!id) statusSel.textContent = i18n.t('status.none')
-    else {
-      const n = findNode(engine.getTree(), id)
-      statusSel.textContent = n ? `${n.name?.trim() || n.type} · ${n.id}` : id
-    }
+    refreshSelection()
     refreshEmptyGuide()
   }
 
   function refreshLocaleChrome(): void {
     brand.textContent = i18n.t('app.brand')
+    refreshWorkspaceText()
     compactControls.setAttribute('aria-label', i18n.t('app.panels'))
     blocksToggle.textContent = i18n.t('app.blocks')
-    settingsToggle.textContent = i18n.t('app.panel_settings')
+    settingsToggle.textContent = i18n.t('app.layers')
+    settingsToggle.setAttribute('aria-label', i18n.t('app.panel_settings'))
+    moreTools.textContent = i18n.t('app.more')
+    moreTools.setAttribute('aria-label', i18n.t('app.tools'))
+    devices.setAttribute('aria-label', i18n.t('device.group'))
+    for (const [key, button] of Object.entries(deviceBtns))
+      button.textContent = i18n.t(`device.${key}`)
     for (const [id, button] of cmdButtons) {
       const command = commands.get(id)
       if (command) button.textContent = commandLabel(command)
@@ -1055,6 +1512,7 @@ export function createApp(opts: AppOptions): SigilApp {
     blocksClose.setAttribute('aria-label', i18n.t('app.close_panel'))
     emptyTitle.textContent = i18n.t('app.empty_title')
     emptyBody.textContent = i18n.t('app.empty_body')
+    emptyAdd.textContent = i18n.t('app.add_blocks')
     emptyTip.textContent = i18n.t('app.empty_tip')
     helpTitle.textContent = i18n.t('app.help')
     const helpLines = [
@@ -1067,26 +1525,34 @@ export function createApp(opts: AppOptions): SigilApp {
     helpItems.forEach((item, index) => {
       item.textContent = helpLines[index] ?? ''
     })
-    right.setAttribute('aria-label', i18n.t('app.panel_settings'))
-    layersTitle.textContent = i18n.t('app.layers')
+    refreshCompactPanels()
     settingsClose.setAttribute('aria-label', i18n.t('app.close_panel'))
     refreshChrome()
     refreshStatusMessage?.()
     refreshExportDialog?.()
   }
 
-  function openExportDialog(): void {
-    closeExportDialog?.()
-    const html = toHTML(engine.toJSON(), {
+  function serializeHTML(doc: SigilDoc, mode?: HtmlMode): string {
+    return toHTML(doc, {
       shortcodeResolver,
       richTextResolver: opts.richText?.resolver,
       sanitize: opts.sanitize,
+      mode,
     })
+  }
+
+  function openExportDialog(): void {
+    if (destroyed) return
+    closeExportDialog?.()
+    const doc = structuredClone(engine.toJSON())
+    const html = serializeHTML(doc)
     const previousFocus = document.activeElement
     let closed = false
+    let pendingDownload: AbortController | null = null
 
     const backdrop = document.createElement('div')
     backdrop.className = 'sigil-dialog-backdrop'
+    backdrop.classList.toggle('sigil-theme-dark', root.classList.contains('sigil-theme-dark'))
     backdrop.setAttribute('role', 'dialog')
     backdrop.setAttribute('aria-modal', 'true')
     backdrop.tabIndex = -1
@@ -1103,50 +1569,115 @@ export function createApp(opts: AppOptions): SigilApp {
     const closeBtn = btn(i18n.t('app.close'), () => close(), true)
     head.append(title, closeBtn)
 
+    let hintKey = 'app.export_hint'
+    let allowOriginalDownload = false
     const hint = document.createElement('p')
     hint.className = 'sigil-muted'
-    hint.textContent = i18n.t('app.export_hint')
+    hint.setAttribute('role', 'status')
+    hint.textContent = i18n.t(hintKey)
 
+    const source = document.createElement('details')
+    const summary = document.createElement('summary')
+    summary.id = `sigil-export-source-${createId()}`
+    summary.textContent = i18n.t('app.export_source')
     const ta = document.createElement('textarea')
     ta.className = 'sigil-export-out'
+    ta.setAttribute('aria-labelledby', summary.id)
     ta.readOnly = true
     ta.value = html
     ta.rows = 14
+    source.append(summary, ta)
 
     const actionsRow = document.createElement('div')
     actionsRow.className = 'sigil-dialog-actions'
     let copied = false
     const copyBtn = btn(i18n.t('app.copy'), () => {
       void copyText(html).then((ok) => {
+        if (closed) return
         copied = ok
+        if (!ok) {
+          hintKey = 'app.copy_manual'
+          refreshDownload()
+          source.open = true
+          ta.focus()
+          ta.select()
+        }
         setStatusMessage(() =>
           copied ? i18n.t('app.copied') : `HTML ${html.length} ${i18n.t('app.characters')}`,
         )
         copyBtn.textContent = copied ? i18n.t('app.copied') : i18n.t('app.copy')
       })
     })
-    copyBtn.classList.add('sigil-btn--primary')
-    const dlBtn = btn(i18n.t('app.download'), () => downloadText(html, 'sigil-page.html'))
+    const dlBtn = btn(i18n.t('app.download'), () => void download())
+    dlBtn.classList.add('sigil-btn--primary')
+    const originalBtn = btn(i18n.t('app.download_original'), () => void download(true))
+    originalBtn.hidden = true
+    function refreshDownload(): void {
+      const preparing = !!pendingDownload
+      dlBtn.setAttribute('aria-disabled', String(preparing))
+      dlBtn.textContent = i18n.t(preparing ? 'app.export_preparing' : 'app.download')
+      originalBtn.hidden = !allowOriginalDownload
+      originalBtn.setAttribute('aria-disabled', String(preparing))
+      originalBtn.textContent = i18n.t('app.download_original')
+      hint.textContent = i18n.t(preparing ? 'app.export_preparing' : hintKey)
+    }
+    async function download(original = false): Promise<void> {
+      if (closed || pendingDownload || (original && !allowOriginalDownload)) return
+      const controller = new AbortController()
+      pendingDownload = controller
+      let preparing = false
+      try {
+        let prepared = doc
+        let downloadHTML = html
+        if (!original && opts.prepareDownload) {
+          preparing = true
+          refreshDownload()
+          prepared = await opts.prepareDownload(structuredClone(doc), controller.signal)
+          if (controller.signal.aborted) return
+          downloadHTML = serializeHTML(prepared)
+          preparing = false
+        }
+        const pageTitle =
+          opts.getExportTitle?.(structuredClone(prepared)) ||
+          prepared.meta?.title ||
+          prepared.root.name ||
+          i18n.t('app.export_title')
+        const page = exportPageTemplate.replace(/{{title}}|<!--sigil-content-->/g, (slot) =>
+          slot === '{{title}}' ? escapeHtml(pageTitle) : downloadHTML,
+        )
+        if (controller.signal.aborted) return
+        downloadText(page, 'sigil-page.html')
+        allowOriginalDownload = original
+        hintKey = original ? 'app.download_original_started' : 'app.export_hint'
+      } catch {
+        allowOriginalDownload = original || preparing
+        hintKey = 'app.export_fail'
+      } finally {
+        pendingDownload = null
+        if (!closed) refreshDownload()
+      }
+    }
     const actionsCloseBtn = btn(i18n.t('app.close'), () => close())
-    actionsRow.append(copyBtn, dlBtn, actionsCloseBtn)
+    actionsRow.append(dlBtn)
+    if (opts.prepareDownload) actionsRow.append(originalBtn)
+    actionsRow.append(copyBtn, actionsCloseBtn)
 
     refreshExportDialog = () => {
       title.textContent = i18n.t('app.export_title')
       closeBtn.textContent = i18n.t('app.close')
-      hint.textContent = i18n.t('app.export_hint')
+      refreshDownload()
+      summary.textContent = i18n.t('app.export_source')
       copyBtn.textContent = copied ? i18n.t('app.copied') : i18n.t('app.copy')
-      dlBtn.textContent = i18n.t('app.download')
       actionsCloseBtn.textContent = i18n.t('app.close')
     }
 
-    panel.append(head, hint, ta, actionsRow)
+    panel.append(head, hint, source, actionsRow)
     backdrop.appendChild(panel)
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) close()
     })
     document.body.appendChild(backdrop)
-    ta.focus()
-    ta.select()
+    dlBtn.focus()
 
     function onDialogKeyDown(e: KeyboardEvent): void {
       if (e.key === 'Escape') {
@@ -1166,6 +1697,7 @@ export function createApp(opts: AppOptions): SigilApp {
       closeExportDialog = null
       refreshExportDialog = null
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus()
+      pendingDownload?.abort()
     }
     closeExportDialog = close
 
@@ -1184,23 +1716,56 @@ export function createApp(opts: AppOptions): SigilApp {
     }
   })
   persistenceReady = true
+  if (typeof ResizeObserver !== 'undefined') {
+    layoutObserver = new ResizeObserver((entries) => {
+      const entry = entries.find((candidate) => candidate.target === root)
+      if (entry) updateLayoutFromWidth(entry.contentRect.width)
+    })
+    layoutObserver.observe(root)
+  } else {
+    window.addEventListener('resize', onWindowResize)
+  }
+  measureLayout()
   refreshChrome()
   runAfterLoad(hooks, engine.toJSON(), engine)
 
   function onBeforeUnload(e: BeforeUnloadEvent): void {
-    if (!persistence.isDirty() && !persistence.isSaving()) return
+    if (!isDirty() && !persistence.isSaving()) return
     e.preventDefault()
     e.returnValue = ''
   }
   window.addEventListener('beforeunload', onBeforeUnload)
 
+  let composingField: EventTarget | null = null
+  function onFieldComposition(e: Event): void {
+    composingField = e.type === 'compositionstart' ? e.target : null
+  }
+  inspectorBox.addEventListener('compositionstart', onFieldComposition)
+  inspectorBox.addEventListener('compositionend', onFieldComposition)
+  inspectorBox.addEventListener('focusout', onFieldComposition)
+
   function onKeyDown(e: KeyboardEvent): void {
     // Hosts can suspend editing while replacing or loading the document.
     if (mountEl.closest('[inert]')) return
     const t = e.target as HTMLElement | null
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+    if (t instanceof Element && t.closest('[role="dialog"], [role="menu"], [inert]')) return
+    const field =
+      t instanceof HTMLElement && (t.matches('input, textarea, select') || t.isContentEditable)
+    if (
+      field &&
+      (!inspectorBox.contains(t) ||
+        t.matches(':disabled, [readonly], [aria-readonly="true"]') ||
+        (!e.ctrlKey && !e.metaKey) ||
+        e.defaultPrevented ||
+        e.isComposing ||
+        e.keyCode === 229 ||
+        composingField === t)
+    )
+      return
     const cmd = commands.match(e, makeCtx())
-    if (!cmd) return
+    if (!cmd || (field && cmd.id !== 'save')) return
+    const selectedId = field && engine.getSelection()
+    if (selectedId && findNode(engine.getTree(), selectedId)?.locked) return
     e.preventDefault()
     void commands.run(cmd.id, makeCtx()).catch(() => {})
   }
@@ -1219,15 +1784,10 @@ export function createApp(opts: AppOptions): SigilApp {
       return structuredClone(engine.toJSON())
     },
     toHTML(htmlMode?: HtmlMode) {
-      return toHTML(engine.toJSON(), {
-        shortcodeResolver,
-        richTextResolver: opts.richText?.resolver,
-        sanitize: opts.sanitize,
-        mode: htmlMode,
-      })
+      return serializeHTML(engine.toJSON(), htmlMode)
     },
     save: doSave,
-    isDirty: persistence.isDirty,
+    isDirty,
     isSaving: persistence.isSaving,
     runCommand(id: string) {
       return commands.run(id, makeCtx())
@@ -1236,17 +1796,25 @@ export function createApp(opts: AppOptions): SigilApp {
       return i18n.getLocale()
     },
     setLocale,
+    setDocumentTitle(title) {
+      workspaceTitle = title?.trim()
+      displayPageName()
+    },
     destroy() {
       if (destroyed) return
       destroyed = true
       persistence.destroy()
       runBeforeDestroy(hooks, engine)
       closeExportDialog?.()
+      closeAssetLibrary?.()
       closeMenu?.()
       cleanupTheme()
       layoutObserver?.disconnect()
       window.removeEventListener('resize', onWindowResize)
       window.removeEventListener('beforeunload', onBeforeUnload)
+      inspectorBox.removeEventListener('compositionstart', onFieldComposition)
+      inspectorBox.removeEventListener('compositionend', onFieldComposition)
+      inspectorBox.removeEventListener('focusout', onFieldComposition)
       document.removeEventListener('keydown', onCompactPanelKeyDown)
       document.removeEventListener('keydown', onKeyDown)
       unsub()
@@ -1267,6 +1835,18 @@ function el(tag: string, className: string): HTMLElement {
   const n = document.createElement(tag)
   n.className = className
   return n
+}
+
+function addRailIcon(button: HTMLButtonElement, shape: string): HTMLSpanElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  const path = document.createElementNS(svg.namespaceURI!, 'path')
+  path.setAttribute('d', shape)
+  svg.append(path)
+  const label = document.createElement('span')
+  button.append(svg, label)
+  return label
 }
 
 function btn(label: string, onClick: () => void, ghost = false): HTMLButtonElement {
@@ -1342,10 +1922,13 @@ function downloadText(text: string, filename: string): void {
   a.href = url
   a.download = filename
   a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  try {
+    document.body.appendChild(a)
+    a.click()
+  } finally {
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
 }
 
 export { SIGIL_APP_VERSION } from './version.js'

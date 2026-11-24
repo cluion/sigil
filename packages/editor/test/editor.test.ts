@@ -299,7 +299,7 @@ describe('editor — toHTML', () => {
     const mobile = el.querySelector('button[data-device="mobile"]') as HTMLButtonElement
     mobile.click()
     expect(el.querySelector('[data-style-device="mobile"]')).toBeTruthy()
-    expect(el.textContent).toContain('未覆寫時繼承 Tablet')
+    expect(el.textContent).toContain('未覆寫時沿用平板或桌面樣式')
     editor.destroy()
   })
 })

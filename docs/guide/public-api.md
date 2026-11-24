@@ -73,6 +73,10 @@ const doc: SigilDoc = {
 - `engine.getTree()` 與 `engine.toJSON()` 會共享內部樹或其他巢狀資料的參考。請視為唯讀，透過 engine 方法修改文件；需要可修改副本時自行 `structuredClone()`。
 - 傳入 engine 的文件、tree helper 或記憶體 store 所持有的物件，也不應假設全部都會深拷貝。繞過 engine 直接改物件會破壞 history、訂閱與 dirty 判斷的前提。
 
+### 插入含 HTML 錨點的元件
+
+自訂插入流程可從 `@cluion/sigil-core` 匯入 `resolveHtmlIdConflicts(subtree, documentRoot)`。它會檢查結構化 `attributes` 的 HTML ID，為衝突的副本分配名稱，並調整子樹內的頁內連結及 HTML／ARIA ID 參照。元件的 Sigil 節點 ID 由 `cloneWithNewIds()` 負責。內建複製與貼上會先重建 Sigil 節點 ID。區塊面板會對區塊工廠傳回的節點處理 HTML ID 衝突。自訂 CSS 選擇器、富文字 HTML 與 shortcode 輸出仍由宿主維護。
+
 ## 同步、非同步與保存
 
 | API                                                                         | 執行契約                                                                           |
@@ -83,12 +87,14 @@ const doc: SigilDoc = {
 | App／Editor `save()`                                                        | `Promise<SigilDoc>`；等待該次保存完成，失敗 reject                                 |
 | App／Editor `runCommand(id)`                                                | `Promise<boolean>`；未知或不可執行時為 `false`，成功執行為 `true`，命令失敗 reject |
 | `ProjectStore.load()`／`save()`                                             | adapter 可同步或回傳 Promise；高階保存會等待 `save()`                              |
-| `AssetStore.list()`／選用的 `upload(file)`                                  | adapter 可同步或回傳 Promise；`upload` 不存在表示沒有上傳能力                      |
+| `AssetStore.list()`／選用的 `upload(file)`                                  | 可同步或回傳 Promise。支援上傳時可選填 `uploadAccept` 和 `describeUploadError`     |
 | `TemplateStore.list()`／`save()`／選用的 `remove(id)`                       | adapter 可同步或回傳 Promise                                                       |
 | `SanitizeFn`、rich-text resolver、`RichTextAdapter.start()` 與 session 方法 | 同步；不能回傳 Promise 取代 HTML 字串或 session                                    |
 | Shortcode `render`／`bind`、resolver `resolve`／`renderStatic`              | 同步；`bind` 可回傳 cleanup，非同步工作須由 context 與生命週期自行管理             |
 
 App 與 Editor 共用保存契約：呼叫 `save()` 時擷取文件，單一實例依序寫入 store；成功後以提交當下的 tree 作為 checkpoint。存檔期間的新編輯仍為 dirty，undo 回到該 checkpoint 可恢復 clean。失敗不會清除 dirty，也不會讓後續重試永久卡住。`beforeSave` 可轉換保存 payload，但不會把轉換結果寫回 engine。
+
+畫布文字已改動且游標仍在欄位時，`isDirty()` 會回傳 `true`。`save()` 會先取回此次輸入，再將文件交給 store。`toJSON()` 仍可純讀取文件樹。[畫布編輯與保存](./persistence.md)
 
 初始文件先被視為 clean；這不證明它已存在於後端。首次建立文件的狀態、revision、備份與離頁策略由宿主追蹤。`isDirty()` 也不代表後端是否被其他分頁更新。單一實例的寫入佇列沒有跨分頁、跨使用者的版本衝突防護，宿主須在 adapter／後端實作 revision 或 ETag 的條件寫入。
 
@@ -120,6 +126,8 @@ App／Editor 沒有 `load()` API，也不會自動呼叫 `ProjectStore.load()`�
 ## 擴充點與宿主責任
 
 `AppOptions` 提供 `assets`，`EditorOptions` 目前沒有這個選項；兩者均可接受文件 store、templates、blocks、shortcodes、rich text、hooks 與自訂 commands。既有 `basicBlocks` 的 record 形式與新的 `BlockDefinition[]` 都是受支援輸入，不能僅因後者較新就視前者為已移除。
+
+`AppOptions.prepareDownload(doc, signal)` 可選填，接收開啟匯出視窗時的文件副本，回傳準備好的 `SigilDoc` 或 `Promise<SigilDoc>`。例如 Laravel 會把本站照片內嵌到下載的 HTML。關閉對話框或銷毀 App 會觸發 `AbortSignal`。處理失敗時，使用者可重試或依原網址下載。HTML 片段、複製及 `toHTML()` 都以原文件輸出。
 
 `RichTextAdapter` 透過同步的 resolver 讀取內容，`start(context)` 回傳含 `focus()`、`getValue()`、`destroy()` 的 session；session 應能安全重複清理。啟用 rich text 時必須提供同步 `sanitize`，目前這個配對要求會在執行期檢查，並未由 options 型別完全表達。見[Rich text adapter](/guide/rich-text)。
 

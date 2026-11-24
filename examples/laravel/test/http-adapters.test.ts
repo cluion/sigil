@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SigilDoc } from '@cluion/sigil-core'
 import { createHttpProjectStore, HttpError } from '../resources/js/http-project-store'
 import { createHttpAssetStore } from '../resources/js/http-asset-store'
+import { createActivityDownload } from '../resources/js/activity-download'
 
 const doc: SigilDoc = {
   version: 1,
@@ -31,6 +32,233 @@ const asset = {
   name: '圖.png',
   mimeType: 'image/png',
 }
+
+describe('activity HTML download images', () => {
+  const origin = 'https://workshop.test'
+  const path = '/sigil/media/04a8d055-e70f-4f84-9c47-e53bd2312172'
+  const cover = '/workshop-printmaking.webp'
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+    'base64',
+  )
+  const coverBytes = readFileSync(new URL('../public/workshop-printmaking.webp', import.meta.url))
+  const pngData = 'data:image/png;base64,' + png.toString('base64')
+  const signal = () => new AbortController().signal
+
+  function page(sources: string[]): SigilDoc {
+    return {
+      version: 1,
+      root: {
+        id: 'root',
+        type: 'section',
+        children: sources.map((src, i) => ({
+          id: 'pic-' + i,
+          type: 'image',
+          attributes: { src, alt: '工作坊照片' },
+          responsiveStyles: { mobile: { width: '100%' } },
+        })),
+      },
+    }
+  }
+  function prepare(request: typeof fetch) {
+    return createActivityDownload({ origin, coverUrl: cover, laravelMedia: true, fetch: request })
+  }
+  function imageResponse(bytes: Uint8Array<ArrayBufferLike>, mime: string, status = 200) {
+    return new Response(new Uint8Array(bytes), { status, headers: { 'Content-Type': mime } })
+  }
+
+  beforeEach(() =>
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ close: vi.fn() })),
+  )
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('embeds managed photos once per URL, preserves order, responsive styles and the original document', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(imageResponse(png, 'image/png'))
+      .mockResolvedValueOnce(imageResponse(coverBytes, 'image/webp'))
+    const external = 'https://images.example.org/flyer.png'
+    const input = page([path, external, origin + path, cover, '/placeholder.svg'])
+    const original = structuredClone(input)
+    const abort = signal()
+    const result = await prepare(request)(input, abort)
+    expect(request.mock.calls).toEqual(
+      [origin + path, origin + cover].map((url) => [
+        url,
+        {
+          mode: 'same-origin',
+          credentials: 'omit',
+          redirect: 'error',
+          signal: abort,
+        },
+      ]),
+    )
+    expect(input).toEqual(original)
+    const images = result.root.children!
+    expect(images[4]!.attributes!.src).toMatch(/^data:image\/svg\+xml;charset=utf-8,/)
+    const expected = [
+      pngData,
+      external,
+      pngData,
+      'data:image/webp;base64,' + coverBytes.toString('base64'),
+      images[4]!.attributes!.src,
+    ]
+    expect(result).toEqual(page(expected as string[]))
+  })
+
+  it('does not request unrelated same-origin routes, user URLs or src attributes of other elements', async () => {
+    const request = vi.fn<typeof fetch>()
+    const input = page([
+      '/activities',
+      '/sigil/media/not-a-uuid',
+      path + '?preview=1',
+      'https://external.test' + path,
+      'https://user@workshop.test' + path,
+      '//workshop.test' + path,
+      'data:image/png;base64,AA==',
+      'blob:https://workshop.test/id',
+    ])
+    input.root.children!.push({
+      id: 'link',
+      type: 'button',
+      tagName: 'a',
+      attributes: { src: path, href: path },
+    })
+    expect(await prepare(request)(input, signal())).toEqual(input)
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('the local demo fetches only its configured bundled cover', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(imageResponse(coverBytes, 'image/webp'))
+    const bundled = '/assets/photo-abcdef.webp'
+    const input = page([path, '/placeholder.svg', cover, pngData, bundled])
+    const result = await createActivityDownload({
+      origin,
+      coverUrl: origin + bundled,
+      fetch: request,
+    })(input, signal())
+    expect(request.mock.calls.map(([url]) => url)).toEqual([origin + bundled])
+    expect(result.root.children!.slice(0, 4)).toEqual(input.root.children!.slice(0, 4))
+  })
+
+  it('embeds hidden images which HTML retains, and ignores children which void tags omit', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(imageResponse(coverBytes, 'image/webp'))
+      .mockResolvedValueOnce(imageResponse(png, 'image/png'))
+    const input = page([cover, path])
+    input.root.children![0]!.hidden = true
+    input.root.children!.push(
+      {
+        id: 'hidden-group',
+        type: 'section',
+        hidden: true,
+        children: [{ id: 'hidden-picture', type: 'image', attributes: { src: path } }],
+      },
+      {
+        id: 'void-tag',
+        type: 'section',
+        tagName: 'hr',
+        children: [{ id: 'omitted-picture', type: 'image', attributes: { src: cover } }],
+      },
+    )
+    const expected = structuredClone(input)
+    expected.root.children![0]!.attributes!.src =
+      'data:image/webp;base64,' + coverBytes.toString('base64')
+    expected.root.children![1]!.attributes!.src = pngData
+    expected.root.children![2]!.children![0]!.attributes!.src = pngData
+    expect(await prepare(request)(input, signal())).toEqual(expected)
+    expect(request.mock.calls.map(([url]) => url)).toEqual([origin + cover, origin + path])
+  })
+
+  it.each([
+    [() => imageResponse(png, 'image/png', 404), 'Invalid image response'],
+    [() => imageResponse(png, 'image/png', 206), 'Invalid image response'],
+    [() => imageResponse(png, 'image/svg+xml'), 'Invalid image response'],
+    [() => imageResponse(png, 'image/jpeg'), 'Image type mismatch'],
+    [
+      () => new Response('<html>Sign in</html>', { headers: { 'Content-Type': 'image/png' } }),
+      'Image type mismatch',
+    ],
+    [
+      () => Object.defineProperty(imageResponse(png, 'image/png'), 'redirected', { value: true }),
+      'Invalid image response',
+    ],
+  ] as const)(
+    'rejects failed, partial, redirected or mislabeled image responses (%#)',
+    async (make, reason) => {
+      const request = vi.fn<typeof fetch>().mockResolvedValue(make())
+      await expect(prepare(request)(page([path]), signal())).rejects.toThrow(reason)
+    },
+  )
+
+  it('an invalid raster fails decoding and a later download can retry without changing the input', async () => {
+    vi.mocked(createImageBitmap).mockRejectedValueOnce(new Error('Undecodable pixels'))
+    const request = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => imageResponse(png, 'image/png'))
+    const input = page([path]),
+      download = prepare(request)
+    await expect(download(input, signal())).rejects.toThrow('Undecodable pixels')
+    expect(input).toEqual(page([path]))
+    expect(await download(input, signal())).toEqual(page([pngData]))
+  })
+
+  it('counts actual streamed bytes and repeated uses towards the output budget', async () => {
+    const bytes = new Uint8Array(4 * 1024 * 1024)
+    bytes.set(png)
+    const request = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => imageResponse(bytes, 'image/png'))
+    // Five references to a single 4 MiB file would expand to over 16 MiB before Base64.
+    await expect(prepare(request)(page(Array(5).fill(path)), signal())).rejects.toThrow('limit')
+    expect(request).toHaveBeenCalledOnce()
+    const canceled = vi.fn()
+    const response = new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array(4 * 1024 * 1024 + 1))
+        },
+        cancel: canceled,
+      }),
+      { headers: { 'Content-Type': 'image/png', 'Content-Length': '1' } },
+    )
+    request.mockResolvedValueOnce(response)
+    await expect(prepare(request)(page([path]), signal())).rejects.toThrow('limit')
+    expect(canceled).toHaveBeenCalledOnce()
+  })
+
+  it('cancellation skips future requests and releases a pending response stream', async () => {
+    const abort = new AbortController()
+    let reading!: () => void
+    const started = new Promise<void>((resolve) => {
+      reading = resolve
+    })
+    const canceled = vi.fn()
+    const stream = new ReadableStream(
+      {
+        pull() {
+          reading()
+        },
+        cancel: canceled,
+      },
+      { highWaterMark: 0 },
+    )
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(stream, { headers: { 'Content-Type': 'image/png' } }))
+    const job = prepare(request)(page([path, cover]), abort.signal)
+    await started
+    abort.abort()
+    await expect(job).rejects.toMatchObject({ name: 'AbortError' })
+    expect(canceled).toHaveBeenCalledOnce()
+    expect(request).toHaveBeenCalledOnce()
+    await expect(prepare(request)(page([path]), abort.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    expect(request).toHaveBeenCalledOnce()
+  })
+})
 
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
@@ -270,6 +498,17 @@ describe('Laravel HTTP ProjectStore', () => {
 })
 
 describe('Laravel HTTP AssetStore', () => {
+  it('offers another file for invalid uploads and leaves network failures retryable', () => {
+    const store = createHttpAssetStore({ csrfToken: 'csrf' })
+    expect(store.uploadAccept).toBe('image/png,image/jpeg,image/webp')
+    for (const status of [413, 422]) {
+      const feedback = store.describeUploadError!(new HttpError(status, 'Upload asset'))
+      expect(feedback?.retryable).toBe(false)
+      expect(feedback?.message).toContain('圖片')
+    }
+    expect(store.describeUploadError!(new TypeError('Network failure'))).toBeUndefined()
+  })
+
   it('validates the list and requests uncached same-origin JSON', async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValueOnce(json([asset]))
     const store = createHttpAssetStore({ csrfToken: 'csrf', fetch: request })

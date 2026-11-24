@@ -13,6 +13,7 @@ class AuthTest extends TestCase
 
     public function test_editor_requires_login_and_login_page_discloses_public_images(): void
     {
+        $this->withoutVite();
         $this->get('/editor/activity')->assertRedirect('/login');
         $this->get('/login')->assertOk()->assertSee('知道圖片網址的人即可讀取圖片');
         $this->getJson('/sigil/pages/activity')->assertUnauthorized();
@@ -27,9 +28,10 @@ class AuthTest extends TestCase
         $previousId = session()->getId();
 
         $this->post('/login', ['email' => 'EDITOR@example.test', 'password' => 'Test-password-12345'])
-            ->assertRedirect('/editor/activity');
+            ->assertRedirect('/activities');
 
         $this->assertAuthenticatedAs($user);
+        $this->get('/login')->assertRedirect('/activities');
         $this->assertNotSame($previousId, session()->getId());
         $loggedInId = session()->getId();
         $loggedInToken = session()->token();
@@ -63,7 +65,7 @@ class AuthTest extends TestCase
 
         $this->postJson('/login', $credentials)->assertStatus(419);
         $this->post('/login', [...$credentials, '_token' => 'test-csrf-token'])
-            ->assertRedirect('/editor/activity');
+            ->assertRedirect('/activities');
         $this->assertAuthenticatedAs($user);
         $this->putJson('/sigil/pages/activity', ['baseRevision' => 0])->assertStatus(419);
         $this->postJson('/sigil/assets')->assertStatus(419);

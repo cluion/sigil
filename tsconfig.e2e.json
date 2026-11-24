@@ -10,6 +10,7 @@
     "playwright.compat.config.ts",
     "examples/laravel/e2e/**/*.ts",
     "e2e/**/*.ts",
+    "demo/activity/**/*.ts",
     "demo/rich-text.ts",
     "demo/fixtures/**/*.ts"
   ]

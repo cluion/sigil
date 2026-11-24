@@ -3,6 +3,114 @@ import { createEngine, createI18n } from '@cluion/sigil-core'
 import { createLayersPanel } from '../src/layers.js'
 
 describe('createLayersPanel', () => {
+  it('折疊子樹保留選取與其他分支的 DOM，外部選取可揭露並捲到指定列', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'root',
+          type: 'section',
+          children: [
+            {
+              id: 'group',
+              type: 'section',
+              children: [
+                {
+                  id: 'inner',
+                  type: 'section',
+                  children: [{ id: 'leaf', type: 'text', name: '初稿', hidden: true }],
+                },
+              ],
+            },
+            { id: 'sibling', type: 'text' },
+          ],
+        },
+      },
+    })
+    const panel = document.createElement('div')
+    const outside = document.createElement('button')
+    document.body.append(panel, outside)
+    const handle = createLayersPanel(engine, panel)
+    const row = (id: string) =>
+      panel.querySelector<HTMLElement>(`[role="treeitem"][data-layer-id="${id}"]`)
+    const key = (id: string, value: string) =>
+      row(id)!.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }))
+    try {
+      const sibling = row('sibling')
+      expect(row('group')?.getAttribute('aria-expanded')).toBe('true')
+      expect(row('leaf')?.hasAttribute('aria-expanded')).toBe(false)
+      engine.select('leaf')
+      row('inner')!.querySelector<HTMLButtonElement>('[data-layer-action="toggle"]')!.click()
+      expect(engine.getSelection()).toBe('leaf')
+      expect(row('leaf')).toBeNull()
+      row('group')!.focus()
+      key('group', 'ArrowLeft')
+      expect(row('group')?.getAttribute('aria-expanded')).toBe('false')
+      expect(document.activeElement).toBe(row('group'))
+      key('group', 'ArrowDown')
+      expect(document.activeElement).toBe(sibling)
+      key('sibling', 'ArrowUp')
+      key('group', 'ArrowRight')
+      expect(document.activeElement).toBe(row('group'))
+      expect(row('inner')?.getAttribute('aria-expanded')).toBe('false')
+      key('group', 'ArrowRight')
+      expect(document.activeElement).toBe(row('inner'))
+      key('inner', 'ArrowLeft')
+      expect(document.activeElement).toBe(row('group'))
+      key('group', 'ArrowLeft')
+      engine.update('leaf', { name: '已更名' })
+      engine.undo()
+      engine.redo()
+      expect(row('leaf')).toBeNull()
+      expect(row('sibling')).toBe(sibling)
+      outside.focus()
+      engine.select('leaf')
+      expect(row('group')?.getAttribute('aria-expanded')).toBe('true')
+      expect(row('inner')?.getAttribute('aria-expanded')).toBe('true')
+      expect(row('leaf')?.getAttribute('aria-label')).toBe('已更名')
+      expect(row('leaf')?.classList.contains('sigil-layer-row--hidden')).toBe(true)
+      expect(row('leaf')?.getAttribute('aria-selected')).toBe('true')
+      expect(row('leaf')?.tabIndex).toBe(0)
+      expect(document.activeElement).toBe(outside)
+      Object.defineProperties(panel, { clientHeight: { value: 100 }, scrollHeight: { value: 900 } })
+      vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 180, 100))
+      vi.spyOn(row('leaf')!, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 410, 180, 30))
+      engine.select('leaf')
+      expect(panel.scrollTop).toBe(340)
+    } finally {
+      handle.destroy()
+      engine.destroy()
+      panel.remove()
+      outside.remove()
+    }
+  })
+
+  it('大型文件只建立根與第一層，選取時只掛載目標所屬分支', () => {
+    const sections = Array.from({ length: 10 }, (_, i) => ({
+      id: `section-${i}`,
+      type: 'section',
+      children: Array.from({ length: 10 }, (_, j) => ({ id: `text-${i}-${j}`, type: 'text' })),
+    }))
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'root', type: 'section', children: sections } },
+    })
+    const panel = document.createElement('div')
+    const handle = createLayersPanel(engine, panel)
+    try {
+      expect(panel.querySelectorAll('[role="treeitem"]')).toHaveLength(11)
+      expect(panel.querySelectorAll('[aria-expanded="false"]')).toHaveLength(10)
+      engine.select('text-8-4')
+      expect(panel.querySelectorAll('[role="treeitem"]')).toHaveLength(21)
+      expect(panel.querySelector('[aria-selected="true"]')?.getAttribute('data-layer-id')).toBe(
+        'text-8-4',
+      )
+      expect(panel.querySelectorAll('[aria-expanded="false"]')).toHaveLength(9)
+    } finally {
+      handle.destroy()
+      engine.destroy()
+    }
+  })
+
   it('顯示節點並可選取', () => {
     const engine = createEngine({
       doc: {

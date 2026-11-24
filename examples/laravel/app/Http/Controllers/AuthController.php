@@ -46,7 +46,7 @@ class AuthController extends Controller
         RateLimiter::clear($key);
         $request->session()->regenerate();
 
-        return redirect()->intended('/editor/activity');
+        return redirect()->intended(route('activities'));
     }
 
     public function destroy(Request $request): RedirectResponse

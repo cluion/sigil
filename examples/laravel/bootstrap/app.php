@@ -13,7 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [App\Http\Middleware\SecurityHeaders::class]);
-        $middleware->redirectUsersTo('/editor/activity');
+        $middleware->redirectUsersTo('/activities');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

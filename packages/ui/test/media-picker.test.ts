@@ -37,6 +37,66 @@ function pickFile(dialog: HTMLElement, file: File): HTMLInputElement {
 const item: AssetItem = { id: 'image', name: 'Image', url: 'https://example.com/image.png' }
 
 describe('openMediaPicker', () => {
+  it('依名稱搜尋並保留目前圖片，清除搜尋後能選取其他圖片', async () => {
+    const onPick = vi.fn()
+    mountPicker({
+      assets: { list: () => [item, { id: '2', name: 'Spring Print', url: '/print.webp' }] },
+      currentUrl: item.url,
+      onPick,
+      onClose: vi.fn(),
+    })
+    const dialog = currentDialog()
+    const search = dialog.querySelector<HTMLInputElement>('input[type=search]')!
+    const status = dialog.querySelector<HTMLElement>('.sigil-media-status')!
+    await vi.waitFor(() => expect(search.hidden).toBe(false))
+    const current = dialog.querySelector<HTMLButtonElement>('[aria-current=true]')!
+    expect(current.textContent).toContain('使用中')
+    expect(current.querySelector('img')?.alt).toBe('')
+    search.value = ' winter '
+    search.dispatchEvent(new Event('input'))
+    expect(status.textContent).toContain('沒有符合的圖片')
+    expect(current.hidden).toBe(true)
+    search.value = ' PRINT '
+    search.dispatchEvent(new Event('input'))
+    expect(dialog.querySelectorAll('.sigil-media-card:not([hidden])')).toHaveLength(1)
+    expect(status.hidden).toBe(true)
+    search.value = ''
+    search.dispatchEvent(new Event('input'))
+    expect(current.hidden).toBe(false)
+    dialog.querySelector<HTMLButtonElement>('.sigil-media-card:last-child')!.click()
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ url: '/print.webp' }))
+  })
+
+  it('宿主可指定檔案類型與換檔提示，挑選其他檔案後可繼續', async () => {
+    const onPick = vi.fn()
+    const upload = vi
+      .fn<NonNullable<AssetStore['upload']>>()
+      .mockRejectedValueOnce(new RangeError('internal-limit'))
+      .mockResolvedValueOnce(item)
+    mountPicker({
+      assets: {
+        list: () => [],
+        uploadAccept: 'image/png',
+        describeUploadError: (error) =>
+          error instanceof RangeError
+            ? { message: '請改選較小的 PNG。', retryable: false }
+            : undefined,
+        upload,
+      },
+      onPick,
+      onClose: vi.fn(),
+    })
+    const dialog = currentDialog()
+    const input = pickFile(dialog, new File(['large'], 'large.png'))
+    expect(input.accept).toBe('image/png')
+    await vi.waitFor(() => expect(dialog.textContent).toContain('請改選較小的 PNG。'))
+    expect(dialog.textContent).not.toContain('internal-limit')
+    expect(dialog.querySelector<HTMLButtonElement>('.sigil-media-upload-retry')?.hidden).toBe(true)
+    expect(onPick).not.toHaveBeenCalled()
+    pickFile(dialog, new File(['small'], 'small.png'))
+    await vi.waitFor(() => expect(onPick).toHaveBeenCalledExactlyOnceWith(item))
+  })
+
   it('點選項目觸發 onPick', async () => {
     const assets: AssetStore = {
       list: () => [{ id: '1', url: 'https://example.com/a.png', name: 'A' }],

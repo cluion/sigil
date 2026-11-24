@@ -24,6 +24,14 @@ export function createHttpAssetStore(options: {
   const endpoint = '/sigil/assets'
 
   return {
+    uploadAccept: 'image/png,image/jpeg,image/webp',
+    describeUploadError(error) {
+      if (!(error instanceof HttpError)) return
+      if (error.status === 413)
+        return { message: '圖片檔案過大。請縮小檔案後再選取。', retryable: false }
+      if (error.status === 422)
+        return { message: '請選擇符合尺寸與容量限制的 PNG、JPEG 或 WebP 圖片。', retryable: false }
+    },
     async list() {
       const response = await request(endpoint, {
         credentials: 'same-origin',

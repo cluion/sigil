@@ -72,6 +72,10 @@ export function blockButton(label = '按鈕'): ComponentNode {
   return { id: createId(), type: 'button', content: label }
 }
 
+function blockLink(): ComponentNode {
+  return { ...blockText('連結'), tagName: 'a', attributes: { href: '#' } }
+}
+
 export function blockColumn(): ComponentNode {
   return { id: createId(), type: 'column', children: [] }
 }
@@ -106,6 +110,7 @@ export const basicBlocks: Record<string, BlockFactory> = {
   text: blockText,
   image: blockImage,
   button: blockButton,
+  link: blockLink,
   column: blockColumn,
 }
 
@@ -150,5 +155,13 @@ export const basicBlockDefs: BlockDefinition[] = [
     icon: '▢',
     keywords: ['button', 'btn', 'cta'],
     create: () => blockButton(),
+  }),
+  defineBlock({
+    id: 'link',
+    label: '連結',
+    category: '內容',
+    icon: '↗',
+    keywords: ['link', 'url', 'anchor', '網址'],
+    create: blockLink,
   }),
 ]

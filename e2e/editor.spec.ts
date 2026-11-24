@@ -20,6 +20,146 @@ interface DemoApp {
   toJSON(): { root: DemoNode }
 }
 
+test('畫布元件工具列跟隨捲動，可選父層、複製、刪除及復原', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'sigil-demo',
+      JSON.stringify({
+        version: 1,
+        root: {
+          id: 'tool-root',
+          type: 'section',
+          style: { padding: '160px 24px 1000px' },
+          children: [
+            {
+              id: 'tool-group',
+              type: 'section',
+              name: '活動資訊',
+              children: [
+                { id: 'tool-title', type: 'text', name: '活動標題', content: '週末工作坊' },
+              ],
+            },
+            {
+              id: 'tool-locked',
+              type: 'text',
+              name: '受保護的資訊',
+              content: '聯絡我們',
+              locked: true,
+            },
+          ],
+        },
+      }),
+    )
+  })
+  await page.getByRole('button', { name: '讀 localStorage', exact: true }).click()
+  const frame = page.frameLocator('iframe[title="編輯畫布"]')
+  const toolbar = page.getByRole('toolbar', { name: '元件操作', exact: true })
+  const title = frame.getByText('週末工作坊', { exact: true })
+  const box = await title.boundingBox()
+  if (!box) throw new Error('找不到活動標題')
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(toolbar).toBeVisible()
+  await expect(toolbar).toContainText('活動標題')
+  const beforeScroll = await toolbar.boundingBox()
+  if (!beforeScroll) throw new Error('找不到畫布工具列')
+  await frame.locator('body').evaluate((el) => el.ownerDocument.defaultView!.scrollBy(0, 50))
+  await expect
+    .poll(async () => Math.round(beforeScroll.y - ((await toolbar.boundingBox())?.y ?? 0)))
+    .toBe(50)
+  const parent = toolbar.getByRole('button', { name: '選取父層' })
+  await parent.focus()
+  await parent.press('Enter')
+  await expect(toolbar).toContainText('活動資訊')
+  await parent.press('ArrowRight')
+  const duplicate = toolbar.getByRole('button', { name: '複製元件' })
+  await expect(duplicate).toBeFocused()
+  await duplicate.press('Enter')
+  await expect(title).toHaveCount(2)
+  await expect(frame.locator('[data-sigil-id="tool-group"] + [data-sigil-selected]')).toContainText(
+    '週末工作坊',
+  )
+  await duplicate.press('ArrowRight')
+  const remove = toolbar.getByRole('button', { name: '刪除元件' })
+  await expect(remove).toBeFocused()
+  await remove.press('Enter')
+  await expect(title).toHaveCount(1)
+  await expect(toolbar).toBeFocused()
+  await page.getByRole('button', { name: '復原', exact: true }).click()
+  await expect(title).toHaveCount(2)
+  await page.getByRole('button', { name: '重做', exact: true }).click()
+  await expect(title).toHaveCount(1)
+  const locked = await frame.getByText('聯絡我們', { exact: true }).boundingBox()
+  if (!locked) throw new Error('找不到鎖定元件')
+  await page.mouse.click(locked.x + locked.width / 2, locked.y + locked.height / 2)
+  await expect(duplicate).toBeDisabled()
+  await expect(toolbar.getByRole('button', { name: '刪除元件' })).toBeDisabled()
+  await parent.click()
+  await expect(toolbar.getByRole('button')).toHaveCount(0)
+  await page.getByRole('button', { name: '預覽', exact: true }).click()
+  await expect(toolbar).toBeHidden()
+  expect(errors).toEqual([])
+})
+
+test('隱藏節點符合預覽，兩份匯出片段各自保留桌面、平板與手機樣式', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+  const fragments: string[] = []
+  for (const [name, desktop, tablet, mobile] of [
+    ['春季活動', '32px', '24px', '16px'],
+    ['夏季活動', '40px', '20px', '8px'],
+  ] as const) {
+    const doc = {
+      version: 1,
+      root: {
+        id: 'root',
+        type: 'section',
+        name,
+        style: { padding: desktop },
+        responsiveStyles: { tablet: { padding: tablet }, mobile: { padding: mobile } },
+        children: [
+          { id: 'title', type: 'text', content: name },
+          { id: 'draft', type: 'text', hidden: true, content: '草稿文字' },
+        ],
+      },
+    }
+    await page.evaluate((doc) => localStorage.setItem('sigil-demo', JSON.stringify(doc)), doc)
+    await page.getByRole('button', { name: '讀 localStorage' }).click()
+    const draft = page.frameLocator('iframe[title="編輯畫布"]').getByText('草稿文字')
+    await expect(draft).toBeVisible()
+    await page.getByRole('button', { name: '預覽', exact: true }).click()
+    await expect(draft).toBeHidden()
+    await page.getByRole('button', { name: '編輯', exact: true }).click()
+    await expect(draft).toBeVisible()
+    await page.getByRole('button', { name: '匯出', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '匯出 HTML' })
+    fragments.push(await dialog.locator('textarea').inputValue())
+    await page.keyboard.press('Escape')
+  }
+
+  await page.route('**/exported-fragments', (route) =>
+    route.fulfill({
+      contentType: 'text/html;charset=utf-8',
+      body: ['<!doctype html><meta charset="utf-8">', ...fragments].join('\n'),
+    }),
+  )
+  await page.goto('/exported-fragments')
+  const spring = page.locator('section').filter({ hasText: '春季活動' })
+  const summer = page.locator('section').filter({ hasText: '夏季活動' })
+  for (const [width, first, second] of [
+    [1024, '32px', '40px'],
+    [768, '24px', '20px'],
+    [375, '16px', '8px'],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 })
+    await expect(spring).toHaveCSS('padding', first)
+    await expect(summer).toHaveCSS('padding', second)
+  }
+  await expect(spring.getByText('草稿文字')).toBeHidden()
+  expect(errors).toEqual([])
+})
+
 test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.goto('/')
@@ -44,9 +184,13 @@ test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async
   await expect(layerRows.nth(1)).toBeFocused()
 
   const layerCount = await layerLabels.count()
+  const addBlocks = page.getByRole('button', { name: '新增區塊', exact: true })
+  const pageStructure = page.getByRole('button', { name: '頁面結構', exact: true })
+  await addBlocks.click()
   const textBlock = page.getByRole('button', { name: '插入 文字', exact: true })
   await textBlock.focus()
   await textBlock.press('Enter')
+  await pageStructure.click()
   await expect(layerLabels).toHaveCount(layerCount + 1)
   await expect(page.locator('.sigil-layer-row--active .sigil-layer-label')).toHaveText('text')
 
@@ -79,12 +223,33 @@ test('桌面主流程：右鍵排序、Undo／Redo 與雙擊文字編輯', async
     .frameLocator('iframe[title="編輯畫布"]')
     .locator('[contenteditable="true"]')
   await expect(inlineEditor).toHaveText('點我編輯')
+  await inlineEditor.dispatchEvent('compositionstart')
+  await inlineEditor.fill('E2E 標')
+  await inlineEditor.dispatchEvent('keydown', { key: 'Enter', isComposing: true })
+  await inlineEditor.dispatchEvent('keydown', { key: 'Escape', isComposing: true })
+  await expect(inlineEditor).toBeFocused()
   await inlineEditor.fill('E2E 標題')
+  await inlineEditor.dispatchEvent('compositionend', { data: '標題' })
   await inlineEditor.press('Enter')
   await expect(
     page.frameLocator('iframe[title="編輯畫布"]').getByText('E2E 標題', { exact: true }),
   ).toBeVisible()
   await expect(inlineEditor).toHaveCount(0)
+
+  await addBlocks.click()
+  const blockBox = await textBlock.boundingBox()
+  const target = await page
+    .frameLocator('iframe[title="編輯畫布"]')
+    .getByText('E2E 標題', { exact: true })
+    .boundingBox()
+  if (!blockBox || !target) throw new Error('找不到拖放區塊或畫布標題')
+  await page.mouse.move(blockBox.x + blockBox.width / 2, blockBox.y + blockBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(target.x + 3, target.y + target.height / 2, { steps: 12 })
+  await page.mouse.up()
+  await pageStructure.click()
+  await expect(layerLabels).toHaveCount(layerCount + 2)
+  await expect(layerLabels.nth(2)).toHaveText('text')
 
   const exportButton = page.getByRole('button', { name: '匯出', exact: true })
   await exportButton.focus()
@@ -173,7 +338,10 @@ test('範本流程：另存、重命名、再插入與刪除', async ({ page }) 
   const errors = await prepareDemo(page)
   await page.goto('/')
 
+  const library = page.getByRole('button', { name: '新增區塊', exact: true })
+  await library.click()
   await expect(page.getByRole('button', { name: 'Hero 組合 範本操作', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '頁面結構', exact: true }).click()
   await page.getByRole('treeitem', { name: '主按鈕', exact: true }).click()
 
   page.once('dialog', async (dialog) => {
@@ -181,6 +349,7 @@ test('範本流程：另存、重命名、再插入與刪除', async ({ page }) 
     await dialog.accept('E2E 範本')
   })
   await page.getByRole('button', { name: '存為範本', exact: true }).click()
+  await library.click()
   await expect(page.getByRole('button', { name: 'E2E 範本 範本操作', exact: true })).toBeVisible()
 
   const search = page.getByRole('searchbox', { name: '搜尋區塊', exact: true })
@@ -194,10 +363,12 @@ test('範本流程：另存、重命名、再插入與刪除', async ({ page }) 
   await expect(page.getByRole('button', { name: 'E2E 已改名 範本操作', exact: true })).toBeVisible()
   await expect(search).toHaveValue('E2E')
 
-  const layerRows = page.getByRole('tree', { name: '圖層', exact: true }).getByRole('treeitem')
-  const layerCount = await layerRows.count()
-  await page.getByRole('button', { name: '插入 E2E 已改名', exact: true }).press('Enter')
-  await expect(layerRows).toHaveCount(layerCount + 1)
+  const canvasButtons = page
+    .frameLocator('iframe[title="編輯畫布"]')
+    .locator('button[data-sigil-id]')
+  const previousCount = await canvasButtons.count()
+  await page.getByRole('button', { name: '插入 E2E 已改名', exact: true }).click()
+  await expect(canvasButtons).toHaveCount(previousCount + 1)
 
   await page.getByRole('button', { name: 'E2E 已改名 範本操作', exact: true }).click()
   page.once('dialog', async (dialog) => {
@@ -208,7 +379,7 @@ test('範本流程：另存、重命名、再插入與刪除', async ({ page }) 
   await expect(page.getByRole('button', { name: 'E2E 已改名 範本操作', exact: true })).toHaveCount(
     0,
   )
-  await expect(layerRows).toHaveCount(layerCount + 1)
+  await expect(canvasButtons).toHaveCount(previousCount + 1)
   expect(errors).toEqual([])
 })
 
@@ -229,6 +400,19 @@ test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', 
 
   await expect(rich).toHaveAttribute('contenteditable', 'true')
   await expect(rich).toHaveAttribute('aria-label', '富文字內容')
+  await rich.dispatchEvent('compositionstart')
+  await rich.dispatchEvent('keydown', { key: 'Enter', ctrlKey: true, isComposing: true })
+  await rich.dispatchEvent('keydown', { key: 'Escape', isComposing: true })
+  await expect(rich).toHaveAttribute('contenteditable', 'true')
+  await rich.dispatchEvent('compositionend')
+  await rich.locator('p').fill('取消這次修改')
+  await rich.press('Escape')
+  await expect(rich.locator('strong')).toHaveText('粗體')
+  await expect(rich).toBeFocused()
+  await page.mouse.dblclick(richBox.x + richBox.width / 2, richBox.y + richBox.height / 2)
+  await rich.press('Control+Enter')
+  await expect(rich).not.toHaveAttribute('contenteditable', 'true')
+  await page.mouse.dblclick(richBox.x + richBox.width / 2, richBox.y + richBox.height / 2)
   await rich.locator('p').fill('富文字 E2E')
   await rich.locator('p').selectText()
   await frame.getByRole('button', { name: '粗體', exact: true }).click()
@@ -249,6 +433,7 @@ test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', 
 
   page.once('dialog', async (dialog) => dialog.accept('富文字範本'))
   await page.getByRole('button', { name: '存為範本', exact: true }).click()
+  await page.getByRole('button', { name: '新增區塊', exact: true }).click()
   await expect(page.getByRole('button', { name: '富文字範本 範本操作', exact: true })).toBeVisible()
   await page.getByRole('button', { name: '插入 富文字範本', exact: true }).press('Enter')
   await expect(frame.getByText('富文字 E2E', { exact: true })).toHaveCount(2)
@@ -304,6 +489,7 @@ test('Marketing Hero：鍵盤插入、語意輸出與 responsive 預設', async 
   const errors = await prepareDemo(page)
   await page.goto('/')
 
+  await page.getByRole('button', { name: '新增區塊', exact: true }).click()
   const insertHero = page.getByRole('button', { name: '插入 Hero 主視覺', exact: true })
   await insertHero.focus()
   await insertHero.press('Enter')
@@ -316,7 +502,7 @@ test('Marketing Hero：鍵盤插入、語意輸出與 responsive 預設', async 
   await expect(hero.locator('button[type="button"]')).toHaveText('立即開始')
   await expect(hero.locator('h1')).toHaveCSS('font-size', '56px')
 
-  await page.getByRole('button', { name: 'Mobile', exact: true }).click()
+  await page.getByRole('button', { name: '手機', exact: true }).click()
   await expect(hero.locator('h1')).toHaveCSS('font-size', '36px')
   await expect(hero).toHaveCSS('min-height', '416px')
 
@@ -349,6 +535,7 @@ test('Marketing Pricing：三方案、推薦狀態、responsive grid 與安全�
   const errors = await prepareDemo(page)
   await page.goto('/')
 
+  await page.getByRole('button', { name: '新增區塊', exact: true }).click()
   const insertPricing = page.getByRole('button', { name: '插入 Pricing 方案價格', exact: true })
   await insertPricing.focus()
   await insertPricing.press('Enter')
@@ -365,9 +552,9 @@ test('Marketing Pricing：三方案、推薦狀態、responsive grid 與安全�
   await expect(plans.nth(2)).toContainText('企業')
   await expect.poll(() => gridColumnCount(planList)).toBe(3)
 
-  await page.getByRole('button', { name: 'Tablet', exact: true }).click()
+  await page.getByRole('button', { name: '平板', exact: true }).click()
   await expect.poll(() => gridColumnCount(planList)).toBe(2)
-  await page.getByRole('button', { name: 'Mobile', exact: true }).click()
+  await page.getByRole('button', { name: '手機', exact: true }).click()
   await expect.poll(() => gridColumnCount(planList)).toBe(1)
   await expect(plans.nth(1)).toHaveCSS('transform', 'none')
 
@@ -401,6 +588,7 @@ test('Marketing FAQ：語意問答、responsive grid 與安全輸出', async ({ 
   const errors = await prepareDemo(page)
   await page.goto('/')
 
+  await page.getByRole('button', { name: '新增區塊', exact: true }).click()
   const insertFAQ = page.getByRole('button', { name: '插入 FAQ 常見問題', exact: true })
   await insertFAQ.focus()
   await insertFAQ.press('Enter')
@@ -417,9 +605,9 @@ test('Marketing FAQ：語意問答、responsive grid 與安全輸出', async ({ 
   await expect(items.last().locator('dd')).toContainText('不綁定後端技術')
   await expect.poll(() => gridColumnCount(faqList)).toBe(2)
 
-  await page.getByRole('button', { name: 'Tablet', exact: true }).click()
+  await page.getByRole('button', { name: '平板', exact: true }).click()
   await expect.poll(() => gridColumnCount(faqList)).toBe(1)
-  await page.getByRole('button', { name: 'Mobile', exact: true }).click()
+  await page.getByRole('button', { name: '手機', exact: true }).click()
   await expect.poll(() => gridColumnCount(faqList)).toBe(1)
 
   await page.getByRole('button', { name: '匯出', exact: true }).click()
@@ -483,16 +671,53 @@ test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) =>
 
   await settingsToggle.click()
   await expect(settings).toHaveAttribute('data-open', 'true')
-  await settings.locator('.sigil-layer-label').first().click()
-  await expect(settings.locator('.sigil-tab')).toHaveCount(3)
+  await expect(settings.getByRole('button', { name: '關閉面板' })).toBeFocused()
+  const targets = app.locator('.sigil-topbar button:visible, [data-open="true"] .sigil-panel-close')
+  const smallestTarget = await targets.evaluateAll((buttons) =>
+    Math.min(
+      ...buttons.flatMap((button) => {
+        const { width, height } = button.getBoundingClientRect()
+        return [width, height]
+      }),
+    ),
+  )
+  expect(smallestTarget).toBeGreaterThanOrEqual(44)
+  expect((await app.locator('.sigil-canvas-wrap').boundingBox())!.height).toBeGreaterThan(300)
+  const contentTab = settings.getByRole('tab', { name: '內容' })
+  await contentTab.focus()
+  await contentTab.press('ArrowRight')
+  const styleTab = settings.getByRole('tab', { name: '樣式' })
+  await expect(styleTab).toBeFocused()
+  await expect(settings.getByRole('tabpanel', { name: '樣式' })).toBeVisible()
+  await styleTab.press('Home')
+  await expect(contentTab).toBeFocused()
+  const heroLayer = settings.getByRole('treeitem', { name: '主圖', exact: true })
+  await heroLayer.click()
+  const pick = settings.getByRole('button', { name: '選圖', exact: true })
+  await pick.click()
+  const media = page.getByRole('dialog', { name: '媒體庫', exact: true })
+  await expect(media).toBeVisible()
+  await media.getByRole('button', { name: '關閉', exact: true }).press('Delete')
+  await expect(heroLayer).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(media).toHaveCount(0)
+  await expect(pick).toBeFocused()
+  await expect(settings).toHaveAttribute('data-open', 'true')
   await page.keyboard.press('Escape')
   await expect(settings).toHaveAttribute('data-open', 'false')
   await expect(settingsToggle).toBeFocused()
 
   const theme = page.locator('.sigil-topbar button[title="主題"]')
+  await page.getByRole('button', { name: '更多工具', exact: true }).click()
   await theme.click()
   await theme.click()
   await expect(app).toHaveClass(/sigil-theme-dark/)
+  await settingsToggle.click()
+  const selectedRow = settings.getByRole('treeitem', { selected: true })
+  const accent = await app
+    .locator('.sigil-topbar-brand')
+    .evaluate((el) => getComputedStyle(el).color)
+  await expect(selectedRow).toHaveCSS('color', accent)
 
   await expect
     .poll(() =>
@@ -519,7 +744,7 @@ async function gridColumnCount(locator: import('@playwright/test').Locator): Pro
 test('runtime locale：保留 App 狀態、套用 override 與更新完整介面', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.goto('/')
-  await page.getByRole('button', { name: 'Tablet', exact: true }).click()
+  await page.getByRole('button', { name: '平板', exact: true }).click()
   await page.evaluate(() => {
     const app = (window as unknown as { __sigil: DemoApp }).__sigil
     app.engine.select('rich-demo')
@@ -567,7 +792,10 @@ test('runtime locale：保留 App 狀態、套用 override 與更新完整介面
   await expect(app).toHaveAttribute('data-layout', 'desktop')
   await expect(page.locator('.sigil-topbar-brand')).toHaveText('Sigil Demo')
   await expect(page.locator('.sigil-status-dirty')).toHaveText('Unsaved')
-  await expect(page.locator('[data-device="tablet"]')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Tablet', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Save as Template', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible()
@@ -575,11 +803,13 @@ test('runtime locale：保留 App 狀態、套用 override 與更新完整介面
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
   const layerTree = page.getByRole('tree', { name: 'Layers', exact: true })
   await expect(layerTree).toBeVisible()
+  await page.getByRole('button', { name: 'Add blocks', exact: true }).click()
   await expect(page.getByRole('searchbox', { name: 'Search blocks', exact: true })).toHaveAttribute(
     'placeholder',
     'Search blocks…',
   )
   await expect(page.getByRole('button', { name: 'Insert 文字', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Page structure', exact: true }).click()
   await expect(layerTree.getByRole('button', { name: 'Hide', exact: true }).first()).toBeVisible()
   await expect(layerTree.getByRole('button', { name: 'Lock', exact: true }).first()).toBeVisible()
   await page.getByRole('button', { name: 'Keys', exact: true }).click()
@@ -594,7 +824,10 @@ test('runtime locale：保留 App 狀態、套用 override 與更新完整介面
 
   await layerTree.getByRole('treeitem', { name: '主圖', exact: true }).click()
   await expect(page.locator('.sigil-tab')).toHaveText(['Content', 'Style', 'Advanced'])
-  await expect(page.locator('.sigil-inspector .sigil-field-label')).toHaveText('Image')
+  await expect(page.locator('.sigil-inspector .sigil-field-label')).toHaveText([
+    'Image',
+    'Alternative text',
+  ])
   await page.getByRole('button', { name: 'Choose image', exact: true }).click()
   const media = page.getByRole('dialog', { name: 'Media library', exact: true })
   await expect(media).toBeVisible()

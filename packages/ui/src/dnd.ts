@@ -450,20 +450,29 @@ function neighborsOf(
 export function startInsertDrag(opts: {
   engine: Engine
   iframe: HTMLIFrameElement
-  node: ComponentNode
+  node: ComponentNode | (() => ComponentNode)
   pointerId: number
+  origin?: { x: number; y: number }
+  onDragStart?: () => void
+  onInsert?: (node: ComponentNode) => void
 }): { cancel: () => void } {
   const { engine, iframe, node, pointerId } = opts
   const indicator = makeIndicator(iframe)
   const guides = makeGuides(iframe)
-  let target: DropTarget | null = null
-  setDragCursor('grabbing')
+  let dragging = !opts.origin
+  let active = true
+  if (dragging) setDragCursor('grabbing')
 
   function onMove(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
+    if (!dragging && opts.origin) {
+      if (Math.hypot(e.clientX - opts.origin.x, e.clientY - opts.origin.y) < 6) return
+      dragging = true
+      opts.onDragStart?.()
+    }
     autoScrollNearEdge(iframe, e.clientX, e.clientY)
     const root = engine.getTree()
-    target = computeDrop(iframe, root, e.clientX, e.clientY)
+    const target = computeDrop(iframe, root, e.clientX, e.clientY)
     const overCanvas = isOverIframe(iframe, e.clientX, e.clientY)
     const doc = iframe.contentDocument
     if (target) {
@@ -493,17 +502,30 @@ export function startInsertDrag(opts: {
   function onUp(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
     cleanup()
-    if (target) engine.insert(target.parentId, node, target.index)
+    if (dragging && isOverIframe(iframe, e.clientX, e.clientY)) {
+      const target = computeDrop(iframe, engine.getTree(), e.clientX, e.clientY)
+      if (!target) return
+      const block = typeof node === 'function' ? node() : node
+      engine.insert(target.parentId, block, target.index)
+      opts.onInsert?.(block)
+    }
+  }
+  function onCancel(e: PointerEvent): void {
+    if (e.pointerId === pointerId) cleanup()
   }
   function cleanup(): void {
+    if (!active) return
+    active = false
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onCancel)
     indicator.clear()
     guides.clear()
-    setDragCursor(null)
+    if (dragging) setDragCursor(null)
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onCancel)
   return { cancel: cleanup }
 }
 

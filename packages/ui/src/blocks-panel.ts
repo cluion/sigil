@@ -1,4 +1,5 @@
 import type { Engine, ComponentNode, I18n } from '@cluion/sigil-core'
+import { resolveHtmlIdConflicts } from '@cluion/sigil-core'
 import { openContextMenu } from './context-menu.js'
 import { startInsertDrag } from './dnd.js'
 import { subscribeLocale, uiText } from './i18n.js'
@@ -97,12 +98,15 @@ export function createBlocksPanel(
   let localeRefreshPending = false
   let destroyed = false
   let closeActionsMenu: (() => void) | null = null
+  let insertDrag: ReturnType<typeof startInsertDrag> | undefined
 
   function defaultCategory(): string {
     return uiText(opts?.i18n, 'blocks.default_category', '一般')
   }
 
   function renderList(filter: string): void {
+    insertDrag?.cancel()
+    insertDrag = undefined
     closeActionsMenu?.()
     closeActionsMenu = null
     list.replaceChildren()
@@ -133,7 +137,8 @@ export function createBlocksPanel(
         const row = document.createElement('div')
         row.className = 'sigil-block-row'
         row.dataset.blockId = def.id
-        const item = document.createElement('div')
+        const item = document.createElement('button')
+        item.type = 'button'
         item.className = 'sigil-block-item'
         item.dataset.blockId = def.id
         item.setAttribute('role', 'button')
@@ -141,7 +146,6 @@ export function createBlocksPanel(
           'aria-label',
           `${uiText(opts?.i18n, 'blocks.insert', '插入')} ${def.label}`,
         )
-        item.tabIndex = 0
         row.appendChild(item)
 
         if (def.icon) {
@@ -278,9 +282,32 @@ export function createBlocksPanel(
           row.appendChild(trigger)
         }
 
+        const createBlock = () => resolveHtmlIdConflicts(def.create(), engine.getTree())
+        let dragged = false
         item.addEventListener('pointerdown', (e: PointerEvent) => {
-          e.preventDefault()
-          startInsertDrag({ engine, iframe, node: def.create(), pointerId: e.pointerId })
+          if (e.button !== 0 || !e.isPrimary) return
+          insertDrag?.cancel()
+          dragged = false
+          insertDrag = startInsertDrag({
+            engine,
+            iframe,
+            node: createBlock,
+            pointerId: e.pointerId,
+            origin: { x: e.clientX, y: e.clientY },
+            onDragStart: () => {
+              dragged = true
+            },
+            onInsert: (block) => engine.select(block.id),
+          })
+        })
+        const insert = () => {
+          const node = createBlock()
+          engine.insert(engine.getTree().id, node)
+          engine.select(node.id)
+        }
+        item.addEventListener('click', (e) => {
+          if (!dragged || e.detail === 0) insert()
+          dragged = false
         })
         item.addEventListener('contextmenu', (e) => {
           if (!openItemActions) return
@@ -298,9 +325,7 @@ export function createBlocksPanel(
           }
           if (e.key !== 'Enter' && e.key !== ' ') return
           e.preventDefault()
-          const node = def.create()
-          engine.insert(engine.getTree().id, node)
-          engine.select(node.id)
+          insert()
         })
         list.appendChild(row)
       }
@@ -357,6 +382,7 @@ export function createBlocksPanel(
   renderList('')
   return {
     destroy() {
+      insertDrag?.cancel()
       destroyed = true
       localeRefreshPending = false
       unsubLocale()

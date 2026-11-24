@@ -2,13 +2,14 @@
 
 ## 現有行為測試
 
-`pnpm test:e2e` 包含 12 個 Chromium 案例，均由 Vite `csp-e2e` 模式提供 CSP／Trusted Types enforcement：
+`pnpm test:e2e` 包含 20 個 Chromium 案例，編輯器由 Vite `csp-e2e` 模式提供 CSP／Trusted Types enforcement：
 
-| 檔案                          | 範圍                                                                                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `editor.spec.ts`（9 個）      | 桌面編輯與鍵盤操作、範本管理、富文字、localStorage 額度不足／保存重試、Hero／Pricing／FAQ、390px 抽屜／焦點／overflow、runtime locale |
-| `security.spec.ts`（1 個）    | policy enforcement、可信 render／export／remount 路徑與 raw sink 阻擋                                                                 |
-| `persistence.spec.ts`（2 個） | HTTP 延遲儲存期間繼續編輯、再次儲存與重新載入，以及 HTTP 503 失敗後保留修改並重試                                                     |
+| 檔案                            | 範圍                                                                                                                             |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `editor.spec.ts`（11 個）       | 畫布工具列與捲動、點選與拖放區塊、桌面鍵盤操作、範本管理、富文字、保存重試、Marketing Blocks、390px 抽屜與焦點、語系、預覽與匯出 |
+| `security.spec.ts`（1 個）      | policy enforcement、可信 render／export／remount 路徑與 raw sink 阻擋                                                            |
+| `persistence.spec.ts`（2 個）   | HTTP 延遲儲存期間繼續編輯、再次儲存與重新載入，以及 HTTP 503 失敗後保留修改並重試                                                |
+| `activity-demo.spec.ts`（6 個） | 工作坊的草稿、儲存異常與手機觸控，裝置照片的更換、復原與重載，範本及裝置照片的下載檔離線解碼                                     |
 
 保存案例使用 `demo/fixtures/persistence.html` 的真實 App 與 HTTP adapter，由 Playwright 控制回應時機及錯誤；不依賴固定延遲。這些案例驗證前端保存契約，完整 Laravel 後端整合仍需另外驗收。
 

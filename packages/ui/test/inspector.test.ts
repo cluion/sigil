@@ -42,6 +42,8 @@ function mediaInspector(kind: 'image' | 'shortcode' | 'both') {
     zh: {},
     en: {
       'inspector.image': 'Image',
+      'inspector.embedded_image': 'Embedded image',
+      'inspector.replace_image_url': 'Paste an image URL to replace it',
       'form.pick_image': 'Choose image',
       'media.title': 'Media library',
       'media.uploading': 'Uploading…',
@@ -74,6 +76,228 @@ function startUpload(dialog: HTMLElement): void {
 }
 
 describe('createInspector — responsive style', () => {
+  it('版面、文字與外觀維持各自的展開狀態，切換元件、裝置與復原皆可繼續編輯', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: { id: 'page', type: 'section', children: [{ id: 'other', type: 'section' }] },
+      },
+    })
+    const box = document.createElement('div')
+    const inspector = createInspector(engine, box)
+    cleanups.push(() => {
+      inspector.destroy()
+      engine.destroy()
+    })
+    engine.select('page')
+    box.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]!.click()
+    const section = (name: string) =>
+      [...box.querySelectorAll<HTMLButtonElement>('.sigil-section-title button')].find(
+        (button) => button.textContent === name,
+      )!
+    const expanded = (name: string) => section(name).getAttribute('aria-expanded')
+    expect(expanded('版面')).toBe('true')
+    expect(expanded('文字')).toBe('false')
+    section('文字').click()
+    section('版面').click()
+    engine.select('other')
+    inspector.setDevice('tablet')
+    engine.update('other', { style: { color: 'blue' } })
+    engine.undo()
+    engine.redo()
+    expect(expanded('版面')).toBe('false')
+    expect(expanded('文字')).toBe('true')
+    const textPanel = box.querySelector<HTMLElement>(
+      `#${section('文字').getAttribute('aria-controls')}`,
+    )!
+    expect(textPanel.hidden).toBe(false)
+    expect(textPanel.querySelector('[data-style-property="color"]')).toBeTruthy()
+    expect(expanded('外觀')).toBe('false')
+    expect(engine.getSelection()).toBe('other')
+  })
+
+  it('依目前裝置顯示可用的 Flex 控制，保存自訂 CSS、繼承、其他樣式與歷程', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'page',
+          type: 'section',
+          style: { display: 'flow-root', gap: '3px' },
+          responsiveStyles: { tablet: { display: 'inline flex', 'flex-direction': 'row-reverse' } },
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const inspector = createInspector(engine, box, { device: 'mobile' })
+    cleanups.push(() => {
+      inspector.destroy()
+      engine.destroy()
+    })
+    engine.select('page')
+    box.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]!.click()
+    const select = (prop: string) =>
+      box.querySelector<HTMLSelectElement>(`select[data-style-property="${prop}"]`)!
+    const choose = (prop: string, value: string) => {
+      const control = select(prop)
+      control.value = value
+      control.dispatchEvent(new Event('change'))
+    }
+    const custom = () =>
+      box.querySelector<HTMLInputElement>('[aria-label="自訂 CSS 值 · 顯示方式"]')!
+    const visible = (prop: string) => !select(prop).closest('[hidden]')
+    expect(select('display').selectedOptions[0]?.textContent).toContain('inline flex')
+    expect(visible('flex-direction')).toBe(true)
+    choose('flex-direction', 'column')
+    choose('justify-content', 'space-between')
+    choose('align-items', 'center')
+    choose('gap', '1rem')
+    choose('display', 'flex')
+    expect(engine.toJSON().root.responsiveStyles?.mobile).toEqual({
+      'flex-direction': 'column',
+      'justify-content': 'space-between',
+      'align-items': 'center',
+      gap: '1rem',
+      display: 'flex',
+    })
+    expect(select('display').selectedOptions[0]?.textContent).toBe('彈性排列')
+    choose(
+      'display',
+      [...select('display').options].find((option) => option.textContent === '自訂 CSS 值')!.value,
+    )
+    expect(custom().hidden).toBe(false)
+    expect(engine.getTree().responsiveStyles?.mobile?.display).toBe('flex')
+    custom().value = 'inline-grid'
+    custom().dispatchEvent(new Event('input'))
+    expect(select('display').selectedOptions[0]?.textContent).toBe('自訂 CSS 值')
+    expect(visible('flex-direction')).toBe(false)
+    expect(visible('gap')).toBe(true)
+    engine.undo()
+    expect(select('display').value).toBe('flex')
+    engine.redo()
+    expect(custom().value).toBe('inline-grid')
+    box.querySelector<HTMLButtonElement>('[data-style-reset="display"]')!.click()
+    expect(select('display').value).toBe('')
+    expect(custom().hidden).toBe(true)
+    expect(visible('flex-direction')).toBe(true)
+    expect(engine.getTree().responsiveStyles?.mobile?.['flex-direction']).toBe('column')
+    engine.update('page', {
+      style: { width: '11rem' },
+      responsiveStyles: { tablet: { display: 'block' } },
+    })
+    expect(visible('gap')).toBe(false)
+    engine.update('page', { locked: true })
+    expect(select('display').disabled).toBe(true)
+    expect(custom().disabled).toBe(true)
+    expect(box.querySelector<HTMLButtonElement>('[data-style-reset="gap"]')?.disabled).toBe(true)
+    engine.update('page', { locked: false })
+    const detached = select('display')
+    inspector.setDevice('desktop')
+    detached.value = 'none'
+    detached.dispatchEvent(new Event('change'))
+    expect(custom().value).toBe('flow-root')
+    expect(engine.getTree().style).toEqual({ display: 'flow-root', gap: '3px', width: '11rem' })
+    expect(engine.getTree().responsiveStyles?.mobile?.display).toBeUndefined()
+  })
+
+  it('內距快速選項保留其他裝置、自訂值與復原歷程', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'page',
+          type: 'section',
+          style: { padding: '2rem' },
+          responsiveStyles: { tablet: { padding: '0.75rem' }, mobile: { gap: '0.5rem' } },
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const inspector = createInspector(engine, box, { device: 'mobile' })
+    cleanups.push(() => {
+      inspector.destroy()
+      engine.destroy()
+    })
+    engine.select('page')
+    box.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]!.click()
+    const button = (value: string) =>
+      box.querySelector<HTMLButtonElement>(
+        `[role="group"][aria-label="內距"] button[value="${value}"]`,
+      )!
+    const input = () => {
+      const label = [...box.querySelectorAll('label')].find(
+        (element) => element.textContent === '內距',
+      )!
+      return box.querySelector<HTMLInputElement>(`#${label.htmlFor}`)!
+    }
+    const inherit = () => box.querySelector<HTMLButtonElement>('[data-style-reset="padding"]')!
+    expect(input().placeholder).toBe('繼承：0.75rem')
+    expect(inherit().disabled).toBe(true)
+    expect(button('1rem').textContent).toBe('標準')
+    button('1rem').click()
+    button('1rem').click()
+    expect(engine.getTree().style?.padding).toBe('2rem')
+    expect(engine.getTree().responsiveStyles).toEqual({
+      tablet: { padding: '0.75rem' },
+      mobile: { gap: '0.5rem', padding: '1rem' },
+    })
+    expect(input().value).toBe('1rem')
+    expect(button('1rem').getAttribute('aria-pressed')).toBe('true')
+    expect(inherit().disabled).toBe(false)
+    engine.undo()
+    expect(engine.canUndo()).toBe(false)
+    expect(input().value).toBe('')
+    expect(inherit().disabled).toBe(true)
+    engine.redo()
+    expect(button('1rem').getAttribute('aria-pressed')).toBe('true')
+    input().value = 'clamp(1rem, 2vw, 3rem) 12px'
+    input().dispatchEvent(new Event('input'))
+    expect(engine.getTree().responsiveStyles?.mobile?.padding).toBe('clamp(1rem, 2vw, 3rem) 12px')
+    expect(box.querySelector('[role="group"] [aria-pressed="true"]')).toBeNull()
+    inherit().click()
+    expect(input().value).toBe('')
+    expect(input().placeholder).toBe('繼承：0.75rem')
+    expect(engine.getTree().responsiveStyles?.mobile).toEqual({ gap: '0.5rem' })
+    inspector.setDevice('desktop')
+    expect(button('2rem').getAttribute('aria-pressed')).toBe('true')
+    button('0.5rem').click()
+    expect(engine.getTree().style?.padding).toBe('0.5rem')
+    inspector.setDevice('tablet')
+    expect(input().value).toBe('0.75rem')
+  })
+
+  it('其他控制項修改內距或鎖定元件時就地更新快速選項', () => {
+    const engine = createEngine({ doc: { version: 1, root: { id: 'page', type: 'section' } } })
+    const box = document.createElement('div')
+    const inspector = createInspector(engine, box, { device: 'mobile' })
+    cleanups.push(() => {
+      inspector.destroy()
+      engine.destroy()
+    })
+    engine.select('page')
+    box.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]!.click()
+    const standard = box.querySelector<HTMLButtonElement>(
+      '.sigil-padding-presets button[value="1rem"]',
+    )!
+    const inherit = box.querySelector<HTMLButtonElement>('[data-style-reset="padding"]')!
+    engine.update('page', { responsiveStyles: { mobile: { padding: '1rem' } } })
+    expect(standard.getAttribute('aria-pressed')).toBe('true')
+    expect(inherit.disabled).toBe(false)
+    engine.update('page', { locked: true })
+    expect(standard.disabled).toBe(true)
+    expect(inherit.disabled).toBe(true)
+    engine.update('page', { locked: false })
+    expect(standard.disabled).toBe(false)
+    expect(inherit.disabled).toBe(false)
+    const previousCompact = box.querySelector<HTMLButtonElement>(
+      '.sigil-padding-presets button[value="0.5rem"]',
+    )!
+    inspector.setDevice('desktop')
+    previousCompact.click()
+    expect(engine.getTree().style?.padding).toBeUndefined()
+    expect(engine.getTree().responsiveStyles?.mobile?.padding).toBe('1rem')
+  })
+
   it('runtime locale 切換更新分頁與內容並保留 tab／device', () => {
     const engine = createEngine({
       doc: {
@@ -162,10 +386,10 @@ describe('createInspector — responsive style', () => {
 
     const context = box.querySelector('.sigil-responsive-style-context') as HTMLElement
     expect(context.dataset.styleDevice).toBe('tablet')
-    expect(context.textContent).toContain('繼承 Desktop')
+    expect(context.textContent).toContain('沿用桌面樣式')
 
     const clear = [...box.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('清除 Tablet 覆寫'),
+      button.textContent?.includes('清除 平板 覆寫'),
     )!
     clear.click()
     expect(engine.getTree().style?.margin).toBe('16px')
@@ -203,6 +427,41 @@ describe('createInspector — responsive style', () => {
 })
 
 describe('createInspector — media lifecycle', () => {
+  it('嵌入圖片只顯示格式及預覽，換網址、復原、重做和切換語系時同步', async () => {
+    const { gate, engine, box, i18n } = mediaInspector('image')
+    const input = () => box.querySelector<HTMLInputElement>('.sigil-field-row input')!
+    const preview = () => box.querySelector<HTMLImageElement>('.sigil-img-preview')!
+    const data = 'data:image/webp;base64,UklGRg=='
+    expect(input().value).toBe('original.png')
+    box.querySelector<HTMLButtonElement>('.sigil-field-row button')!.click()
+    startUpload(document.querySelector<HTMLElement>('.sigil-media-backdrop')!)
+    gate.resolve({ id: 'embedded', url: data })
+    await vi.waitFor(() => expect(preview().getAttribute('src')).toBe(data))
+    expect(input().value).toBe('')
+    expect(box.textContent).toContain('已嵌入圖片 · WEBP')
+    expect(box.textContent).not.toContain('UklGRg==')
+    expect(input().placeholder).toBe('貼上圖片網址以更換')
+    i18n.setLocale('en')
+    expect(box.textContent).toContain('Embedded image · WEBP')
+    expect(input().placeholder).toBe('Paste an image URL to replace it')
+
+    const url = 'https://example.org/workshop.webp'
+    input().value = url
+    input().dispatchEvent(new Event('input'))
+    expect(preview().getAttribute('src')).toBe(url)
+    expect(input().getAttribute('aria-describedby')).toBeNull()
+    expect(box.textContent).not.toContain('Embedded image')
+    engine.undo()
+    expect(preview().getAttribute('src')).toBe(data)
+    expect(input().value).toBe('')
+    expect(document.getElementById(input().getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Embedded image · WEBP',
+    )
+    engine.redo()
+    expect(input().value).toBe(url)
+    expect(preview().getAttribute('src')).toBe(url)
+  })
+
   it('延遲上傳與手動輸入圖片 URL 都保留其他最新 attributes', async () => {
     const { gate, engine, box } = mediaInspector('image')
     ;(box.querySelector('.sigil-field-row button') as HTMLButtonElement).click()
@@ -227,6 +486,20 @@ describe('createInspector — media lifecycle', () => {
       alt: 'Latest alt',
       title: 'Host title',
     })
+    const label = [...box.querySelectorAll('label')].find(
+      (item) => item.textContent === '替代文字',
+    )!
+    const alt = box.querySelector<HTMLInputElement>(`#${label.htmlFor}`)!
+    alt.value = '窗邊的攝影器材'
+    alt.dispatchEvent(new Event('input'))
+    expect(engine.getTree().children?.[0]?.attributes).toEqual({
+      src: 'manual.png',
+      alt: '窗邊的攝影器材',
+      title: 'Host title',
+    })
+    alt.value = ''
+    alt.dispatchEvent(new Event('input'))
+    expect(engine.getTree().children?.[0]?.attributes?.alt).toBe('')
   })
 
   it.each([
