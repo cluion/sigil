@@ -17,6 +17,7 @@ import {
   runAfterLoad,
   runBeforeDestroy,
   type Engine,
+  type HistoryEngine,
   type SigilDoc,
   type SanitizeFn,
   type HtmlMode,
@@ -32,18 +33,24 @@ import {
   type EditorHooks,
 } from '@cluion/sigil-core'
 import {
+  collectPageImages,
   createCanvas,
   createBlocksPanel,
   createLayersPanel,
+  createSelectionPath,
   createInspector,
+  createPageLinksPanel,
   createTemplateLibraryController,
   openMediaPicker,
+  openHistoryDialog,
+  openPageTextDialog,
   applyTheme,
   nextTheme,
   openContextMenu,
   type BlocksInput,
   type CanvasDevice,
   type CanvasMode,
+  type InspectorOptions,
   type ThemeChoice,
   type MenuItem,
   type TemplateLibraryController,
@@ -55,7 +62,7 @@ import {
   createShortcodeResolver,
   type ShortcodeDefinition,
 } from '@cluion/sigil-shortcode'
-import { blockImage, templateToBlockDef } from '@cluion/sigil-blocks'
+import { blockFAQItem, blockImage, templateToBlockDef } from '@cluion/sigil-blocks'
 import exportPageTemplate from './export-page.html?raw'
 import { ensureTokens } from './tokens.js'
 
@@ -70,6 +77,7 @@ const i18nMessages = {
     'app.layers': '圖層',
     'app.panels': '面板',
     'app.panel_settings': '圖層／設定',
+    'app.panel_view': '面板檢視',
     'app.tools': '更多工具',
     'app.more': '更多',
     'app.edit_selection': '編輯所選元件',
@@ -93,6 +101,10 @@ const i18nMessages = {
     'app.help_save': 'Ctrl/Cmd+S — 存檔',
     'app.undo': '復原',
     'app.redo': '重做',
+    'history.title': '編輯歷程',
+    'page_text.title': '尋找與取代',
+    'page_text.short': '尋找',
+    'app.help_find_replace': 'Ctrl/Cmd+Shift+F — 尋找與取代',
     'app.dirty': '未儲存',
     'app.saved': '已儲存',
     'app.saved_msg': '已寫入 ProjectStore',
@@ -102,6 +114,7 @@ const i18nMessages = {
     'app.export_title': '匯出 HTML',
     'app.export_hint': '下載可直接開啟的網頁檔，或複製 HTML 片段嵌入其他頁面。',
     'app.export_source': 'HTML 片段',
+    'app.export_link_missing': '這個連結已移除或無法在畫布中編輯。重新開啟匯出即可查看最新清單。',
     'app.export_preparing': '正在準備下載檔…',
     'app.download_original': '依原網址下載',
     'app.download_original_started': '已開始下載使用原網址的 HTML。',
@@ -129,8 +142,16 @@ const i18nMessages = {
     'blocks.search_placeholder': '搜尋區塊…',
     'blocks.search_label': '搜尋區塊',
     'blocks.insert': '插入',
+    'blocks.insert_after_target': '插入於「{name}」下方',
+    'blocks.cancel_insert': '取消',
     'blocks.default_category': '一般',
     'blocks.empty': '無符合區塊',
+    'blocks.pin': '釘選 {name}',
+    'blocks.unpin': '取消釘選 {name}',
+    'blocks.pinned_only': '只看已釘選',
+    'blocks.results': '{count} 個結果',
+    'blocks.no_pins': '尚無已釘選區塊',
+    'blocks.pins_session_only': '釘選變更僅保留於目前工作階段。',
     'blocks.actions': '範本操作',
     'blocks.rename': '重新命名',
     'blocks.rename_prompt': '範本名稱',
@@ -146,10 +167,57 @@ const i18nMessages = {
     'blocks.template_remove_failed': '範本刪除失敗',
     'blocks.retry': '重試',
     'layers.title': '圖層',
+    'path.title': '元件路徑',
+    'path.close': '關閉',
+    'path.page': '頁面',
+    'layers.search': '搜尋圖層',
+    'layers.search_clear': '清除搜尋',
+    'layers.search_count': '找到 {count} 個圖層',
+    'layers.search_none': '找不到符合的圖層',
+    'layers.search_more': '顯示更多結果',
+    'layers.views': '結構檢視',
+    'layers.all': '所有圖層',
+    'layers.outline': '標題大綱',
+    'layers.outline_search': '搜尋標題',
+    'layers.outline_count': '共 {count} 個標題',
+    'layers.outline_empty': '這個頁面還沒有標題',
+    'layers.outline_no_matches': '找不到符合的標題',
+    'layers.outline_untitled': '未命名標題',
+    'layers.outline_more': '顯示更多標題',
+    'move.title': '移動元件',
+    'move.page': '頁面',
+    'move.section': '區段',
+    'move.column': '欄',
+    'move.source': '目前位置：{path}',
+    'move.search': '搜尋目的地',
+    'move.destination': '目的地',
+    'move.position': '插入位置',
+    'move.before_label': '放在這個元件之前',
+    'move.more': '顯示更多目的地',
+    'move.more_before': '顯示更多元件',
+    'move.cancel': '取消',
+    'move.confirm': '移動',
+    'move.first': '開頭',
+    'move.last': '結尾',
+    'move.before': '指定元件之前',
+    'move.choose': '選擇目的地',
+    'move.empty': '找不到符合的目的地',
+    'move.choose_before': '選擇同層元件',
+    'move.empty_before': '目的地沒有其他元件，請改選開頭或結尾。',
+    'move.preview_before': '在「{name}」之前',
+    'move.unchanged': '已在這個位置',
     'layers.expand': '展開子圖層',
     'layers.collapse': '收合子圖層',
     'canvas.component_actions': '元件操作',
+    'canvas.locate_selection': '在畫布定位',
+    'canvas.edit_text': '編輯文字',
+    'canvas.edit_leading_text': '編輯開頭文字',
+    'canvas.finish_editing': '完成編輯',
+    'canvas.cancel_editing': '取消編輯',
+    'canvas.editing_text': '正在編輯文字',
+    'canvas.text_commit_failed': '未能完成編輯。草稿已保留，請再試一次。',
     'canvas.select_parent': '選取父層',
+    'canvas.insert_after': '在下方新增區塊',
     'canvas.duplicate': '複製元件',
     'canvas.replace_image': '更換圖片',
     'canvas.delete': '刪除元件',
@@ -159,8 +227,26 @@ const i18nMessages = {
     'layers.lock': '鎖定',
     'layers.unlock': '解鎖',
     'layers.rename_prompt': '圖層名稱',
+    'layers.rename': '重新命名圖層',
     'media.title': '媒體庫',
     'media.search': '搜尋圖片名稱',
+    'media.sources': '圖片來源',
+    'media.library': '素材庫',
+    'media.page_images': '本頁圖片',
+    'media.search_page': '搜尋本頁圖片',
+    'media.page_uses': '本頁使用 {count} 次',
+    'media.more': '顯示更多圖片',
+    'media.empty_page': '本頁尚無圖片',
+    'media.image_url': '圖片網址',
+    'media.preview_image': '預覽圖片',
+    'media.insert_image': '插入圖片',
+    'media.alt_hint': '裝飾用圖片可留白。',
+    'media.invalid_url': '請輸入 HTTP(S) 圖片網址或以 / 開頭的站內路徑。',
+    'media.rejected_url': '此網站無法儲存這個圖片網址，請更換網址。',
+    'media.loading_image': '正在載入圖片…',
+    'media.failed_image': '圖片無法載入。請確認網址可直接開啟圖片，再試一次。',
+    'media.image_loaded': '圖片已載入',
+    'media.invalid_alt': '這段替代文字無法儲存，請縮短或修改內容。',
     'media.current': '使用中',
     'media.empty_search': '沒有符合的圖片，請試試其他名稱。',
     'media.close': '關閉',
@@ -175,6 +261,7 @@ const i18nMessages = {
     'props.title': '屬性',
     'props.empty': '未選取節點',
     'props.content': '內容',
+    'props.leading_text': '開頭文字',
     'props.node_id_open': '（',
     'props.node_id_close': '）',
     'style.title': '樣式',
@@ -190,6 +277,18 @@ const i18nMessages = {
     'style.property.font-weight': '字重',
     'style.property.text-align': '文字對齊',
     'style.property.color': '文字顏色',
+    'spacing.expand.padding': '分別調整內距',
+    'spacing.expand.margin': '分別調整外距',
+    'spacing.top': '上方{property}',
+    'spacing.right': '右方{property}',
+    'spacing.bottom': '下方{property}',
+    'spacing.left': '左方{property}',
+    'spacing.reset': '清除{side}覆寫',
+    'spacing.invalid': '請輸入有效的單邊間距',
+    'spacing.invalid_shorthand': '請輸入一至四個有效的間距值',
+    'spacing.unsupported': '這個間距值無法儲存在此網站',
+    'spacing.dynamic': '依 CSS 宣告決定',
+    'spacing.from_group': '來自四邊設定',
     'style.property.background-color': '背景顏色',
     'style.property.border': '邊框',
     'style.property.border-radius': '圓角',
@@ -201,9 +300,83 @@ const i18nMessages = {
     'inspector.empty_hint': '在畫布點一下區塊，即可編輯內容、樣式與進階屬性。',
     'inspector.no_content': '此節點無可編輯內容欄位，可切到樣式分頁',
     'inspector.image': '圖片',
+    'image.framing_action': '調整圖片構圖',
+    'image.link': '圖片連結',
+    'image.remove_link': '移除圖片連結',
+    'image.shared_link': '變更這個網址也會套用至同一連結內的其他內容。',
+    'framing.title': '圖片構圖',
+    'framing.ratio': '裁切比例',
+    'framing.fit': '圖片適應方式',
+    'framing.original': '原有尺寸',
+    'framing.cover': '填滿裁切',
+    'framing.contain': '完整顯示',
+    'framing.fill': '伸展填滿',
+    'framing.custom': '自訂',
+    'framing.point': '在原圖設定焦點',
+    'framing.x': '水平焦點 (%)',
+    'framing.y': '垂直焦點 (%)',
+    'framing.unavailable': '無法預覽原圖',
+    'framing.reset_focus': '清除焦點設定',
+    'framing.inherit_focus': '沿用上層焦點',
+    'framing.reset_frame': '清除比例、高度、上下限與適應方式',
+    'framing.inherit_frame': '沿用上層比例、高度、上下限與適應方式',
+    'framing.custom_position': '自訂焦點',
+    'framing.focus_hint': '點選原圖或輸入百分比調整焦點。',
     'inspector.embedded_image': '已嵌入圖片',
     'inspector.replace_image_url': '貼上圖片網址以更換',
+    'inspector.component_id': '元件內部 ID',
+    'page_links.title': '頁面連結',
+    'page_links.scope': '檢查元件連結與頁內目標。外部連結僅列出網址。',
+    'page_links.count': '共 {count} 個連結，{issues} 個待處理',
+    'page_links.filter': '只看待處理',
+    'page_links.inspect': '查看連結 {name}',
+    'page_links.more': '顯示更多連結',
+    'page_links.empty': '這個頁面沒有元件連結',
+    'page_links.clear': '沒有待處理的連結',
+    'page_links.untitled': '未命名連結',
+    'page_links.unset': '未設定目的地',
+    'page_links.missing': '找不到頁內目標',
+    'page_links.duplicate': '頁內目標重複',
+    'page_links.hidden': '頁內目標已隱藏',
+    'page_links.page': '頁內連結',
+    'page_links.url': '網址',
+    'page_links.email': '電子郵件',
+    'page_links.phone': '電話',
+    'page_links.unconfirmed': '需在預覽確認目標',
+    'page_links.text': '文字片段',
+    'anchor.edit': '編輯頁內錨點',
+    'anchor.title': '頁內錨點',
+    'anchor.name': '錨點名稱',
+    'anchor.apply': '套用錨點',
+    'anchor.copy': '複製頁內連結',
+    'anchor.fragment': '頁內連結',
+    'anchor.references': '此頁有 {count} 處參照此錨點。',
+    'anchor.duplicate': '這個名稱由多個元件共用。改名會保留既有參照。',
+    'anchor.unavailable': '請更換名稱，以取得此元件專用的頁內連結。',
+    'anchor.updated': '已更新頁內錨點。',
+    'anchor.copied': '已複製頁內連結。',
+    'anchor.manual': '請手動複製已選取的頁內連結。',
+    'anchor.missing': '找不到目前元件，請重新選取。',
+    'anchor.locked': '請先解鎖這個元件。',
+    'anchor.invalid': '請輸入有效的錨點名稱，例如 event-info 或 活動資訊。',
+    'anchor.conflict': '這個名稱已被使用，請選擇其他名稱。',
+    'anchor.referenced': '請先移除或重新指定指向此錨點的參照。',
+    'anchor.locked-reference': '請先解鎖包含此錨點參照的元件。',
     'link.section': '連到頁內區段',
+    'link.edit': '編輯連結',
+    'link.kind': '連結類型',
+    'link.web': '網址或頁內區段',
+    'link.email': '電子郵件',
+    'link.phone': '電話',
+    'link.email_address': '電子郵件地址',
+    'link.phone_number': '電話號碼',
+    'link.invalid_email': '請輸入有效的電子郵件地址。',
+    'link.invalid_phone': '請輸入有效的電話號碼。',
+    'link.new_tab': '在新分頁開啟',
+    'link.reveal': '在畫布定位區段',
+    'link.missing_section': '找不到這個頁內區段，請重新選擇。',
+    'link.duplicate_section': '這個錨點有多個區段使用，請重新選擇。',
+    'link.unavailable_section': '這個目標無法在畫布定位。',
     'link.address': '連結網址',
     'link.apply': '套用',
     'link.choose': '選擇區段…',
@@ -221,6 +394,68 @@ const i18nMessages = {
     'form.load_failed': '載入失敗',
     'form.label_separator': '：',
     'style.base': '基礎樣式',
+    'faq.question': '問題',
+    'faq.answer': '答案',
+    'faq.add': '新增問答',
+    'faq.back': '返回問答清單',
+    'faq.new_question': '新的問題',
+    'faq.new_answer': '請填寫答案。',
+    'grid.title': '格線欄數',
+    'layout.wrap_title': '項目換行',
+    'layout.nowrap': '不換行',
+    'layout.wrap': '自動換行',
+    'layout.wrap-reverse': '反向換行',
+    'layout.reset_wrap': '還原換行設定',
+    'layout.wrap_css': '依 CSS 決定',
+    'layout.from_flow': '來自 flex-flow',
+    'layout.separate_gaps': '分別調整間距',
+    'layout.invalid_gap': '請輸入有效的非負間距',
+    'layout.mixed_gaps': '分別設定',
+    'layout.clear_uniform_gap': '清除共用間距',
+    'style.property.row-gap': '列間距',
+    'style.property.column-gap': '欄間距',
+    'grid.item_title': '格線項目配置',
+    'grid.item_auto': '自動排列',
+    'grid.item_full': '橫跨整列',
+    'grid.item_inherit': '沿用上層配置',
+    'grid.item_restore_area': '還原區域配置',
+    'grid.item_custom': '自訂配置（{value}）',
+    'grid.one': '1 欄',
+    'grid.count': '{count} 欄',
+    'grid.custom': '自訂欄寬',
+    'grid.inherit': '沿用上層欄寬',
+    'grid.invalid': '請輸入有效的 CSS 欄寬。',
+    'grid.unsupported': '此網站不支援這種欄寬設定。',
+    'typography.edit': '調整文字排版',
+    'style.custom_value': '自訂 CSS 值',
+    'style.option.font-weight.normal': '一般',
+    'style.option.font-weight.600': '半粗體',
+    'style.option.font-weight.bold': '粗體',
+    'typography.preset': '文字排版預設',
+    'typography.custom': '自訂',
+    'typography.display': '展示標題',
+    'typography.heading': '章節標題',
+    'typography.body': '內文',
+    'typography.caption': '註解',
+    'typography.invalid': '請輸入有效的 CSS 值。',
+    'typography.unsupported': '此編輯器無法儲存這個值。',
+    'style.property.line-height': '行高',
+    'style.property.letter-spacing': '字距',
+    'text_format.label': '文字格式',
+    'text_format.paragraph': '段落',
+    'text_format.inline': '行內文字',
+    'text_format.heading': '標題 {level}（H{level}）',
+    'color.pick': '選擇顏色',
+    'color.palette': '頁面色票',
+    'color.empty': '此頁尚無可重用的顏色',
+    'color.invalid': '請輸入有效的 CSS 色值',
+    'color.unsupported': '此編輯器無法儲存這個色值',
+    'style.copy': '複製樣式',
+    'style.apply': '套用樣式',
+    'style.copied_from': '已複製「{name}」的{device}樣式',
+    'style.applied_to': '已套用至「{name}」的{device}樣式',
+    'style.already_matches': '樣式已相同',
+    'style.no_styles': '目前裝置沒有可複製的樣式',
     'device.desktop': '桌面',
     'device.group': '畫布裝置',
     'device.tablet': '平板',
@@ -249,6 +484,7 @@ const i18nMessages = {
     'app.layers': 'Layers',
     'app.panels': 'Panels',
     'app.panel_settings': 'Layers / Settings',
+    'app.panel_view': 'Panel view',
     'app.tools': 'More tools',
     'app.more': 'More',
     'app.edit_selection': 'Edit selection',
@@ -272,6 +508,10 @@ const i18nMessages = {
     'app.help_save': 'Ctrl/Cmd+S — Save',
     'app.undo': 'Undo',
     'app.redo': 'Redo',
+    'history.title': 'Edit history',
+    'page_text.title': 'Find and replace',
+    'page_text.short': 'Find',
+    'app.help_find_replace': 'Ctrl/Cmd+Shift+F — Find and replace',
     'app.dirty': 'Unsaved',
     'app.saved': 'Saved',
     'app.saved_msg': 'Saved to ProjectStore',
@@ -282,6 +522,8 @@ const i18nMessages = {
     'app.export_hint':
       'Download a page you can open in your browser, or copy HTML to embed elsewhere.',
     'app.export_source': 'HTML fragment',
+    'app.export_link_missing':
+      'This link is no longer available in the editor. Reopen Export to review the current links.',
     'app.export_preparing': 'Preparing download…',
     'app.download_original': 'Download with original URLs',
     'app.download_original_started': 'Started downloading HTML with the original URLs.',
@@ -309,8 +551,16 @@ const i18nMessages = {
     'blocks.search_placeholder': 'Search blocks…',
     'blocks.search_label': 'Search blocks',
     'blocks.insert': 'Insert',
+    'blocks.insert_after_target': 'Insert after {name}',
+    'blocks.cancel_insert': 'Cancel',
     'blocks.default_category': 'General',
     'blocks.empty': 'No matching blocks',
+    'blocks.pin': 'Pin {name}',
+    'blocks.unpin': 'Unpin {name}',
+    'blocks.pinned_only': 'Pinned only',
+    'blocks.results': 'Results: {count}',
+    'blocks.no_pins': 'No pinned blocks yet',
+    'blocks.pins_session_only': 'Pin changes will last for this session only.',
     'blocks.actions': 'Template actions',
     'blocks.rename': 'Rename',
     'blocks.rename_prompt': 'Template name',
@@ -326,10 +576,57 @@ const i18nMessages = {
     'blocks.template_remove_failed': 'Failed to delete template',
     'blocks.retry': 'Retry',
     'layers.title': 'Layers',
+    'path.title': 'Component path',
+    'path.close': 'Close',
+    'path.page': 'Page',
+    'layers.search': 'Search layers',
+    'layers.search_clear': 'Clear search',
+    'layers.search_count': 'Matching layers ({count})',
+    'layers.search_none': 'No matching layers',
+    'layers.search_more': 'Show more results',
+    'layers.views': 'Structure views',
+    'layers.all': 'All layers',
+    'layers.outline': 'Heading outline',
+    'layers.outline_search': 'Search headings',
+    'layers.outline_count': 'Headings ({count})',
+    'layers.outline_empty': 'This page has no headings yet',
+    'layers.outline_no_matches': 'No matching headings',
+    'layers.outline_untitled': 'Untitled heading',
+    'layers.outline_more': 'Show more headings',
+    'move.title': 'Move component',
+    'move.page': 'Page',
+    'move.section': 'Section',
+    'move.column': 'Column',
+    'move.source': 'Current location: {path}',
+    'move.search': 'Search destinations',
+    'move.destination': 'Destination',
+    'move.position': 'Placement',
+    'move.before_label': 'Place before this component',
+    'move.more': 'Show more destinations',
+    'move.more_before': 'Show more components',
+    'move.cancel': 'Cancel',
+    'move.confirm': 'Move',
+    'move.first': 'Beginning',
+    'move.last': 'End',
+    'move.before': 'Before a component',
+    'move.choose': 'Choose a destination',
+    'move.empty': 'No matching destinations',
+    'move.choose_before': 'Choose a component at this level',
+    'move.empty_before': 'The destination is empty. Choose Beginning or End.',
+    'move.preview_before': 'Before “{name}”',
+    'move.unchanged': 'Already at this position',
     'layers.expand': 'Expand children',
     'layers.collapse': 'Collapse children',
     'canvas.component_actions': 'Component actions',
+    'canvas.locate_selection': 'Locate on canvas',
+    'canvas.edit_text': 'Edit text',
+    'canvas.edit_leading_text': 'Edit leading text',
+    'canvas.finish_editing': 'Done editing',
+    'canvas.cancel_editing': 'Cancel editing',
+    'canvas.editing_text': 'Editing text',
+    'canvas.text_commit_failed': 'Could not finish editing. Your draft is still here. Try again.',
     'canvas.select_parent': 'Select parent',
+    'canvas.insert_after': 'Add block below',
     'canvas.duplicate': 'Duplicate component',
     'canvas.replace_image': 'Replace image',
     'canvas.delete': 'Delete component',
@@ -339,8 +636,27 @@ const i18nMessages = {
     'layers.lock': 'Lock',
     'layers.unlock': 'Unlock',
     'layers.rename_prompt': 'Layer name',
+    'layers.rename': 'Rename layer',
     'media.title': 'Media library',
     'media.search': 'Search images by name',
+    'media.sources': 'Image sources',
+    'media.library': 'Asset library',
+    'media.page_images': 'Page images',
+    'media.search_page': 'Search page images',
+    'media.page_uses': 'Uses on this page: {count}',
+    'media.more': 'Show more images',
+    'media.empty_page': 'This page has no images',
+    'media.image_url': 'Image URL',
+    'media.preview_image': 'Preview image',
+    'media.insert_image': 'Insert image',
+    'media.alt_hint': 'Leave blank for a decorative image.',
+    'media.invalid_url': 'Enter an HTTP(S) image URL or a site path starting with /.',
+    'media.rejected_url': 'This site cannot save that image URL. Use a different address.',
+    'media.loading_image': 'Loading image…',
+    'media.failed_image':
+      'Could not load the image. Check that the address opens an image, then try again.',
+    'media.image_loaded': 'Image loaded',
+    'media.invalid_alt': 'This site cannot save that alternative text. Shorten or edit it.',
     'media.current': 'In use',
     'media.empty_search': 'No matching images. Try another name.',
     'media.close': 'Close',
@@ -355,6 +671,7 @@ const i18nMessages = {
     'props.title': 'Properties',
     'props.empty': 'No node selected',
     'props.content': 'Content',
+    'props.leading_text': 'Leading text',
     'props.node_id_open': ' (',
     'props.node_id_close': ')',
     'style.title': 'Styles',
@@ -370,6 +687,18 @@ const i18nMessages = {
     'style.property.font-weight': 'Font weight',
     'style.property.text-align': 'Text alignment',
     'style.property.color': 'Text color',
+    'spacing.expand.padding': 'Adjust padding by side',
+    'spacing.expand.margin': 'Adjust margin by side',
+    'spacing.top': 'Top {property}',
+    'spacing.right': 'Right {property}',
+    'spacing.bottom': 'Bottom {property}',
+    'spacing.left': 'Left {property}',
+    'spacing.reset': 'Clear {side} override',
+    'spacing.invalid': 'Enter a valid value for one side',
+    'spacing.invalid_shorthand': 'Enter one to four valid spacing values',
+    'spacing.unsupported': 'This site cannot save that spacing value',
+    'spacing.dynamic': 'Determined by CSS',
+    'spacing.from_group': 'From shorthand',
     'style.property.background-color': 'Background color',
     'style.property.border': 'Border',
     'style.property.border-radius': 'Corner radius',
@@ -382,9 +711,85 @@ const i18nMessages = {
       'Select a block on the canvas to edit its content, styles, and advanced properties.',
     'inspector.no_content': 'This node has no editable content fields. Use the Style tab instead.',
     'inspector.image': 'Image',
+    'image.framing_action': 'Adjust image framing',
+    'image.link': 'Image link',
+    'image.remove_link': 'Remove image link',
+    'image.shared_link': 'Changing this address also affects other content in the same link.',
+    'framing.title': 'Image framing',
+    'framing.ratio': 'Frame ratio',
+    'framing.fit': 'Image fit',
+    'framing.original': 'Existing dimensions',
+    'framing.cover': 'Cover',
+    'framing.contain': 'Contain',
+    'framing.fill': 'Stretch',
+    'framing.custom': 'Custom',
+    'framing.point': 'Set focus on the source image',
+    'framing.x': 'Horizontal focus (%)',
+    'framing.y': 'Vertical focus (%)',
+    'framing.unavailable': 'Original image unavailable',
+    'framing.reset_focus': 'Clear focus',
+    'framing.inherit_focus': 'Inherit focus',
+    'framing.reset_frame': 'Clear ratio, height, limits and fit',
+    'framing.inherit_frame': 'Inherit ratio, height, limits and fit',
+    'framing.custom_position': 'Custom focus',
+    'framing.focus_hint': 'Choose a point on the image or enter percentages.',
     'inspector.embedded_image': 'Embedded image',
     'inspector.replace_image_url': 'Paste an image URL to replace it',
+    'inspector.component_id': 'Component ID',
+    'page_links.title': 'Page links',
+    'page_links.scope':
+      'Review component links and page targets. External URLs are listed without verification.',
+    'page_links.count': 'Total links: {count} · Needs attention: {issues}',
+    'page_links.filter': 'Needs attention only',
+    'page_links.inspect': 'Inspect link {name}',
+    'page_links.more': 'Show more links',
+    'page_links.empty': 'This page has no component links',
+    'page_links.clear': 'No links need attention',
+    'page_links.untitled': 'Untitled link',
+    'page_links.unset': 'No destination',
+    'page_links.missing': 'Page target not found',
+    'page_links.duplicate': 'Duplicate page target',
+    'page_links.hidden': 'Page target is hidden',
+    'page_links.page': 'Page link',
+    'page_links.url': 'URL',
+    'page_links.email': 'Email',
+    'page_links.phone': 'Phone',
+    'page_links.unconfirmed': 'Confirm target in preview',
+    'page_links.text': 'Text fragment',
+    'anchor.edit': 'Edit page anchor',
+    'anchor.title': 'Page anchor',
+    'anchor.name': 'Anchor name',
+    'anchor.apply': 'Apply anchor',
+    'anchor.copy': 'Copy page link',
+    'anchor.fragment': 'Page link',
+    'anchor.references': 'References on this page: {count}.',
+    'anchor.duplicate':
+      'Several components share this name. Renaming this component leaves existing references in place.',
+    'anchor.unavailable': 'Choose a different name to get a link to this component.',
+    'anchor.updated': 'Page anchor updated.',
+    'anchor.copied': 'Page link copied.',
+    'anchor.manual': 'Copy the selected page link.',
+    'anchor.missing': 'Select the component again.',
+    'anchor.locked': 'Unlock this component first.',
+    'anchor.invalid': 'Enter a valid anchor name, such as event-info or 活動資訊.',
+    'anchor.conflict': 'This name is already in use. Choose another name.',
+    'anchor.referenced': 'Remove or redirect references to this anchor first.',
+    'anchor.locked-reference': 'Unlock the components that reference this anchor first.',
     'link.section': 'Link to section',
+    'link.edit': 'Edit link',
+    'link.kind': 'Link type',
+    'link.web': 'Web address or page section',
+    'link.email': 'Email',
+    'link.phone': 'Phone',
+    'link.email_address': 'Email address',
+    'link.phone_number': 'Phone number',
+    'link.invalid_email': 'Enter a valid email address.',
+    'link.invalid_phone': 'Enter a valid phone number.',
+    'link.new_tab': 'Open in a new tab',
+    'link.reveal': 'Show section on canvas',
+    'link.missing_section': 'Section not found. Choose another section on this page.',
+    'link.duplicate_section': 'Multiple sections use this anchor. Choose another section.',
+    'link.unavailable_section': 'This target cannot be shown on the canvas.',
     'link.address': 'Link address',
     'link.apply': 'Apply',
     'link.choose': 'Choose a section…',
@@ -402,6 +807,68 @@ const i18nMessages = {
     'form.load_failed': 'Failed to load',
     'form.label_separator': ': ',
     'style.base': 'Base styles',
+    'faq.question': 'Question',
+    'faq.answer': 'Answer',
+    'faq.add': 'Add question',
+    'faq.back': 'Back to questions',
+    'faq.new_question': 'New question',
+    'faq.new_answer': 'Enter an answer.',
+    'grid.title': 'Grid columns',
+    'layout.wrap_title': 'Item wrapping',
+    'layout.nowrap': 'No wrap',
+    'layout.wrap': 'Wrap',
+    'layout.wrap-reverse': 'Wrap in reverse',
+    'layout.reset_wrap': 'Reset wrapping',
+    'layout.wrap_css': 'From CSS',
+    'layout.from_flow': 'From flex-flow',
+    'layout.separate_gaps': 'Adjust gaps separately',
+    'layout.invalid_gap': 'Enter a valid, non-negative gap',
+    'layout.mixed_gaps': 'Separate values',
+    'layout.clear_uniform_gap': 'Clear shared gap',
+    'style.property.row-gap': 'Row gap',
+    'style.property.column-gap': 'Column gap',
+    'grid.item_title': 'Grid item placement',
+    'grid.item_auto': 'Auto placement',
+    'grid.item_full': 'Full row',
+    'grid.item_inherit': 'Inherit placement',
+    'grid.item_restore_area': 'Restore area placement',
+    'grid.item_custom': 'Custom placement ({value})',
+    'grid.one': '1 column',
+    'grid.count': '{count} columns',
+    'grid.custom': 'Custom column tracks',
+    'grid.inherit': 'Inherit column tracks',
+    'grid.invalid': 'Enter a valid CSS grid track list.',
+    'grid.unsupported': 'This site does not support these column tracks.',
+    'typography.edit': 'Edit typography',
+    'style.custom_value': 'Custom CSS value',
+    'style.option.font-weight.normal': 'Regular',
+    'style.option.font-weight.600': 'Semibold',
+    'style.option.font-weight.bold': 'Bold',
+    'typography.preset': 'Typography preset',
+    'typography.custom': 'Custom',
+    'typography.display': 'Display',
+    'typography.heading': 'Section heading',
+    'typography.body': 'Body',
+    'typography.caption': 'Caption',
+    'typography.invalid': 'Enter a valid CSS value.',
+    'typography.unsupported': 'This editor cannot save this value.',
+    'style.property.line-height': 'Line height',
+    'style.property.letter-spacing': 'Letter spacing',
+    'text_format.label': 'Text format',
+    'text_format.paragraph': 'Paragraph',
+    'text_format.inline': 'Inline text',
+    'text_format.heading': 'Heading {level} (H{level})',
+    'color.pick': 'Choose color',
+    'color.palette': 'Page colors',
+    'color.empty': 'No reusable colors on this page',
+    'color.invalid': 'Enter a valid CSS color',
+    'color.unsupported': 'This editor cannot save this color value',
+    'style.copy': 'Copy styles',
+    'style.apply': 'Apply styles',
+    'style.copied_from': 'Copied from {name} · {device}',
+    'style.applied_to': 'Applied to {name} · {device}',
+    'style.already_matches': 'Styles already match',
+    'style.no_styles': 'No styles to copy for this device',
     'device.desktop': 'Desktop',
     'device.group': 'Canvas device',
     'device.tablet': 'Tablet',
@@ -434,8 +901,20 @@ export interface AppOptions {
   renderPageNavigation?: () => HTMLElement
   /** 媒體庫 */
   assets?: AssetStore
+  /** 插入網址圖片前檢查宿主可儲存的來源與替代文字。 */
+  acceptsImageAttribute?: (name: 'src' | 'alt', value: string) => boolean
   /** Record 工廠或 defineBlock 列表 */
   blocks?: BlocksInput
+  /** 釘選區塊的本機儲存命名空間；false 僅在本次面板保留。 */
+  blockPinStorageKey?: string | false
+  /** 在套用自訂格線欄寬前檢查宿主的樣式限制。 */
+  acceptsCustomGridTracks?: (value: string) => boolean
+  /** 在套用文字或背景色前檢查宿主可儲存的色值。 */
+  acceptsColorValue?: (value: string) => boolean
+  /** 檢查宿主可儲存的內距、外距與項目間距值。 */
+  acceptsSpacingValue?: (value: string) => boolean
+  /** 檢查宿主能儲存的文字排版屬性值。 */
+  acceptsTypographyValue?: InspectorOptions['acceptsTypographyValue']
   /** 範本庫 adapter，傳入後啟用「另存為範本」命令 */
   templates?: TemplateStore
   shortcodes?: ShortcodeDefinition[]
@@ -456,8 +935,8 @@ export interface AppOptions {
   hooks?: EditorHooks
 }
 
-export interface SigilApp {
-  engine: Engine
+export interface SigilApp<E extends Engine = Engine> {
+  engine: E
   /** Pure detached snapshot; use save() to write to ProjectStore. */
   toJSON(): SigilDoc
   /** Persist the revision captured at invocation; rejects on failure. */
@@ -481,13 +960,14 @@ export { defineCommand, createDefaultEditingCommands }
 export type { CommandDefinition, CommandContext, EditorHooks, RichTextAdapter }
 
 type CompactPanel = 'blocks' | 'settings'
+type SettingsView = 'layers' | 'inspector'
 
 const COMPACT_LAYOUT_BREAKPOINT = 900
 
 /**
  * 開箱即用產品殼 — Design tokens + Topbar + 三欄 + Inspector 分頁
  */
-export function createApp(opts: AppOptions): SigilApp {
+export function createApp(opts: AppOptions): SigilApp<HistoryEngine> {
   if (opts.richText && !opts.sanitize) {
     throw new Error('createApp：richText 必須搭配 sanitize')
   }
@@ -532,12 +1012,18 @@ export function createApp(opts: AppOptions): SigilApp {
   let helpOpen = false
   let compactLayout = false
   let activePanel: CompactPanel | null = null
+  let settingsView: SettingsView = 'layers'
   let desktopPanel: 'structure' | 'blocks' | null = 'structure'
   let workspaceTitle: string | undefined
   let closeAssetLibrary: (() => void) | null = null
-  let panelTrigger: HTMLButtonElement | null = null
+  let panelTrigger: HTMLElement | null = null
+  let dismissBlockPlacement: (() => void) | null = null
   let clipboard: ComponentNode | null = null
   let closeExportDialog: (() => void) | null = null
+  let historyDialog: ReturnType<typeof openHistoryDialog> | undefined
+  let pageTextDialog: ReturnType<typeof openPageTextDialog> | undefined
+  let searchQuery = ''
+  let matchCase = false
   let refreshExportDialog: (() => void) | null = null
   let refreshStatusMessage: (() => void) | null = null
   let templateLibrary: TemplateLibraryController | null = null
@@ -550,7 +1036,10 @@ export function createApp(opts: AppOptions): SigilApp {
     store,
     hooks,
     onStateChange: () => {
-      if (persistenceReady) refreshChrome()
+      if (persistenceReady) {
+        refreshChrome()
+        historyDialog?.setSavedId(persistence.getSavedHistoryId())
+      }
     },
   })
 
@@ -599,6 +1088,80 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const commandMap = new Map<string, CommandDefinition>()
   for (const c of createDefaultEditingCommands()) commandMap.set(c.id, c)
+  commandMap.set('edit-history', {
+    id: 'edit-history',
+    toolbar: true,
+    toolbarGroup: 'history',
+    when: () => !destroyed,
+    run() {
+      if (historyDialog) return
+      try {
+        canvas.commitEditing({ forSave: true })
+      } catch (error) {
+        setStatusMessage(() => i18n.t('canvas.text_commit_failed'))
+        throw error
+      }
+      closeCompactPanel(false)
+      if (compactLayout) showExtraTools(false)
+      const trigger = compactLayout ? moreTools : cmdButtons.get('edit-history')
+      historyDialog = openHistoryDialog({
+        engine,
+        mount: root,
+        i18n,
+        trigger,
+        savedId: persistence.getSavedHistoryId(),
+        onClose: () => {
+          historyDialog = undefined
+        },
+      })
+    },
+  })
+  commandMap.set('find-replace', {
+    id: 'find-replace',
+    shortcut: 'mod+shift+f',
+    when: () => !destroyed && mode === 'edit' && !mountEl.closest('[inert]'),
+    run() {
+      if (pageTextDialog) return
+      canvas.commitEditing({ forSave: true })
+      closeCompactPanel(false)
+      if (compactLayout) showExtraTools(false)
+      const trigger = compactLayout ? moreTools : findToggle
+      pageTextDialog = openPageTextDialog({
+        mount: root,
+        engine,
+        trigger,
+        i18n,
+        device: canvas.getDevice(),
+        richText: opts.richText?.resolver,
+        initialQuery: searchQuery,
+        initialMatchCase: matchCase,
+        onQueryChange(query, caseSensitive) {
+          searchQuery = query
+          matchCase = caseSensitive
+        },
+        onClose() {
+          pageTextDialog = undefined
+          const visibleTrigger = compactLayout ? moreTools : findToggle
+          if (!destroyed && trigger !== visibleTrigger)
+            visibleTrigger.focus({ preventScroll: true })
+        },
+        onReveal(id) {
+          engine.select(id)
+          canvas.revealSelection?.({ focusToolbar: true })
+        },
+      })
+    },
+  })
+  commandMap.set('move-to', {
+    id: 'move-to',
+    when: () => canvas.canMoveSelection?.() ?? false,
+    run() {
+      const focused = mountEl.ownerDocument.activeElement
+      canvas.moveSelection?.(
+        focused instanceof HTMLElement && mountEl.contains(focused) ? focused : undefined,
+      )
+    },
+  })
   // 註冊殼層匯出命令
   commandMap.set(
     'export',
@@ -677,8 +1240,10 @@ export function createApp(opts: AppOptions): SigilApp {
     const known: Record<string, string> = {
       undo: i18n.t('app.undo'),
       redo: i18n.t('app.redo'),
+      'edit-history': i18n.t('history.title'),
       copy: i18n.t('app.copy'),
       paste: i18n.t('app.paste'),
+      'move-to': i18n.t('move.title'),
       'move-up': i18n.t('app.move_up'),
       'move-down': i18n.t('app.move_down'),
       delete: i18n.t('app.delete'),
@@ -714,6 +1279,7 @@ export function createApp(opts: AppOptions): SigilApp {
     )
     if (primary) b.classList.add('sigil-btn--primary')
     b.dataset.commandId = cmd.id
+    if (cmd.id === 'edit-history') b.setAttribute('aria-haspopup', 'dialog')
     const tip = shortcutTitle(cmd)
     if (tip) b.title = tip
     group.appendChild(b)
@@ -889,7 +1455,20 @@ export function createApp(opts: AppOptions): SigilApp {
   rail.setAttribute('aria-label', i18n.t('app.panels'))
   const structureToggle = btn('', () => toggleDesktopPanel('structure'), true)
   const libraryToggle = btn('', () => toggleDesktopPanel('blocks'), true)
-  const assetsToggle = btn('', () => openAssets(), true)
+  const assetsToggle = btn('', () => openAssets(assetsToggle), true)
+  const compactAssets = btn('', () => openAssets(compactAssets), true)
+  function findPageText() {
+    void commands
+      .run('find-replace', makeCtx())
+      .catch(() => setStatusMessage(() => i18n.t('canvas.command_failed')))
+  }
+  const findToggle = btn('', findPageText, true)
+  const compactFind = btn('', findPageText, true)
+  for (const button of [findToggle, compactFind]) {
+    button.setAttribute('aria-haspopup', 'dialog')
+    button.dataset.commandId = 'find-replace'
+  }
+  const findLabel = addRailIcon(findToggle, 'M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Zm-2 5 6 6')
   const pageStylesToggle = btn(
     '',
     () => {
@@ -914,8 +1493,8 @@ export function createApp(opts: AppOptions): SigilApp {
     'M4 7h5m4 0h7M4 17h9m4 0h3M9 4h4v6H9zM13 14h4v6h-4z',
   )
   assetsToggle.setAttribute('aria-haspopup', 'dialog')
-  assetsToggle.hidden = !opts.assets
-  rail.append(structureToggle, libraryToggle, assetsToggle, pageStylesToggle)
+  compactAssets.setAttribute('aria-haspopup', 'dialog')
+  rail.append(structureToggle, libraryToggle, assetsToggle, pageStylesToggle, findToggle)
   libraryToggle.hidden = !opts.templates && !Object.keys(opts.blocks ?? {}).length
 
   const sidebar = el('aside', 'sigil-sidebar')
@@ -949,6 +1528,7 @@ export function createApp(opts: AppOptions): SigilApp {
 
   const canvasWrap = el('div', 'sigil-canvas-wrap')
   const canvasBox = el('div', 'sigil-canvas-host')
+  const canvasActions = el('div', 'sigil-canvas-actions')
 
   const emptyGuide = el('div', 'sigil-empty-canvas')
   emptyGuide.setAttribute('aria-hidden', 'true')
@@ -975,7 +1555,7 @@ export function createApp(opts: AppOptions): SigilApp {
   emptyGuide.append(emptyTitle, emptyBody, emptyAdd, emptyTip)
   canvasBox.appendChild(emptyGuide)
 
-  canvasWrap.append(canvasBox)
+  canvasWrap.append(canvasBox, canvasActions)
 
   const helpPanel = el('div', 'sigil-help-panel')
   helpPanel.hidden = true
@@ -987,6 +1567,7 @@ export function createApp(opts: AppOptions): SigilApp {
     i18n.t('app.help_delete'),
     i18n.t('app.help_undo'),
     i18n.t('app.help_redo'),
+    i18n.t('app.help_find_replace'),
     i18n.t('app.help_copy_paste'),
     i18n.t('app.help_save'),
   ]) {
@@ -1003,15 +1584,25 @@ export function createApp(opts: AppOptions): SigilApp {
   right.dataset.compactPanel = 'settings'
   right.setAttribute('aria-label', i18n.t('app.panel_settings'))
   const settingsHead = el('div', 'sigil-panel-head sigil-panel-head--settings')
-  const layersTitle = document.createElement('h3')
-  layersTitle.className = 'sigil-sidebar-title'
-  layersTitle.textContent = i18n.t('app.layers')
+  const settingsTitle = document.createElement('h3')
+  settingsTitle.className = 'sigil-sidebar-title'
   const settingsClose = btn('×', () => closeCompactPanel(), true)
   settingsClose.classList.add('sigil-panel-close')
   settingsClose.setAttribute('aria-label', i18n.t('app.close_panel'))
-  settingsHead.append(layersTitle, settingsClose)
   const layersBox = el('div', 'sigil-layers-box')
+  layersBox.id = `sigil-layers-${panelIdSuffix}`
   const inspectorBox = document.createElement('div')
+  inspectorBox.id = `sigil-inspector-drawer-${panelIdSuffix}`
+  const views = el('div', 'sigil-settings-views')
+  views.setAttribute('role', 'group')
+  const layersView = btn('', () => switchSettingsView('layers'), true)
+  const inspectorView = btn('', () => switchSettingsView('inspector'), true)
+  layersView.dataset.settingsView = 'layers'
+  inspectorView.dataset.settingsView = 'inspector'
+  layersView.setAttribute('aria-controls', layersBox.id)
+  inspectorView.setAttribute('aria-controls', inspectorBox.id)
+  views.append(layersView, inspectorView)
+  settingsHead.append(settingsTitle, views, settingsClose)
   right.append(settingsHead, layersBox, inspectorBox)
 
   const panelBackdrop = el('div', 'sigil-panel-backdrop')
@@ -1024,14 +1615,35 @@ export function createApp(opts: AppOptions): SigilApp {
   // —— Status ——
   const status = el('footer', 'sigil-status')
   const statusSel = document.createElement('span')
-  const editSelection = btn('', () => toggleCompactPanel('settings', editSelection))
+  const pathBox = el('div', 'sigil-status-path')
+  const selectionPath = createSelectionPath(engine, pathBox, {
+    i18n,
+    onActivate() {
+      closeCompactPanel(false)
+      canvas.revealSelection?.({ focusToolbar: true })
+    },
+  })
+  const editSelection = btn('', () => {
+    toggleCompactPanel('settings', editSelection, 'inspector')
+    if (activePanel !== 'settings') return
+    const editable = inspectorBox.querySelectorAll<HTMLElement>(
+      '[role="tabpanel"] input:not([disabled]), [role="tabpanel"] textarea:not([disabled]), [role="tabpanel"] select:not([disabled])',
+    )
+    const field =
+      inspectorBox.querySelector<HTMLElement>(
+        '.sigil-img-preview + .sigil-field-row button:not([disabled])',
+      ) ?? Array.from(editable).find((control) => !control.closest('[hidden]'))
+    ;(field ?? currentInspectorTab()).focus()
+  })
   editSelection.classList.add('sigil-edit-selection')
   editSelection.setAttribute('aria-controls', settingsDrawerId)
   editSelection.hidden = true
   const statusDirty = document.createElement('span')
+  statusDirty.dataset.saveState = ''
   const statusMsg = document.createElement('span')
+  statusMsg.className = 'sigil-status-message'
   statusMsg.setAttribute('role', 'status')
-  status.append(statusSel, editSelection, statusDirty, statusMsg)
+  status.append(statusSel, pathBox, editSelection, statusDirty, statusMsg)
 
   root.append(topbar, body, status)
 
@@ -1054,7 +1666,7 @@ export function createApp(opts: AppOptions): SigilApp {
       primaryTools.append(compactControls, modes)
       if (saveButton) primaryTools.append(saveButton)
       primaryTools.append(moreTools)
-      extraTools.append(brand, hist, devices)
+      extraTools.append(brand, hist, devices, compactAssets, compactFind)
       if (customBar.childNodes.length) extraTools.append(customBar)
       extraTools.append(actions)
       topbar.replaceChildren(primaryTools, extraTools)
@@ -1084,6 +1696,11 @@ export function createApp(opts: AppOptions): SigilApp {
     libraryToggle.setAttribute('aria-label', libraryToggle.title)
     libraryLabel.textContent = i18n.t('app.blocks')
     assetsToggle.title = i18n.t('app.insert_image')
+    compactAssets.textContent = assetsToggle.title
+    findToggle.title = i18n.t('page_text.title')
+    findToggle.setAttribute('aria-label', findToggle.title)
+    findLabel.textContent = i18n.t('page_text.short')
+    compactFind.textContent = findToggle.title
     assetsLabel.textContent = i18n.t('app.assets')
     pageStylesToggle.setAttribute('aria-label', i18n.t('app.page_styles'))
     pageStylesToggle.title = i18n.t('app.page_styles')
@@ -1098,8 +1715,7 @@ export function createApp(opts: AppOptions): SigilApp {
     desktopPanel = desktopPanel === panel ? null : panel
     refreshCompactPanels()
     if (desktopPanel === 'blocks') blocksBox.querySelector('input')?.focus()
-    if (desktopPanel === 'structure')
-      layersBox.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+    if (desktopPanel === 'structure') layers.focus('search')
   }
 
   function canInsertAsset(): boolean {
@@ -1107,34 +1723,51 @@ export function createApp(opts: AppOptions): SigilApp {
     return mode === 'edit' && !root.locked && (root.type === 'section' || root.type === 'column')
   }
 
-  function openAssets(): void {
+  function openAssets(trigger: HTMLButtonElement): void {
     if (
-      !opts.assets ||
-      compactLayout ||
+      destroyed ||
+      compactLayout !== (trigger === compactAssets) ||
+      trigger.closest('[hidden]') ||
       closeAssetLibrary ||
       !canInsertAsset() ||
       mountEl.closest('[inert]')
     )
       return
-    assetsToggle.focus({ preventScroll: true })
+    trigger.focus({ preventScroll: true })
+    let inserted = false
+    function insertImage(src: string, alt?: string): void {
+      if (destroyed) return
+      if (!canInsertAsset() || mountEl.closest('[inert]')) {
+        setStatusMessage(() => i18n.t('app.insert_unavailable'))
+        return
+      }
+      const image = blockImage(src)
+      if (alt !== undefined) image.attributes = { ...image.attributes, alt }
+      engine.insert(engine.getTree().id, image)
+      engine.select(image.id)
+      inserted = true
+    }
     closeAssetLibrary = openMediaPicker({
       assets: opts.assets,
+      pageImages: () => collectPageImages(engine.getTree(), opts.richText?.resolver),
+      acceptsImageAttribute: opts.acceptsImageAttribute,
       i18n: {
         ...i18n,
         t: (key) => i18n.t(key === 'media.title' ? 'app.insert_image' : key),
       },
-      onPick(item) {
-        if (destroyed) return
-        if (!canInsertAsset() || mountEl.closest('[inert]')) {
-          setStatusMessage(() => i18n.t('app.insert_unavailable'))
-          return
-        }
-        const image = blockImage(item.url)
-        engine.insert(engine.getTree().id, image)
-        engine.select(image.id)
-      },
+      onPick: (item) => insertImage(item.url),
+      onInsertUrl: insertImage,
       onClose() {
         closeAssetLibrary = null
+        if (inserted) {
+          if (compactLayout) showExtraTools(false)
+          canvas.revealSelection?.({ focusToolbar: compactLayout })
+          if (
+            compactLayout &&
+            (document.activeElement === trigger || document.activeElement === document.body)
+          )
+            moreTools.focus({ preventScroll: true })
+        }
       },
     })
   }
@@ -1143,9 +1776,22 @@ export function createApp(opts: AppOptions): SigilApp {
     const id = engine.getSelection()
     const node = id ? findNode(engine.getTree(), id) : undefined
     const name = node?.name?.trim()
-    statusSel.textContent = node ? `${name || node.type} · ${node.id}` : i18n.t('status.none')
+    statusSel.hidden = !!node && mode === 'edit'
+    if (!statusSel.hidden) {
+      statusSel.textContent = node ? name || node.type : i18n.t('status.none')
+      statusSel.title = node?.id ?? ''
+    }
+    inspectorView.disabled = !node
+    if (compactLayout && activePanel === 'settings' && settingsView === 'inspector' && !node) {
+      const focused = document.activeElement
+      const restoreFocus =
+        focused === document.body || inspectorBox.contains(focused) || focused === inspectorView
+      settingsView = 'layers'
+      refreshSettingsView()
+      if (restoreFocus && !focused?.closest('dialog, [role="dialog"], [role="menu"]'))
+        layersView.focus()
+    }
     const canEditHere = compactLayout && mode === 'edit' && !activePanel && !!node
-    statusSel.hidden = canEditHere
     editSelection.hidden = !canEditHere
     if (canEditHere) {
       editSelection.textContent = name
@@ -1155,6 +1801,8 @@ export function createApp(opts: AppOptions): SigilApp {
   }
 
   function refreshCompactPanels(): void {
+    if (compactLayout ? activePanel !== 'blocks' : desktopPanel !== 'blocks')
+      dismissBlockPlacement?.()
     root.classList.toggle('sigil-app--compact', compactLayout)
     root.dataset.layout = compactLayout ? 'compact' : 'desktop'
 
@@ -1185,16 +1833,49 @@ export function createApp(opts: AppOptions): SigilApp {
     if (compactLayout && layersBox.parentElement !== right)
       right.insertBefore(layersBox, inspectorBox)
     if (!compactLayout && layersBox.parentElement !== structure) structure.append(layersBox)
-    const directSettings = activePanel === 'settings' && panelTrigger === editSelection
-    layersBox.hidden = directSettings
-    layersTitle.textContent = i18n.t(
-      !compactLayout || directSettings ? 'app.component_settings' : 'app.layers',
-    )
+    refreshSettingsView()
+    refreshSelection()
+  }
+
+  function refreshSettingsView(): void {
+    const viewingLayers = settingsView === 'layers'
+    views.hidden = !compactLayout
+    settingsTitle.hidden = compactLayout
+    settingsTitle.textContent = i18n.t('app.component_settings')
+    views.setAttribute('aria-label', i18n.t('app.panel_view'))
+    layersView.textContent = i18n.t('app.layers')
+    inspectorView.textContent = i18n.t('app.component_settings')
+    layersView.setAttribute('aria-pressed', String(viewingLayers))
+    inspectorView.setAttribute('aria-pressed', String(!viewingLayers))
+    right.dataset.view = settingsView
     right.setAttribute(
       'aria-label',
-      i18n.t(!compactLayout || directSettings ? 'app.component_settings' : 'app.panel_settings'),
+      i18n.t(compactLayout && viewingLayers ? 'app.panel_settings' : 'app.component_settings'),
     )
-    refreshSelection()
+    layersBox.hidden = compactLayout && !viewingLayers
+    inspectorBox.hidden = compactLayout && viewingLayers
+    layers.setSearchVisible(
+      compactLayout ? activePanel === 'settings' && viewingLayers : desktopPanel === 'structure',
+    )
+  }
+
+  function currentInspectorTab(): HTMLElement {
+    return (
+      inspectorBox.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? inspectorView
+    )
+  }
+
+  function switchSettingsView(next: SettingsView): void {
+    if (
+      !compactLayout ||
+      activePanel !== 'settings' ||
+      (next === 'inspector' && inspectorView.disabled)
+    )
+      return
+    settingsView = next
+    refreshSettingsView()
+    if (next === 'layers') layers.focus()
+    else currentInspectorTab().focus({ preventScroll: true })
   }
 
   function setCompactLayout(next: boolean): void {
@@ -1211,14 +1892,16 @@ export function createApp(opts: AppOptions): SigilApp {
         : sidebar.contains(focused) || focused === libraryToggle
           ? 'blocks'
           : null
-    if (!next && (focusedLayer || focused === settingsToggle)) desktopPanel = 'structure'
+    if (!next && (focusedLayer || focused === settingsToggle || focused === layersView))
+      desktopPanel = 'structure'
     else if (
       !next &&
       (blocksBox.contains(focused) || focused === blocksClose || focused === blocksToggle)
     )
       desktopPanel = libraryToggle.hidden ? 'structure' : 'blocks'
-    if (next) closeAssetLibrary?.()
+    closeAssetLibrary?.()
     compactLayout = next
+    selectionPath.setCompact(next)
     activePanel = null
     panelTrigger = null
     arrangeToolbar()
@@ -1238,9 +1921,10 @@ export function createApp(opts: AppOptions): SigilApp {
     } else if (!next && focused === blocksToggle)
       (libraryToggle.hidden ? structureToggle : libraryToggle).focus()
     else if (!next && focused === settingsToggle) structureToggle.focus()
-    else if (!next && focusedLayer && focused instanceof HTMLElement)
-      focused.focus({ preventScroll: true })
+    else if (!next && (focusedLayer || focused === layersView)) layers.focus()
+    else if (!next && focused === inspectorView) currentInspectorTab().focus()
     else if (next && (focused === assetsToggle || assetDialogWasOpen)) moreTools.focus()
+    else if (!next && (focused === compactAssets || assetDialogWasOpen)) assetsToggle.focus()
     else if (!next && focused === moreTools) editBtn.focus()
     else if (focused instanceof HTMLElement && topbar.contains(focused)) {
       if (next && (focused === editBtn || focused === previewBtn)) currentModeAction().focus()
@@ -1248,7 +1932,11 @@ export function createApp(opts: AppOptions): SigilApp {
     }
   }
 
-  function toggleCompactPanel(panel: CompactPanel, trigger = getPanelToggle(panel)): void {
+  function toggleCompactPanel(
+    panel: CompactPanel,
+    trigger: HTMLElement = getPanelToggle(panel),
+    view: SettingsView = 'layers',
+  ): void {
     if (!compactLayout || mode === 'preview') return
     if (activePanel === panel) {
       closeCompactPanel()
@@ -1257,16 +1945,17 @@ export function createApp(opts: AppOptions): SigilApp {
     showExtraTools(false)
     activePanel = panel
     panelTrigger = trigger
+    settingsView = view
     refreshCompactPanels()
-    if (trigger === editSelection) {
-      const control =
-        inspectorBox.querySelector<HTMLElement>('.sigil-img-preview + .sigil-field-row button') ??
-        inspectorBox.querySelector<HTMLElement>(
-          '[role="tabpanel"] input:not([disabled]), [role="tabpanel"] textarea:not([disabled]), [role="tabpanel"] select:not([disabled])',
-        ) ??
-        inspectorBox.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
-      ;(control ?? settingsClose).focus()
-    } else (panel === 'blocks' ? blocksClose : settingsClose).focus()
+    if (panel === 'blocks') blocksClose.focus()
+    else if (view === 'layers') layersView.focus()
+    else currentInspectorTab().focus()
+  }
+
+  function openCanvasSettings(trigger: HTMLElement): void {
+    if (!compactLayout) return
+    if (activePanel === 'settings') switchSettingsView('inspector')
+    else toggleCompactPanel('settings', trigger, 'inspector')
   }
 
   function closeCompactPanel(restoreFocus = true): void {
@@ -1277,7 +1966,9 @@ export function createApp(opts: AppOptions): SigilApp {
     panelTrigger = null
     refreshCompactPanels()
     if (restoreFocus)
-      (trigger && !trigger.closest('[hidden], [inert]')
+      (trigger?.isConnected &&
+      !trigger.closest('[hidden], [inert]') &&
+      !trigger.matches(':disabled')
         ? trigger
         : getPanelToggle(previous)
       ).focus()
@@ -1301,12 +1992,16 @@ export function createApp(opts: AppOptions): SigilApp {
   const onWindowResize = (): void => measureLayout()
   arrangeToolbar()
   refreshWorkspaceText()
-  refreshCompactPanels()
 
   function onCompactPanelKeyDown(e: KeyboardEvent): void {
-    if (e.key !== 'Escape') return
+    if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || e.key !== 'Escape') return
     const target = e.target instanceof Element ? e.target : document.activeElement
-    if (!target || !root.contains(target)) return
+    if (
+      !target ||
+      !root.contains(target) ||
+      target.closest('dialog, [role="dialog"], [role="menu"]')
+    )
+      return
     if (!compactLayout) {
       if (desktopPanel === 'blocks' && (sidebar.contains(target) || target === libraryToggle)) {
         e.preventDefault()
@@ -1332,7 +2027,7 @@ export function createApp(opts: AppOptions): SigilApp {
   function openSelectionMenu(x: number, y: number): void {
     closeMenu?.()
     const ctx = makeCtx()
-    const groups = [['copy', 'paste'], ['move-up', 'move-down'], ['delete']]
+    const groups = [['copy', 'paste'], ['move-to', 'move-up', 'move-down'], ['delete']]
     const items: MenuItem[] = []
     for (const group of groups) {
       const actions: MenuItem[] = []
@@ -1363,35 +2058,108 @@ export function createApp(opts: AppOptions): SigilApp {
     })
   }
 
+  function openBlockPlacement(id: string, trigger: HTMLElement): (() => void) | undefined {
+    if (!blocksPanel?.beginInsertAfter || mode !== 'edit' || mountEl.closest('[inert]')) return
+    dismissBlockPlacement?.()
+    const previousPanel = desktopPanel
+    if (compactLayout) toggleCompactPanel('blocks', trigger)
+    else {
+      desktopPanel = 'blocks'
+      refreshCompactPanels()
+    }
+    function dismiss(): void {
+      if (dismissBlockPlacement !== dismiss) return
+      dismissBlockPlacement = null
+      blocksPanel?.cancelInsertAfter?.()
+    }
+    dismissBlockPlacement = dismiss
+    blocksPanel.beginInsertAfter(id, (inserted) => {
+      if (dismissBlockPlacement !== dismiss || destroyed) return
+      dismissBlockPlacement = null
+      if (compactLayout) closeCompactPanel(false)
+      else {
+        desktopPanel = previousPanel
+        refreshCompactPanels()
+      }
+      if (inserted) canvas.revealSelection?.()
+      if (inserted || engine.getSelection() === id) {
+        if (!trigger.closest('[hidden], [inert]') && !trigger.matches(':disabled'))
+          trigger.focus({ preventScroll: true })
+        else (compactLayout ? blocksToggle : libraryToggle).focus({ preventScroll: true })
+      }
+    })
+    return dismiss
+  }
+
   const canvas = createCanvas(engine, canvasBox, {
+    selectionToolbarContainer: canvasActions,
     selectionCommands: { registry: commands, context: makeCtx },
+    onInsertAfter: libraryToggle.hidden ? undefined : openBlockPlacement,
+    onComponentMoved: () => closeCompactPanel(false),
+    onFrameImage(id, trigger) {
+      openCanvasSettings(trigger)
+      inspector.openImageFraming?.(id)
+    },
+    onEditImageLink(id, trigger) {
+      openCanvasSettings(trigger)
+      inspector.openImageLink?.(id)
+    },
+    onEditLink(id, trigger) {
+      openCanvasSettings(trigger)
+      inspector.openLinkSettings?.(id)
+    },
+    onEditLeadingText(id, trigger) {
+      openCanvasSettings(trigger)
+      inspector.openLeadingText?.(id)
+    },
+    onEditTypography(id, trigger) {
+      openCanvasSettings(trigger)
+      inspector.openTypography?.(id)
+    },
     onEditingDirtyChange(dirty) {
       inlineDirty = dirty
       if (persistenceReady && !destroyed) refreshChrome()
     },
-    onReplaceImage: opts.assets
-      ? (id, trigger) => inspector.replaceImage?.(id, trigger)
-      : undefined,
+    onReplaceImage: (id, trigger) => inspector.replaceImage?.(id, trigger),
     rendererOptions: { shortcodeResolver, htmlPolicy: policy },
     richText: opts.richText,
     i18n,
     chrome: false,
     onContextMenu: (_id, x, y) => openSelectionMenu(x, y),
   })
+  canvas.iframe.style.minHeight = '0'
   const inspector = createInspector(engine, inspectorBox, {
+    onRevealLinkTarget() {
+      if (compactLayout) closeCompactPanel(false)
+      canvas.revealSelection?.({ focusToolbar: true })
+    },
+    faq: { createItem: blockFAQItem, revealSelection: () => canvas.revealSelection?.() },
     getShortcodeSchema: (name) => shortcodeRegistry.get(name)?.schema,
     richText: opts.richText?.resolver,
+    acceptsCustomGridTracks: opts.acceptsCustomGridTracks,
+    acceptsColorValue: opts.acceptsColorValue,
+    acceptsSpacingValue: opts.acceptsSpacingValue,
+    acceptsTypographyValue: opts.acceptsTypographyValue,
     assets: opts.assets,
     i18n,
     fetchJSON,
   })
   const unsubDevice = canvas.subscribeDevice((next) => inspector.setDevice(next))
   const layers = createLayersPanel(engine, layersBox, {
+    searchable: true,
+    headingOutline: true,
+    richText: opts.richText?.resolver,
     i18n,
+    preserveSearchOnActivate: () => compactLayout && activePanel === 'settings',
+    onActivate() {
+      canvas.revealSelection?.()
+      if (compactLayout && activePanel === 'settings') switchSettingsView('inspector')
+    },
     onContextMenu: (_id, x, y) => {
       openSelectionMenu(x, y)
     },
   })
+  refreshCompactPanels()
   // 合併靜態區塊與範本；有任一來源即建立面板
   const templateStore = opts.templates
   const hasTemplates = !!templateStore
@@ -1406,6 +2174,7 @@ export function createApp(opts: AppOptions): SigilApp {
   const blocksPanel = mergedBlocks
     ? createBlocksPanel(engine, blocksBox, canvas.iframe, mergedBlocks, {
         i18n,
+        blockPinStorageKey: opts.blockPinStorageKey,
         itemActions: (block) => templateLibrary?.itemActions(block),
       })
     : null
@@ -1430,8 +2199,13 @@ export function createApp(opts: AppOptions): SigilApp {
   }
   function setMode(next: CanvasMode): void {
     mode = next
-    if (next === 'preview') closeAssetLibrary?.()
+    if (next === 'preview') {
+      pageTextDialog?.close()
+      blocksPanel?.cancelInsertAfter?.()
+      closeAssetLibrary?.()
+    }
     canvas.setMode(next)
+    selectionPath.setVisible(next === 'edit')
     if (compactLayout) {
       closeCompactPanel(false)
       showExtraTools(false)
@@ -1476,6 +2250,9 @@ export function createApp(opts: AppOptions): SigilApp {
     previewBtn.setAttribute('aria-pressed', String(mode === 'preview'))
     const dirty = isDirty()
     assetsToggle.disabled = !canInsertAsset()
+    compactAssets.disabled = assetsToggle.disabled
+    const findCommand = commands.get('find-replace')
+    findToggle.disabled = compactFind.disabled = findCommand?.when ? !findCommand.when(ctx) : false
     pageStylesToggle.disabled = mode === 'preview' || !!engine.getTree().locked
     statusDirty.textContent = i18n.t(
       persistence.isSaving() ? 'app.saving' : dirty ? 'app.dirty' : 'app.saved',
@@ -1519,6 +2296,7 @@ export function createApp(opts: AppOptions): SigilApp {
       i18n.t('app.help_delete'),
       i18n.t('app.help_undo'),
       i18n.t('app.help_redo'),
+      i18n.t('app.help_find_replace'),
       i18n.t('app.help_copy_paste'),
       i18n.t('app.help_save'),
     ]
@@ -1587,6 +2365,29 @@ export function createApp(opts: AppOptions): SigilApp {
     ta.value = html
     ta.rows = 14
     source.append(summary, ta)
+
+    const missingSource = document.createElement('p')
+    missingSource.className = 'sigil-muted'
+    missingSource.setAttribute('role', 'status')
+    missingSource.hidden = true
+    const pageLinks = createPageLinksPanel(doc.root, {
+      i18n,
+      richText: opts.richText?.resolver,
+      onEdit(id) {
+        if (closed) return
+        if (mountEl.closest('[inert]') || !pageLinks.hasSource(engine.getTree(), id)) {
+          missingSource.hidden = false
+          missingSource.textContent = i18n.t('app.export_link_missing')
+          return
+        }
+        close(false)
+        if (mode === 'preview') setMode('edit')
+        engine.select(id)
+        canvas.revealSelection?.()
+        openCanvasSettings(editSelection)
+        inspector.openLinkSettings?.(id, 'address')
+      },
+    })
 
     const actionsRow = document.createElement('div')
     actionsRow.className = 'sigil-dialog-actions'
@@ -1666,12 +2467,14 @@ export function createApp(opts: AppOptions): SigilApp {
       title.textContent = i18n.t('app.export_title')
       closeBtn.textContent = i18n.t('app.close')
       refreshDownload()
+      pageLinks.refreshLocale()
+      if (!missingSource.hidden) missingSource.textContent = i18n.t('app.export_link_missing')
       summary.textContent = i18n.t('app.export_source')
       copyBtn.textContent = copied ? i18n.t('app.copied') : i18n.t('app.copy')
       actionsCloseBtn.textContent = i18n.t('app.close')
     }
 
-    panel.append(head, hint, source, actionsRow)
+    panel.append(head, hint, pageLinks.el, missingSource, source, actionsRow)
     backdrop.appendChild(panel)
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) close()
@@ -1680,6 +2483,7 @@ export function createApp(opts: AppOptions): SigilApp {
     dlBtn.focus()
 
     function onDialogKeyDown(e: KeyboardEvent): void {
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return
       if (e.key === 'Escape') {
         e.preventDefault()
         close()
@@ -1689,14 +2493,16 @@ export function createApp(opts: AppOptions): SigilApp {
     }
     document.addEventListener('keydown', onDialogKeyDown)
 
-    function close(): void {
+    function close(restoreFocus = true): void {
       if (closed) return
       closed = true
       document.removeEventListener('keydown', onDialogKeyDown)
+      pageLinks.destroy()
       backdrop.remove()
       closeExportDialog = null
       refreshExportDialog = null
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus()
+      if (restoreFocus && previousFocus instanceof HTMLElement && previousFocus.isConnected)
+        previousFocus.focus()
       pendingDownload?.abort()
     }
     closeExportDialog = close
@@ -1748,7 +2554,13 @@ export function createApp(opts: AppOptions): SigilApp {
     // Hosts can suspend editing while replacing or loading the document.
     if (mountEl.closest('[inert]')) return
     const t = e.target as HTMLElement | null
-    if (t instanceof Element && t.closest('[role="dialog"], [role="menu"], [inert]')) return
+    if (
+      t instanceof Element &&
+      t.closest(
+        'dialog, [role="dialog"], [role="menu"], [inert], .sigil-layer-search, .sigil-layer-views, .sigil-heading-outline, .sigil-block-pin, .sigil-blocks-pin-filter, .sigil-settings-views',
+      )
+    )
+      return
     const field =
       t instanceof HTMLElement && (t.matches('input, textarea, select') || t.isContentEditable)
     if (
@@ -1764,10 +2576,17 @@ export function createApp(opts: AppOptions): SigilApp {
       return
     const cmd = commands.match(e, makeCtx())
     if (!cmd || (field && cmd.id !== 'save')) return
+    if (
+      cmd.id === 'find-replace' &&
+      (!t || !root.contains(t) || e.defaultPrevented || e.isComposing || e.keyCode === 229)
+    )
+      return
     const selectedId = field && engine.getSelection()
     if (selectedId && findNode(engine.getTree(), selectedId)?.locked) return
     e.preventDefault()
-    void commands.run(cmd.id, makeCtx()).catch(() => {})
+    void commands
+      .run(cmd.id, makeCtx())
+      .catch(() => setStatusMessage(() => i18n.t('canvas.command_failed')))
   }
   document.addEventListener('keydown', onKeyDown)
 
@@ -1778,7 +2597,7 @@ export function createApp(opts: AppOptions): SigilApp {
     refreshLocaleChrome()
   }
 
-  const api: SigilApp = {
+  const api: SigilApp<HistoryEngine> = {
     engine,
     toJSON() {
       return structuredClone(engine.toJSON())
@@ -1806,6 +2625,8 @@ export function createApp(opts: AppOptions): SigilApp {
       persistence.destroy()
       runBeforeDestroy(hooks, engine)
       closeExportDialog?.()
+      historyDialog?.close()
+      pageTextDialog?.close()
       closeAssetLibrary?.()
       closeMenu?.()
       cleanupTheme()
@@ -1821,6 +2642,7 @@ export function createApp(opts: AppOptions): SigilApp {
       unsubDevice()
       templateLibrary?.destroy()
       blocksPanel?.destroy()
+      selectionPath.destroy()
       layers.destroy()
       inspector.destroy()
       canvas.destroy()

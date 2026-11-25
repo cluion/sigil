@@ -7,6 +7,11 @@ import {
 } from '../../examples/laravel/resources/js/activity-template'
 import { addPhoto, listPhotos, PhotoError } from './local-photos'
 import { decodeDraft, encodeDraft } from './photo-draft'
+import {
+  acceptsColorValue,
+  acceptsImageAttribute,
+  acceptsSpacingValue,
+} from '../../examples/laravel/resources/js/document-validation'
 import { createActivityDownload } from '../../examples/laravel/resources/js/activity-download'
 import '../../examples/laravel/resources/css/editor.css'
 
@@ -86,6 +91,9 @@ async function openActivity(): Promise<void> {
     mount: '#sigil-root',
     doc,
     store,
+    acceptsColorValue,
+    acceptsImageAttribute,
+    acceptsSpacingValue,
     assets: {
       async list() {
         const cover = { id: 'workshop-cover', url: coverUrl, name: '工作坊版畫照片' }

@@ -52,10 +52,19 @@ export function getEffectiveStyle(
   device: ResponsiveDevice,
 ): Style {
   const style: Style = { ...node.style }
-  if (device === 'tablet' || device === 'mobile') {
-    Object.assign(style, node.responsiveStyles?.tablet)
+  if (device !== 'desktop' && node.responsiveStyles) {
+    for (const breakpoint of BREAKPOINTS) {
+      const overrides = node.responsiveStyles[breakpoint]
+      if (overrides) {
+        // 較窄裝置的宣告排在最後，保留 CSS 簡寫與個別屬性的覆寫順序。
+        for (const [property, value] of Object.entries(overrides)) {
+          delete style[property]
+          style[property] = value
+        }
+      }
+      if (breakpoint === device) break
+    }
   }
-  if (device === 'mobile') Object.assign(style, node.responsiveStyles?.mobile)
   for (const [property, value] of Object.entries(style)) {
     if (value === '') delete style[property]
   }

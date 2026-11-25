@@ -647,6 +647,120 @@ function createFAQItem(item: FAQItemOptions): ComponentNode {
   }
 }
 
+const DEFAULT_ACCORDION_ITEMS: readonly FAQItemOptions[] = [
+  { question: '需要自備工具嗎？', answer: '活動現場會提供所需工具與材料。' },
+  { question: '第一次參加也適合嗎？', answer: '歡迎初次參加，現場會有分步示範。' },
+  { question: '幾點開始報到？', answer: '請於活動開始前十分鐘抵達，預留時間報到。' },
+]
+
+/** 建立可獨立插入的原生折疊問答 */
+export function blockFAQItem(item: FAQItemOptions): ComponentNode {
+  return {
+    id: createId(),
+    type: 'section',
+    tagName: 'details',
+    name: '問答項目',
+    style: {
+      'min-width': '0',
+      color: '#1e293b',
+      background: '#ffffff',
+      border: '1px solid #cbd5e1',
+      'border-radius': '0.75rem',
+      'overflow-wrap': 'anywhere',
+    },
+    children: [
+      {
+        id: createId(),
+        type: 'text',
+        tagName: 'summary',
+        name: '問題',
+        content: item.question,
+        style: {
+          'box-sizing': 'border-box',
+          'min-height': '44px',
+          padding: '0.75rem 1rem',
+          'font-weight': '650',
+          'line-height': '1.5',
+          cursor: 'pointer',
+        },
+      },
+      {
+        id: createId(),
+        type: 'text',
+        tagName: 'p',
+        name: '答案',
+        content: item.answer,
+        style: {
+          margin: '0',
+          padding: '0 1rem 1rem',
+          color: '#475569',
+          'line-height': '1.7',
+          'white-space': 'pre-line',
+        },
+      },
+    ],
+  }
+}
+
+/** 建立內含原生 details 與 summary 的 FAQ 區塊 */
+export function blockAccordionFAQ(options: FAQBlockOptions = {}): ComponentNode {
+  const title = options.title ?? '常見問題'
+  const children: ComponentNode[] = []
+  if (options.eyebrow) {
+    children.push({
+      id: createId(),
+      type: 'text',
+      tagName: 'span',
+      name: 'FAQ 眉標',
+      content: options.eyebrow,
+      style: { color: '#475569', 'font-size': '0.875rem', 'font-weight': '650' },
+    })
+  }
+  children.push({
+    id: createId(),
+    type: 'text',
+    tagName: 'h2',
+    name: 'FAQ 標題',
+    content: title,
+    style: {
+      margin: '0 0 0.5rem',
+      'font-size': 'clamp(1.5rem, 4vw, 2.25rem)',
+      'line-height': '1.2',
+    },
+  })
+  if (options.description) {
+    children.push({
+      id: createId(),
+      type: 'text',
+      tagName: 'p',
+      name: 'FAQ 說明',
+      content: options.description,
+      style: { margin: '0 0 0.5rem', color: '#475569', 'line-height': '1.7' },
+    })
+  }
+  return {
+    id: createId(),
+    type: 'section',
+    name: '折疊式 FAQ',
+    attributes: { 'data-faq-accordion': 'true', 'aria-label': options.ariaLabel ?? title },
+    style: {
+      'box-sizing': 'border-box',
+      width: '100%',
+      'max-width': '52rem',
+      margin: '0 auto',
+      padding: 'clamp(1rem, 4vw, 3rem)',
+      display: 'flex',
+      'flex-direction': 'column',
+      gap: '0.75rem',
+      color: '#0f172a',
+      background: '#f8fafc',
+      'border-radius': '1rem',
+      'overflow-wrap': 'anywhere',
+    },
+    children: [...children, ...(options.items ?? DEFAULT_ACCORDION_ITEMS).map(blockFAQItem)],
+  }
+}
+
 /** BlocksPanel 使用的 Hero 定義 */
 export const heroBlockDef: BlockDefinition = {
   id: 'marketing-hero',
@@ -677,5 +791,19 @@ export const faqBlockDef: BlockDefinition = {
   create: blockFAQ,
 }
 
+export const accordionFAQBlockDef: BlockDefinition = {
+  id: 'marketing-accordion-faq',
+  label: '折疊式 FAQ',
+  category: '行銷',
+  icon: '▸',
+  keywords: ['accordion', 'FAQ', '問答', '常見問題', '折疊'],
+  create: blockAccordionFAQ,
+}
+
 /** 官方行銷區塊 */
-export const marketingBlockDefs: BlockDefinition[] = [heroBlockDef, pricingBlockDef, faqBlockDef]
+export const marketingBlockDefs: BlockDefinition[] = [
+  heroBlockDef,
+  pricingBlockDef,
+  faqBlockDef,
+  accordionFAQBlockDef,
+]

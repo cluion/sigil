@@ -3,6 +3,237 @@ import { createEngine, createI18n } from '@cluion/sigil-core'
 import { createLayersPanel } from '../src/layers.js'
 
 describe('createLayersPanel', () => {
+  it('切換標題大綱時保留圖層查詢與展開狀態，返回時揭露新選取', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'page',
+          type: 'section',
+          children: [
+            {
+              id: 'hero',
+              type: 'section',
+              children: [{ id: 'title', type: 'text', tagName: 'h1', content: '首場活動' }],
+            },
+            { id: 'intro', type: 'text', content: '報名方式' },
+          ],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.append(box)
+    const onActivate = vi.fn()
+    const i18n = createI18n({ zh: {}, en: { 'layers.all': 'All layers' } })
+    const handle = createLayersPanel(engine, box, {
+      searchable: true,
+      headingOutline: true,
+      onActivate,
+      i18n,
+    })
+    const tree = box.querySelector<HTMLElement>('[role="tree"]')!
+    const group = tree.querySelector<HTMLElement>('[role="treeitem"][data-layer-id="hero"]')!
+    const all = box.querySelector<HTMLButtonElement>('[data-layer-view="tree"]')!
+    const outline = box.querySelector<HTMLButtonElement>('[data-layer-view="outline"]')!
+    const search = box.querySelector<HTMLInputElement>('.sigil-layer-search-input')!
+    Object.defineProperty(box, 'clientHeight', { value: 140 })
+    Object.defineProperties(tree, { clientHeight: { value: 100 }, scrollHeight: { value: 900 } })
+    const treeBounds = vi
+      .spyOn(tree, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(0, 0, 180, 100))
+    try {
+      group.querySelector<HTMLButtonElement>('[data-layer-action="toggle"]')!.click()
+      search.value = '報名'
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+      const result = box.querySelector('[data-layer-result="intro"]')!
+      expect(box.querySelector('[data-heading-id]')).toBeNull()
+      outline.click()
+      expect(all.getAttribute('aria-pressed')).toBe('false')
+      expect(outline.getAttribute('aria-pressed')).toBe('true')
+      expect(result.closest('[hidden]')).not.toBeNull()
+      all.click()
+      expect(search.value).toBe('報名')
+      expect(box.querySelector('[data-layer-result="intro"]')?.closest('[hidden]')).toBeNull()
+      expect(group.getAttribute('aria-expanded')).toBe('false')
+      outline.click()
+      handle.focus('search')
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('搜尋標題')
+      box.querySelector<HTMLButtonElement>('[data-heading-id="title"]')!.click()
+      expect(onActivate.mock.calls).toEqual([['title']])
+      expect(engine.getSelection()).toBe('title')
+      expect(engine.canUndo()).toBe(false)
+      i18n.setLocale('en')
+      expect(all.textContent).toBe('All layers')
+      all.click()
+      expect(treeBounds).not.toHaveBeenCalled()
+      search.value = ''
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(tree.hidden).toBe(false)
+      expect(treeBounds).toHaveBeenCalled()
+      expect(tree.querySelector('[data-layer-id="hero"][aria-expanded="true"]')).not.toBeNull()
+      expect(tree.querySelector('[data-layer-id="title"][aria-selected="true"]')).not.toBeNull()
+      expect(box.querySelector('[data-heading-id]')?.closest('[hidden]')).not.toBeNull()
+    } finally {
+      handle.destroy()
+      box.remove()
+      engine.destroy()
+    }
+  })
+
+  it('單獨啟用大綱可重新揭露收合的同一個標題，將最新圖層列捲入內層清單', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'page',
+          type: 'section',
+          children: [
+            {
+              id: 'group',
+              type: 'section',
+              children: [{ id: 'title', type: 'text', tagName: 'h2', content: '報名' }],
+            },
+          ],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.append(box)
+    const handle = createLayersPanel(engine, box, { headingOutline: true })
+    const tree = box.querySelector<HTMLElement>('[role="tree"]')!
+    const row = () => tree.querySelector<HTMLElement>('[role="treeitem"][data-layer-id="title"]')
+    Object.defineProperty(box, 'clientHeight', { value: 140 })
+    Object.defineProperties(tree, { clientHeight: { value: 100 }, scrollHeight: { value: 900 } })
+    const bounds = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        return this === tree ? new DOMRect(0, 0, 180, 100) : new DOMRect(0, 410, 180, 30)
+      })
+    try {
+      engine.select('title')
+      tree
+        .querySelector<HTMLButtonElement>(
+          '[role="treeitem"][data-layer-id="group"] [data-layer-action="toggle"]',
+        )!
+        .click()
+      expect(row()).toBeNull()
+      tree.scrollTop = 0
+      box.querySelector<HTMLButtonElement>('[data-layer-view="outline"]')!.click()
+      box.querySelector<HTMLButtonElement>('[data-heading-id="title"]')!.click()
+      engine.insert('page', { id: 'other', type: 'text', content: '更多內容' })
+      expect(row()).toBeNull()
+      box.querySelector<HTMLButtonElement>('[data-layer-view="tree"]')!.click()
+      expect(row()?.getAttribute('aria-selected')).toBe('true')
+      expect(tree.scrollTop).toBe(340)
+      expect(box.scrollTop).toBe(0)
+    } finally {
+      bounds.mockRestore()
+      handle.destroy()
+      engine.destroy()
+      box.remove()
+    }
+  })
+
+  it('可依目前面板保留搜尋結果與焦點，切回一般模式會揭露所選圖層', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'page',
+          type: 'section',
+          children: [{ id: 'heading', type: 'text', name: '活動標題' }],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.append(box)
+    let preserve = true
+    const handle = createLayersPanel(engine, box, {
+      searchable: true,
+      preserveSearchOnActivate: () => preserve,
+    })
+    try {
+      const input = box.querySelector('input')!
+      input.value = '活動'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.focus()
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      expect(document.activeElement).toBe(box.querySelector('[data-layer-result="heading"]'))
+      expect(engine.getSelection()).toBe('heading')
+      expect(input.value).toBe('活動')
+      expect(box.querySelector<HTMLElement>('[role="tree"]')!.hidden).toBe(true)
+      preserve = false
+      box.querySelector<HTMLButtonElement>('[data-layer-result="heading"]')!.click()
+      expect(input.value).toBe('')
+      expect(document.activeElement).toBe(
+        box.querySelector('[role="treeitem"][aria-label="活動標題"]'),
+      )
+      expect(engine.canUndo()).toBe(false)
+    } finally {
+      handle.destroy()
+      box.remove()
+      engine.destroy()
+    }
+  })
+
+  it('在收合的圖層中搜尋及取消，選擇結果時才展開該分支並交還鍵盤焦點', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'root',
+          type: 'section',
+          children: ['a', 'b'].map((id) => ({
+            id,
+            type: 'section',
+            children: [{ id: id + '-leaf', type: 'text', name: '小標題', content: '報名資訊' }],
+          })),
+        },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.append(box)
+    const onActivate = vi.fn()
+    const handle = createLayersPanel(engine, box, { searchable: true, onActivate })
+    const row = (id: string) =>
+      box.querySelector<HTMLElement>(`[role="treeitem"][data-layer-id="${id}"]`)
+    const tree = box.querySelector<HTMLElement>('[role="tree"]')!
+    const input = box.querySelector<HTMLInputElement>('input[type="search"]')!
+    const search = (text: string) => {
+      input.focus()
+      input.value = text
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    try {
+      engine.select('root')
+      for (const id of ['a', 'b'])
+        row(id)!.querySelector<HTMLButtonElement>('[data-layer-action="toggle"]')!.click()
+      const originalRow = row('a')
+      search('報名資訊')
+      expect(tree.hidden).toBe(true)
+      expect(box.querySelectorAll('[data-layer-result]')).toHaveLength(2)
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      expect(tree.hidden).toBe(false)
+      expect(row('a')).toBe(originalRow)
+      expect(row('a-leaf')).toBeNull()
+      expect(row('b-leaf')).toBeNull()
+      expect(engine.getSelection()).toBe('root')
+      search('報名資訊')
+      box.querySelector<HTMLButtonElement>('[data-layer-result="b-leaf"]')!.click()
+      expect(tree.hidden).toBe(false)
+      expect(engine.getSelection()).toBe('b-leaf')
+      expect(row('a-leaf')).toBeNull()
+      expect(document.activeElement).toBe(row('b-leaf'))
+      expect(row('b-leaf')?.getAttribute('aria-selected')).toBe('true')
+      expect(onActivate.mock.calls).toEqual([['b-leaf']])
+      expect(engine.canUndo()).toBe(false)
+    } finally {
+      handle.destroy()
+      box.remove()
+      engine.destroy()
+    }
+  })
+
   it('折疊子樹保留選取與其他分支的 DOM，外部選取可揭露並捲到指定列', () => {
     const engine = createEngine({
       doc: {
@@ -201,6 +432,49 @@ describe('createLayersPanel', () => {
     box.remove()
   })
 
+  it('只有明確點選圖層和鍵盤確認才會通知宿主定位已選取的元件', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: { id: 'page', type: 'section', children: [{ id: 'title', type: 'text' }] },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.append(box)
+    const onActivate = vi.fn((id: string) => expect(engine.getSelection()).toBe(id))
+    const panel = createLayersPanel(engine, box, { onActivate, onContextMenu: vi.fn() })
+    const row = (id: string) =>
+      box.querySelector<HTMLElement>(`[role="treeitem"][data-layer-id="${id}"]`)!
+    const key = (id: string, value: string) =>
+      row(id).dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }))
+    const action = (id: string, value: string) =>
+      row(id).querySelector<HTMLButtonElement>(`[data-layer-action="${value}"]`)!.click()
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('新標題')
+    try {
+      engine.select('title')
+      key('page', 'ArrowDown')
+      key('title', 'Home')
+      action('page', 'toggle')
+      key('page', 'ArrowRight')
+      action('title', 'lock')
+      action('title', 'visibility')
+      key('title', 'F2')
+      key('title', 'ContextMenu')
+      row('title').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      expect(onActivate).not.toHaveBeenCalled()
+
+      row('title').querySelector<HTMLElement>('.sigil-layer-label')!.click()
+      row('title').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 }))
+      key('page', 'Enter')
+      key('title', ' ')
+      expect(onActivate.mock.calls).toEqual([['title'], ['page'], ['title']])
+    } finally {
+      prompt.mockRestore()
+      panel.destroy()
+      box.remove()
+    }
+  })
+
   it('F2 重命名，選單鍵同步選取並回報列座標', () => {
     const engine = createEngine({
       doc: {
@@ -279,7 +553,7 @@ describe('createLayersPanel', () => {
     panel.destroy()
   })
 
-  it('右鍵同步選取並回報節點與座標', () => {
+  it('右鍵同步選取與焦點並回報節點與座標', () => {
     const engine = createEngine({
       doc: {
         version: 1,
@@ -291,6 +565,7 @@ describe('createLayersPanel', () => {
       },
     })
     const box = document.createElement('div')
+    document.body.append(box)
     const onContextMenu = vi.fn()
     const panel = createLayersPanel(engine, box, { onContextMenu })
     const row = box.querySelector('.sigil-layer-row[data-layer-id="t"]') as HTMLElement
@@ -307,7 +582,9 @@ describe('createLayersPanel', () => {
     expect(engine.getSelection()).toBe('t')
     expect(onContextMenu).toHaveBeenCalledOnce()
     expect(onContextMenu).toHaveBeenCalledWith('t', 18, 24)
+    expect(document.activeElement).toBe(row)
     panel.destroy()
+    box.remove()
   })
 
   it('runtime locale 切換更新操作並保留焦點，destroy 後停止更新', () => {

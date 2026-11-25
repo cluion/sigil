@@ -69,10 +69,13 @@ test('桌面中文亮色', async ({ page }) => {
   await expect(app).toHaveAttribute('data-layout', 'desktop')
   await page.getByRole('treeitem', { name: '標題文字', exact: true }).click()
   await expect(page.locator('.sigil-tab')).toHaveText(['內容', '樣式', '進階'])
+  await expect(app.getByRole('combobox', { name: '文字格式' })).toHaveValue('span')
   await expect(page.getByRole('button', { name: '主題: 亮色', exact: true })).toBeVisible()
   await expectNoOverflow(page)
   await page.mouse.move(0, 0)
-  await expect(app).toHaveScreenshot('desktop-zh-light.png')
+  await expect(
+    app.filter({ has: page.getByRole('combobox', { name: '文字格式' }) }),
+  ).toHaveScreenshot('desktop-zh-light.png')
   expect(errors).toEqual([])
 })
 
@@ -84,13 +87,16 @@ test('桌面英文暗色', async ({ page }) => {
   await page.getByRole('button', { name: 'Theme: Light', exact: true }).click()
   await expect(app).toHaveClass(/sigil-theme-dark/)
   await expect(page.locator('.sigil-tab')).toHaveText(['Content', 'Style', 'Advanced'])
+  await expect(app.getByRole('combobox', { name: 'Text format' })).toHaveValue('span')
   await expect(page.getByRole('button', { name: 'Theme: Dark', exact: true })).toBeVisible()
   await expect(
     page.frameLocator('iframe[title="Canvas"]').getByText('建立你的下一個頁面'),
   ).toBeVisible()
   await expectNoOverflow(page)
   await page.mouse.move(0, 0)
-  await expect(app).toHaveScreenshot('desktop-en-dark.png')
+  await expect(
+    app.filter({ has: page.getByRole('combobox', { name: 'Text format' }) }),
+  ).toHaveScreenshot('desktop-en-dark.png')
   expect(errors).toEqual([])
 })
 
@@ -103,10 +109,24 @@ test('390px 中文亮色設定抽屜', async ({ page }) => {
   const settings = page.locator('[data-compact-panel="settings"]')
   await expect(settings).toHaveAttribute('data-open', 'true')
   await expect(settings).toHaveAttribute('aria-hidden', 'false')
+  const views = settings.getByRole('group', { name: '面板檢視' })
+  await expect(views.getByRole('button', { name: '圖層', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(settings.locator('.sigil-inspector')).toBeHidden()
   await settings.getByRole('treeitem', { name: '標題文字', exact: true }).click()
+  await expect(views.getByRole('button', { name: '元件設定', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(settings.getByRole('tree', { includeHidden: true })).toBeHidden()
   await expect(settings.locator('.sigil-tab')).toHaveText(['內容', '樣式', '進階'])
+  await expect(settings.getByRole('combobox', { name: '文字格式' })).toHaveValue('span')
   await expectNoOverflow(page)
   await page.mouse.move(0, 0)
-  await expect(app).toHaveScreenshot('compact-390-zh-light-settings.png')
+  await expect(
+    app.filter({ has: page.getByRole('combobox', { name: '文字格式' }) }),
+  ).toHaveScreenshot('compact-390-zh-light-settings.png')
   expect(errors).toEqual([])
 })

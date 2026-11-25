@@ -99,6 +99,7 @@ export function decorateStyleControl(
   i18n?: I18n,
   observe?: (refreshMetadata: (value: DeviceStyleValue) => void) => void,
   signal?: AbortSignal,
+  reset?: () => void,
 ): HTMLElement {
   applyControlMetadata(control, initial, i18n)
   if (device === 'desktop') {
@@ -140,7 +141,8 @@ export function decorateStyleControl(
   inherit.addEventListener(
     'click',
     () => {
-      updateDeviceStyle(engine, node.id, device, property, '')
+      if (reset) reset()
+      else updateDeviceStyle(engine, node.id, device, property, '')
       if (observe) return
       const latest = findNode(engine.getTree(), node.id)
       if (!latest) return

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createEngine, createI18n, type AssetItem } from '@cluion/sigil-core'
+import { createEngine, createI18n, type AssetItem, type ComponentNode } from '@cluion/sigil-core'
 import { createInspector } from '../src/inspector.js'
 import { createEnglishUiI18n } from './i18n.js'
 
@@ -75,7 +75,327 @@ function startUpload(dialog: HTMLElement): void {
   input.dispatchEvent(new Event('change'))
 }
 
+describe('createInspector — 圖層名稱', () => {
+  it('本頁圖片選圖會在重新開啟時讀取最新來源，鎖定目標會取消選圖', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'page',
+          type: 'section',
+          children: [
+            { id: 'target', type: 'image', attributes: { src: '/one.jpg', alt: '一' } },
+            { id: 'source', type: 'image', attributes: { src: '/two.jpg', alt: '二' } },
+          ],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.append(box)
+    const inspector = createInspector(engine, box)
+    try {
+      engine.select('target')
+      const pick = box.querySelector<HTMLButtonElement>('.sigil-field-row button')!
+      pick.click()
+      const source = document.querySelectorAll<HTMLButtonElement>('.sigil-media-card')[1]!
+      engine.update('target', { locked: true })
+      expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
+      source.click()
+      expect(engine.getTree().children?.[0]?.attributes?.src).toBe('/one.jpg')
+      engine.update('source', { attributes: { src: '/three.jpg' } })
+      engine.update('target', { locked: false })
+      pick.click()
+      document.querySelectorAll<HTMLButtonElement>('.sigil-media-card')[1]!.click()
+      expect(engine.getTree().children?.[0]?.attributes).toEqual({ src: '/three.jpg', alt: '一' })
+      expect(document.activeElement).toBe(pick)
+    } finally {
+      inspector.destroy()
+      box.remove()
+      engine.destroy()
+    }
+  })
+
+  it('保留進階設定的焦點，只有改名時才新增復原步驟', () => {
+    const { box, engine } = mediaInspector('image')
+    box.querySelector<HTMLButtonElement>('[role="tab"][id$="-advanced"]')!.click()
+    const rename = box.querySelector<HTMLButtonElement>('.sigil-rename-layer')!
+    const prompt = vi.spyOn(window, 'prompt')
+    cleanups.push(() => prompt.mockRestore())
+    prompt.mockReturnValueOnce(null).mockReturnValueOnce('').mockReturnValueOnce('封面')
+    rename.focus()
+    rename.click()
+    rename.click()
+    expect(engine.canUndo()).toBe(false)
+    rename.click()
+    expect(document.activeElement).toBe(rename)
+    expect(box.querySelector('.sigil-inspector-head')?.textContent).toBe('封面')
+    expect(engine.getTree().children?.[0]).toMatchObject({
+      id: 'media',
+      name: '封面',
+      attributes: { src: 'original.png' },
+    })
+    engine.undo()
+    expect(engine.getSelection()).toBe('media')
+    expect(box.querySelector('.sigil-inspector-head')?.textContent).toBe('image')
+    expect(engine.canUndo()).toBe(false)
+  })
+})
+
+describe('createInspector — 圖片構圖', () => {
+  it('從內容跳到樣式，舊選取的入口不會打開新選取的面板', () => {
+    const { box, engine, inspector } = mediaInspector('image')
+    const content = box.querySelector<HTMLButtonElement>('[role="tab"][id$="-content"]')!
+    const style = box.querySelector<HTMLButtonElement>('[role="tab"][id$="-style"]')!
+    const open = box.querySelector<HTMLButtonElement>('.sigil-framing-action')!
+    open.click()
+    expect(style.getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(box.querySelector('.sigil-image-framing'))
+    expect(engine.canUndo()).toBe(false)
+    content.click()
+    engine.select('other')
+    open.click()
+    inspector.openImageFraming?.('media')
+    expect(content.getAttribute('aria-selected')).toBe('true')
+    expect(box.querySelector('.sigil-framing-action')).toBeNull()
+  })
+
+  it('有 shortcode 的圖片只顯示它自己的元件控制項', () => {
+    const { box, inspector } = mediaInspector('both')
+    expect(box.querySelector('.sigil-framing-action')).toBeNull()
+    inspector.openImageFraming?.('media')
+    box.querySelector<HTMLButtonElement>('[role="tab"][id$="-style"]')!.click()
+    expect(box.querySelector('.sigil-image-framing')).toBeNull()
+  })
+})
+
+describe('createInspector — 複製與套用樣式', () => {
+  function setup(children: ComponentNode[]) {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'page', type: 'section', children } },
+    })
+    cleanups.push(() => engine.destroy())
+    function mountInspector() {
+      const box = document.createElement('div')
+      document.body.append(box)
+      const inspector = createInspector(engine, box)
+      box.querySelector<HTMLButtonElement>('[role="tab"][id$="-style"]')!.click()
+      cleanups.push(() => {
+        inspector.destroy()
+        box.remove()
+      })
+      const button = (label: string) => {
+        const match = [...box.querySelectorAll('button')].find((el) => el.textContent === label)
+        expect(match, label).toBeDefined()
+        return match!
+      }
+      return { inspector, copy: () => button('複製樣式'), apply: () => button('套用樣式') }
+    }
+    return { engine, mountInspector }
+  }
+
+  it('跨裝置套用來源快照，只覆寫不同的值，一次復原及重做整批樣式', () => {
+    const target: ComponentNode = {
+      id: 'target',
+      type: 'text',
+      content: '保留這段內容',
+      attributes: { id: 'intro' },
+      className: 'lead',
+      style: { display: 'block', color: 'black' },
+      responsiveStyles: { tablet: { width: '75%' }, mobile: { padding: '3px' } },
+    }
+    const { engine, mountInspector } = setup([
+      {
+        id: 'source',
+        type: 'text',
+        style: { display: 'block', color: 'navy', padding: '2px' },
+        responsiveStyles: {
+          tablet: { padding: '12px', gap: '8px' },
+          mobile: { gap: '16px' },
+        },
+      },
+      target,
+    ])
+    const { inspector, copy, apply } = mountInspector()
+    engine.select('source')
+    inspector.setDevice('mobile')
+    copy().focus()
+    copy().click()
+    expect(document.activeElement).toBe(copy())
+    expect(engine.canUndo()).toBe(false)
+    engine.update('source', { style: { color: 'red' } })
+    engine.select('target')
+    inspector.setDevice('tablet')
+    const before = engine.getTree()
+    const update = vi.spyOn(engine, 'update')
+    apply().focus()
+    apply().click()
+    expect(document.activeElement).toBe(apply())
+    expect(engine.getTree().children![1]).toEqual({
+      ...target,
+      responsiveStyles: {
+        tablet: { width: '75%', padding: '12px', color: 'navy', gap: '16px' },
+        mobile: { padding: '3px' },
+      },
+    })
+    const applied = engine.getTree()
+    apply().click()
+    expect(update).toHaveBeenCalledTimes(1)
+    engine.undo()
+    expect(engine.getTree()).toEqual(before)
+    expect(document.activeElement).toBe(apply())
+    engine.redo()
+    expect(engine.getTree()).toEqual(applied)
+  })
+
+  it('可讀取鎖定來源，空樣式與鎖定目標不產生寫入', () => {
+    const { engine, mountInspector } = setup([
+      { id: 'source', type: 'text', locked: true, style: { color: 'navy' } },
+      { id: 'empty', type: 'text', className: 'external-style' },
+      { id: 'target', type: 'text', locked: true, responsiveStyles: { mobile: { gap: '8px' } } },
+    ])
+    const { copy, apply } = mountInspector()
+    engine.select('empty')
+    expect(copy().disabled).toBe(true)
+    expect(apply().disabled).toBe(true)
+    engine.select('source')
+    expect(copy().disabled).toBe(false)
+    copy().click()
+    engine.select('target')
+    expect(apply().disabled).toBe(true)
+    apply().click()
+    expect(engine.canUndo()).toBe(false)
+    engine.update('target', { locked: false })
+    apply().click()
+    expect(engine.getTree().children![2]).toMatchObject({
+      style: { color: 'navy' },
+      responsiveStyles: { mobile: { gap: '8px' } },
+    })
+  })
+
+  it('共用同份文件的 Inspector 各自保留樣式，改選後舊按鈕無法寫入', () => {
+    const { engine, mountInspector } = setup([
+      { id: 'blue', type: 'text', style: { color: 'blue' } },
+      { id: 'red', type: 'text', style: { color: 'red' } },
+      { id: 'target', type: 'button' },
+    ])
+    const first = mountInspector()
+    const second = mountInspector()
+    engine.select('blue')
+    first.copy().click()
+    engine.select('red')
+    expect(second.apply().disabled).toBe(true)
+    second.copy().click()
+    const staleApply = first.apply()
+    engine.select('target')
+    staleApply.click()
+    expect(engine.canUndo()).toBe(false)
+    first.apply().click()
+    expect(engine.getTree().children![2]!.style).toEqual({ color: 'blue' })
+    second.apply().click()
+    expect(engine.getTree().children![2]!.style).toEqual({ color: 'red' })
+  })
+})
+
 describe('createInspector — responsive style', () => {
+  it('選取標題後，版面會隨父層排列與裝置顯示跨欄操作', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'cards',
+          type: 'section',
+          style: { display: 'flex' },
+          responsiveStyles: { mobile: { display: 'flex' } },
+          children: [{ id: 'headline', type: 'text', tagName: 'h2', content: '活動資訊' }],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const inspector = createInspector(engine, box)
+    cleanups.push(() => {
+      inspector.destroy()
+      engine.destroy()
+    })
+    engine.select('headline')
+    box.querySelector<HTMLButtonElement>('[role="tab"][id$="-style"]')!.click()
+    const group = () => box.querySelector<HTMLElement>('.sigil-style-section .sigil-grid-item')!
+    const full = () => group().querySelector<HTMLButtonElement>('[data-grid-item="full"]')!
+    expect(group().hidden).toBe(true)
+    engine.update('cards', { style: { display: 'inline-grid' } })
+    expect(group().hidden).toBe(false)
+    const old = full()
+    old.click()
+    expect(engine.getTree().children?.[0]?.style?.['grid-column']).toBe('1 / -1')
+    inspector.setDevice('mobile')
+    expect(group().hidden).toBe(true)
+    inspector.setDevice('desktop')
+    expect(full().getAttribute('aria-pressed')).toBe('true')
+    engine.undo()
+    expect(full().getAttribute('aria-pressed')).toBe('false')
+    engine.select('cards')
+    expect(box.querySelector('.sigil-grid-item')).toBeNull()
+    const tree = engine.getTree()
+    old.click()
+    expect(engine.getTree()).toBe(tree)
+  })
+
+  it('容器版面可直接選欄數，切裝置和復原時會同步顯示方式與間距欄位', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'cards',
+          type: 'section',
+          tagName: 'article',
+          style: { display: 'flex', gap: '12px' },
+          children: [
+            { id: 'headline', type: 'text', tagName: 'h2', content: '活動' },
+            { id: 'rich', type: 'section', tagName: 'div' },
+          ],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const inspector = createInspector(engine, box, {
+      richText: { supports: (node) => node.id === 'rich', read: () => '' },
+    })
+    cleanups.push(() => {
+      inspector.destroy()
+      engine.destroy()
+    })
+    engine.select('cards')
+    box.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]!.click()
+    inspector.setDevice('mobile')
+    const button = (n: number) =>
+      box.querySelector<HTMLButtonElement>(`[data-grid-columns="${n}"]`)!
+    const mobileTwo = button(2)
+    expect(mobileTwo.closest('.sigil-style-section')?.previousElementSibling?.textContent).toBe(
+      '版面',
+    )
+    mobileTwo.click()
+    const display = () => box.querySelector<HTMLSelectElement>('[data-style-property="display"]')!
+    expect(display().value).toBe('grid')
+    expect(box.querySelector('[data-style-property="gap"]')?.closest('[hidden]')).toBeNull()
+    expect(
+      box.querySelector('[data-style-property="flex-direction"]')?.closest('[hidden]'),
+    ).toBeTruthy()
+    expect(mobileTwo.getAttribute('aria-pressed')).toBe('true')
+    engine.undo()
+    expect(display().dataset.styleSource).toBe('desktop')
+    expect(button(2).getAttribute('aria-pressed')).toBe('false')
+    engine.redo()
+    inspector.setDevice('desktop')
+    expect(display().value).toBe('flex')
+    expect(button(2).getAttribute('aria-pressed')).toBe('false')
+    const tree = engine.getTree()
+    mobileTwo.click()
+    expect(engine.getTree()).toBe(tree)
+    for (const id of ['headline', 'rich']) {
+      engine.select(id)
+      expect(box.querySelector('.sigil-grid-columns')).toBeNull()
+    }
+  })
+
   it('版面、文字與外觀維持各自的展開狀態，切換元件、裝置與復原皆可繼續編輯', () => {
     const engine = createEngine({
       doc: {

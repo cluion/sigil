@@ -1,10 +1,31 @@
-import { createId, findNode, type Engine, type ComponentNode, type I18n } from '@cluion/sigil-core'
+import {
+  createId,
+  findNode,
+  type Engine,
+  type ComponentNode,
+  type I18n,
+  type RichTextResolver,
+} from '@cluion/sigil-core'
 import { subscribeLocale, uiText } from './i18n.js'
+import { createLayerSearch } from './layer-search.js'
+import { createHeadingOutline } from './heading-outline.js'
+import { findComponentPath } from './component-path.js'
+import { imageLinkLabel } from './image-link-label.js'
 
 export interface LayersPanelOptions {
   i18n?: I18n
   /** 圖層樹的無障礙名稱 */
   ariaLabel?: string
+  /** 在圖層樹上方提供可搜尋整份文件的欄位。 */
+  searchable?: boolean
+  /** 提供依文件順序瀏覽原生標題的檢視。 */
+  headingOutline?: boolean
+  /** 大綱略過由這個 adapter 接管的內容。 */
+  richText?: Pick<RichTextResolver, 'supports'>
+  /** 選擇結果後保留查詢、已展開的結果頁和目前結果。 */
+  preserveSearchOnActivate?: () => boolean
+  /** 點選圖層或按 Enter、空白鍵確認選取後觸發。 */
+  onActivate?: (id: string) => void
   /** 右鍵選單命中節點與游標座標 */
   onContextMenu?: (id: string, x: number, y: number) => void
 }
@@ -18,11 +39,22 @@ export function createLayersPanel(
   opts?: LayersPanelOptions,
 ): {
   destroy: () => void
+  /** 將焦點移回目前檢視的控制項，或直接移到其搜尋欄。 */
+  focus: (target?: 'previous' | 'search') => void
+  /** 面板隱藏時延後更新搜尋與大綱，再次顯示時同步。 */
+  setSearchVisible: (visible: boolean) => void
 } {
-  container.classList.add('sigil-layers-panel')
-  container.setAttribute('role', 'tree')
+  const treeView =
+    opts?.searchable || opts?.headingOutline ? document.createElement('div') : container
+  treeView.classList.add('sigil-layers-panel')
+  treeView.setAttribute('role', 'tree')
+  function typeLabel(node: ComponentNode): string {
+    if (node.name?.trim()) return node.name.trim()
+    if (node.type === 'shortcode' && node.shortcode?.name) return `sc:${node.shortcode.name}`
+    return imageLinkLabel(node, opts?.i18n) ?? node.type
+  }
   function refreshLabel(): void {
-    container.setAttribute(
+    treeView.setAttribute(
       'aria-label',
       opts?.ariaLabel ?? uiText(opts?.i18n, 'layers.title', '圖層'),
     )
@@ -34,6 +66,77 @@ export function createLayersPanel(
   const rows = new Map<string, HTMLElement>()
   let tabStop: HTMLElement | null = null
   let selectedId = engine.getSelection()
+  let lastControl: HTMLElement | null = null
+  let pendingSelection = false
+  const search = opts?.searchable
+    ? createLayerSearch(engine, {
+        tree: treeView,
+        i18n: opts.i18n,
+        labelForNode: typeLabel,
+        preserveSearchOnActivate: opts.preserveSearchOnActivate,
+        onShowTree: syncPendingSelection,
+        onActivate(id) {
+          engine.select(id)
+          if (!treeView.hidden) rows.get(id)?.focus({ preventScroll: true })
+          opts.onActivate?.(id)
+        },
+      })
+    : undefined
+  const outline = opts?.headingOutline
+    ? createHeadingOutline(engine, {
+        document: container.ownerDocument,
+        i18n: opts.i18n,
+        richText: opts.richText,
+        onActivate(id) {
+          engine.select(id)
+          opts.onActivate?.(id)
+        },
+      })
+    : undefined
+  const treePane = outline ? document.createElement('div') : container
+  const views = outline ? createLayerViews(treePane, outline.el, opts?.i18n) : undefined
+  let visible = true
+  let showingOutline = false
+  let treeLocaleChanged = false
+
+  if (search || outline) {
+    if (container.classList.contains('sigil-layers-panel')) {
+      container.classList.remove('sigil-layers-panel')
+      container.removeAttribute('role')
+      container.removeAttribute('aria-label')
+    }
+    treeView.classList.add('sigil-layer-tree')
+    container.classList.add('sigil-layer-browser')
+    treePane.replaceChildren(...(search ? [search.el, treeView] : [treeView]))
+    if (views && outline) {
+      treePane.className = 'sigil-layer-tree-view'
+      container.replaceChildren(views.el, treePane, outline.el)
+    }
+  }
+
+  function setVisible(next: boolean): void {
+    visible = next
+    search?.setVisible(visible && !showingOutline)
+    outline?.setVisible(visible && showingOutline)
+    syncPendingSelection()
+  }
+
+  function syncPendingSelection(): void {
+    if (pendingSelection && visible && !showingOutline && !treeView.hidden) syncSelection()
+  }
+
+  function setOutlineActive(next: boolean): void {
+    if (!views || showingOutline === next) return
+    showingOutline = next
+    views.setOutlineActive(next)
+    treePane.hidden = next
+    if (!next) {
+      pendingSelection ||= selectedId !== engine.getSelection()
+      if (treeLocaleChanged || !refreshChangedNode()) render(!!(selectedId && rows.has(selectedId)))
+      treeLocaleChanged = false
+    }
+    setVisible(visible)
+  }
 
   function setTabStop(next: HTMLElement | undefined): void {
     if (tabStop === next) return
@@ -150,9 +253,8 @@ export function createLayersPanel(
 
   function reveal(id: string): void {
     if (rows.has(id)) return
-    const ancestors: ComponentNode[] = []
-    if (findAncestors(engine.getTree(), id, ancestors)) {
-      for (const node of ancestors) toggleBranch(node, true)
+    for (const ancestor of findComponentPath(engine.getTree(), id).slice(0, -1)) {
+      toggleBranch(ancestor, true)
     }
   }
 
@@ -167,11 +269,14 @@ export function createLayersPanel(
     }
     selectedId = nextId
     setTabStop(rowFor(document.activeElement) ?? next ?? rows.values().next().value)
-    if (next && container.clientHeight && container.scrollHeight > container.clientHeight) {
-      const bounds = container.getBoundingClientRect()
+    pendingSelection = !!next && (!visible || treeView.hidden)
+    if (!next || pendingSelection || !container.clientHeight) return
+    const scrollBox = treeView.scrollHeight > treeView.clientHeight ? treeView : container
+    if (scrollBox.scrollHeight > scrollBox.clientHeight) {
+      const bounds = scrollBox.getBoundingClientRect()
       const item = next.getBoundingClientRect()
-      if (item.top < bounds.top) container.scrollTop += item.top - bounds.top
-      else if (item.bottom > bounds.bottom) container.scrollTop += item.bottom - bounds.bottom
+      if (item.top < bounds.top) scrollBox.scrollTop += item.top - bounds.top
+      else if (item.bottom > bounds.bottom) scrollBox.scrollTop += item.bottom - bounds.bottom
     }
   }
 
@@ -200,7 +305,7 @@ export function createLayersPanel(
     selectedId = engine.getSelection()
     rows.clear()
     tabStop = null
-    container.replaceChildren(renderNode(renderedTree, 0))
+    treeView.replaceChildren(renderNode(renderedTree, 0))
     if (revealSelection && selectedId) reveal(selectedId)
     const focusedRow = focusedId ? rows.get(focusedId) : undefined
     setTabStop(
@@ -220,6 +325,15 @@ export function createLayersPanel(
   }
 
   function onClick(event: MouseEvent): void {
+    const viewButton =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>('[data-layer-view]')
+        : null
+    if (viewButton && views?.el.contains(viewButton)) {
+      viewButton.focus({ preventScroll: true })
+      setOutlineActive(viewButton.dataset.layerView === 'outline')
+      return
+    }
     const row = rowFor(event.target)
     if (!row) return
     const id = row.dataset.layerId!
@@ -240,6 +354,7 @@ export function createLayersPanel(
     }
     row.focus()
     engine.select(id)
+    if (event.detail < 2) opts?.onActivate?.(id)
   }
 
   function onDoubleClick(event: MouseEvent): void {
@@ -248,7 +363,7 @@ export function createLayersPanel(
     event.preventDefault()
     event.stopPropagation()
     const node = findNode(engine.getTree(), row.dataset.layerId!)
-    if (node) renameNode(engine, node, opts?.i18n)
+    if (node) renameLayer(engine, node, opts?.i18n)
   }
 
   function onContextMenu(event: MouseEvent): void {
@@ -256,6 +371,7 @@ export function createLayersPanel(
     if (!row || !opts?.onContextMenu) return
     event.preventDefault()
     engine.select(row.dataset.layerId!)
+    row.focus({ preventScroll: true })
     opts.onContextMenu(row.dataset.layerId!, event.clientX, event.clientY)
   }
 
@@ -268,10 +384,11 @@ export function createLayersPanel(
       case 'Enter':
       case ' ':
         engine.select(id)
+        opts?.onActivate?.(id)
         break
       case 'F2': {
         const node = findNode(engine.getTree(), id)
-        if (node) renameNode(engine, node, opts?.i18n)
+        if (node) renameLayer(engine, node, opts?.i18n)
         break
       }
       case 'ContextMenu':
@@ -316,8 +433,38 @@ export function createLayersPanel(
   }
 
   function onFocus(event: FocusEvent): void {
+    if (event.target instanceof HTMLElement) lastControl = event.target
     const row = rowFor(event.target)
     if (row) setTabStop(row)
+  }
+
+  function focus(target: 'previous' | 'search' = 'previous'): void {
+    const activeSearch = showingOutline ? outline?.el : search?.el
+    if (target === 'search' && activeSearch) {
+      activeSearch.querySelector('input')?.focus({ preventScroll: true })
+      return
+    }
+    if (lastControl && container.contains(lastControl) && !lastControl.closest('[hidden]')) {
+      lastControl.focus({ preventScroll: true })
+      return
+    }
+    if (showingOutline && outline) {
+      outline.focus()
+      return
+    }
+    if (treeView.hidden && search) {
+      const id = lastControl?.dataset.layerResult
+      const result =
+        id && search.el.querySelector<HTMLElement>(`[data-layer-result="${CSS.escape(id)}"]`)
+      ;(result || search.el.querySelector('input'))?.focus({ preventScroll: true })
+      return
+    }
+    const id = lastControl?.closest<HTMLElement>('[role="treeitem"]')?.dataset.layerId
+    const row = id ? rows.get(id) : undefined
+    const action = lastControl?.dataset.layerAction
+    const button =
+      action && row?.querySelector<HTMLElement>(`[data-layer-action="${CSS.escape(action)}"]`)
+    ;(button || row || tabStop)?.focus({ preventScroll: true })
   }
   container.addEventListener('click', onClick)
   container.addEventListener('dblclick', onDoubleClick)
@@ -325,6 +472,15 @@ export function createLayersPanel(
   container.addEventListener('keydown', onKeyDown)
   container.addEventListener('focusin', onFocus)
   const unsub = engine.subscribe((event) => {
+    if (event.type === 'selection') {
+      outline?.syncSelection()
+      if (showingOutline) pendingSelection = true
+    }
+    if (event.type === 'patch' || event.type === 'tree') {
+      outline?.refresh(event.type === 'patch' ? event.patch : undefined)
+      search?.refresh()
+    }
+    if (showingOutline) return
     if (event.type === 'selection') syncSelection()
     else if (
       (event.type === 'patch' &&
@@ -336,11 +492,22 @@ export function createLayersPanel(
   })
   const unsubLocale = subscribeLocale(opts?.i18n, () => {
     refreshLabel()
-    render(false)
+    search?.refreshLocale()
+    outline?.refreshLocale()
+    views?.refreshLocale()
+    if (showingOutline) treeLocaleChanged = true
+    else render(false)
   })
   render(true)
   return {
+    focus,
+    setSearchVisible: setVisible,
     destroy() {
+      outline?.destroy()
+      search?.destroy()
+      views?.el.remove()
+      if (outline && treePane.parentElement === container) treePane.replaceWith(treeView)
+      if (search || outline) container.classList.remove('sigil-layer-browser')
       unsub()
       unsubLocale()
       container.removeEventListener('click', onClick)
@@ -350,6 +517,38 @@ export function createLayersPanel(
       container.removeEventListener('focusin', onFocus)
     },
   }
+}
+
+function createLayerViews(tree: HTMLElement, outline: HTMLElement, i18n?: I18n) {
+  const el = document.createElement('div')
+  el.className = 'sigil-layer-views'
+  el.setAttribute('role', 'group')
+  function button(view: string, controls: HTMLElement) {
+    const item = document.createElement('button')
+    item.type = 'button'
+    item.className = 'sigil-btn'
+    item.dataset.layerView = view
+    controls.id ||= `sigil-layer-${view}-${createId()}`
+    item.setAttribute('aria-controls', controls.id)
+    return item
+  }
+  const all = button('tree', tree)
+  const headings = button('outline', outline)
+  el.append(all, headings)
+  function setOutlineActive(active: boolean) {
+    all.setAttribute('aria-pressed', String(!active))
+    headings.setAttribute('aria-pressed', String(active))
+    all.style.fontWeight = active ? '' : '600'
+    headings.style.fontWeight = active ? '600' : ''
+  }
+  function refreshLocale() {
+    el.setAttribute('aria-label', uiText(i18n, 'layers.views', '結構檢視'))
+    all.textContent = uiText(i18n, 'layers.all', '所有圖層')
+    headings.textContent = uiText(i18n, 'layers.outline', '標題大綱')
+  }
+  setOutlineActive(false)
+  refreshLocale()
+  return { el, setOutlineActive, refreshLocale }
 }
 
 function actionButton(action: string): HTMLButtonElement {
@@ -398,16 +597,6 @@ function initialExpansion(root: ComponentNode): Set<string> {
   return branches
 }
 
-function findAncestors(node: ComponentNode, id: string, path: ComponentNode[]): boolean {
-  if (node.id === id) return true
-  path.push(node)
-  for (const child of node.children ?? []) {
-    if (findAncestors(child, id, path)) return true
-  }
-  path.pop()
-  return false
-}
-
 function sameOwnFields(before: ComponentNode, after: ComponentNode): boolean {
   return (
     before.type === after.type &&
@@ -440,19 +629,14 @@ function singleChangedNode(before: ComponentNode, after: ComponentNode): Compone
     if (!changed) return null
   }
   if (!sameOwnFields(before, after)) return changed ? null : after
+  if (changed && Boolean(imageLinkLabel(before)) !== Boolean(imageLinkLabel(after))) return null
   return changed
 }
 
-function typeLabel(node: ComponentNode): string {
-  if (node.name?.trim()) return node.name.trim()
-  if (node.type === 'shortcode' && node.shortcode?.name) return `sc:${node.shortcode.name}`
-  return node.type
-}
-
-function renameNode(engine: Engine, node: ComponentNode, i18n?: I18n): void {
+export function renameLayer(engine: Engine, node: ComponentNode, i18n?: I18n): void {
   // 鎖定時仍可重命名
   const current = node.name ?? ''
   const next = window.prompt(uiText(i18n, 'layers.rename_prompt', '圖層名稱'), current)
-  if (next === null) return
+  if (next === null || next === current) return
   engine.update(node.id, { name: next })
 }

@@ -73,6 +73,85 @@ const doc: SigilDoc = {
 - `engine.getTree()` 與 `engine.toJSON()` 會共享內部樹或其他巢狀資料的參考。請視為唯讀，透過 engine 方法修改文件；需要可修改副本時自行 `structuredClone()`。
 - 傳入 engine 的文件、tree helper 或記憶體 store 所持有的物件，也不應假設全部都會深拷貝。繞過 engine 直接改物件會破壞 history、訂閱與 dirty 判斷的前提。
 
+要修改已存在的普通文字標籤，可呼叫 `engine.update(id, { tagName: 'h3' })`。訂閱者可由 `update` patch 的 `tagName` 取得新標籤。原生 renderer 會保留相同節點 ID 與子元件；持有舊 DOM 元素的宿主應使用節點 ID 重新取得該元素。如果變更涉及 shortcode 宿主等需重新掛載的結構，訂閱者會收到 `replace` patch。
+
+### 尋找與取代頁面文字
+
+Studio 與嵌入版都支援 `runCommand('find-replace')`。自組介面可使用 `@cluion/sigil-ui` 的 `openPageTextDialog({ mount, engine, device, richText, onReveal })`。傳入目前的裝置和富文字 resolver，搜尋結果便會遵循相同的元件範圍。選「跳到畫布」時，視窗會關閉並將目標元件 ID 傳給 `onReveal`。
+
+`createEngine().updateTextContents(updates)` 接受以元件 ID 為鍵、完整新文字為值的 `ReadonlyMap<string, string>`。批次修改建立一筆歷程，略過鎖定分支、shortcode 及內建富文字。由宿主自訂的富文字 resolver 與裝置可見性由搜尋端處理。訂閱者會收到一個 `tree` 事件。若畫布仍顯示 `textChanges.from`，可套用 `textChanges.patches` 保留現有 DOM。其他時候可使用事件內的完整文件樹。自訂 `Engine` 可繼續以 `batch` 與 `update` 支援對話框。
+
+### 讀取或跳至編輯歷程
+
+`createEngine()`、`createApp().engine` 與 `createEditor().engine` 提供 `getHistory()` 和 `goToHistory(id)`。前者回傳 `{ entries, currentId }`。每筆資料含有 `id`、`kind`、`target`，部分文字修改另有簡短的 `detail`。第一筆代表本次開啟文件時的狀態。
+
+使用該次歷程的 ID 呼叫 `goToHistory(id)`，可在一次文件更新內還原多步，成功時回傳 `true`。若 ID 已在目前位置或已被後續修改取代，則回傳 `false`。歷程屬於單一引擎執行個體，保存及匯出沿用目前選定的文件。Studio 與嵌入版的 `runCommand('edit-history')` 均可開啟歷程視窗。
+
+宿主若保留 `engine` 參考，卸載編輯器介面後仍可在該引擎逐步復原、重做或登記新的訂閱。重新建立編輯器會開啟獨立的歷程。
+
+使用內建保存流程時，`createProjectPersistence().getSavedHistoryId()` 可讀取最後一次成功寫入所對應的編輯步驟。送出後繼續打字仍會保留該步驟。若宿主自行處理保存，可在擷取文件時呼叫 `engine.checkpointHistory()` 取得 ID 並結束本組連續輸入；在進行中的 `batch` 內會回傳 `undefined`。標記對應送出時的編輯狀態，宿主的 `beforeSave` 仍可轉換實際寫入的文件。
+
+### 編輯現有元件的頁內錨點
+
+要查詢或重新命名現有元件的 HTML ID，可從 `@cluion/sigil-core` 匯入 `getHtmlAnchorInfo(root, nodeId)` 與 `renameHtmlAnchor(engine, nodeId, name)`。前者提供名稱、可複製的網址片段、結構化參照的數目、重複與鎖定狀態。後者以單一復原步驟更新 HTML ID、同頁連結及相關 HTML／ARIA 屬性。空字串可移除沒有參照的錨點。名稱衝突或需更動鎖定元件時，回傳 `{ ok: false, reason }`。
+
+宿主使用 `engine.update()` 時，可用 `{ removeAttributes: ['title'] }` 明確移除已設定的 HTML 屬性。屬性名稱依 HTML 的大小寫規則比對，同一次更新中指定移除會優先於設定。
+
+自訂宿主可透過 `canvas.canMoveSelection?.()` 判斷目前是否能搬移選取元件，並用 `canvas.moveSelection?.(trigger)` 開啟目的地與位置選擇器。`CanvasOptions.onComponentMoved(id)` 會在搬移成功後、畫布捲到元件前執行，可用來收合宿主面板。使用 `createApp()` 或 `createEditor()` 的宿主也可以呼叫 `runCommand('move-to')`。
+
+自行組裝畫布時，可在 `CanvasOptions.onEditImageLink(id, trigger)` 開啟 Inspector，再呼叫 `inspector.openImageLink?.(id)`，讓作者直接輸入該圖片的連結目的地。儲存文件使用原生 `a` 元件包住原圖；原圖的元件 ID 與替代文字會保留。若宿主樣式表以直接子元素選擇器定位圖片，須考量連結包覆後的 HTML 結構。
+
+`createApp()` 與 `createEditor()` 將元件操作列放在畫布下方。自行組裝介面時，可將同一文件內的掛載元素傳給 `CanvasOptions.selectionToolbarContainer`，由宿主決定其位置。進入行內編輯時，這個區域會顯示「完成編輯」與「取消編輯」。省略掛載元素時使用畫布內的浮動工具列，普通文字可按 Enter 完成或 Esc 取消。進入預覽時會收起畫布操作。`canvas.destroy()` 會移除掛入的控制項並保留宿主元素。
+
+嵌入 `createEditor()` 時，容器寬度在 768px 以內會將畫布移到上排，區塊與屬性面板在下排各自捲動。調整宿主寬度即可切回三欄，目前選取與畫布內容會保留。
+
+原生文字、按鈕或連結可同時含有 `content` 和 `children`。`content` 顯示在第一個子元件之前。自訂宿主可在 `CanvasOptions.onEditLeadingText(id, trigger)` 開啟設定面板，再呼叫 `inspector.openLeadingText?.(id)` 將焦點帶到「開頭文字」。Studio 和嵌入式編輯器已接上這個操作。
+
+呼叫 `engine.update(id, { content })` 即可更新開頭文字並保留子元件。若另傳 `children`，引擎會以新陣列替換該節點的子樹，並建立獨立的復原步驟。`children: []` 會清空子元件。若目前選取的後代因此消失，宿主會收到清除選取的通知。
+
+### 在自訂工作區顯示元件路徑
+
+從 `@cluion/sigil-ui` 匯入 `createSelectionPath`。傳入 engine、掛載元素與選項後，路徑會跟著目前選取及文件結構更新。宿主可在選取上層後將畫布捲到該元件，並在進入預覽時收起路徑。
+
+```ts
+const path = createSelectionPath(engine, footer, {
+  i18n,
+  onActivate: () => canvas.revealSelection?.(),
+})
+const canvas = createCanvas(engine, canvasHost, {
+  i18n,
+  onModeChange: (mode) => path.setVisible(mode === 'edit'),
+})
+```
+
+嵌入區域變窄時可呼叫 `path.setCompact(true)`，讓使用者從按鈕開啟整條路徑。卸載時呼叫 `path.destroy()` 與 `canvas.destroy()`。
+
+### 在圖層搜尋與設定之間切換
+
+使用 `headingOutline: true` 可在圖層面板加入「標題大綱」。面板會依文件順序列出元件模型中的 H1–H6，選擇標題時選取該元件並觸發 `onActivate(id)`。`createApp()` 與 `createEditor()` 預設啟用此檢視。若自訂宿主有提供富文字編輯器，可將同一個 `richText` resolver 傳給圖層面板。大綱只列出可獨立定位的標題元件。
+
+自訂宿主可對 `createLayersPanel()` 傳入 `searchable: true` 與 `preserveSearchOnActivate: () => isCompact`。每次選取搜尋結果時，若回傳 `true`，圖層面板會保留搜尋詞及已載入的結果數；預設行為會清除查詢並回到圖層樹。宿主自行控制面板的顯示與鍵盤焦點。隱藏面板時呼叫 `layers.setSearchVisible(false)`，可將搜尋更新延到重新顯示時，再以 `layers.setSearchVisible(true)` 刷新結果。
+
+從元件設定返回面板後，呼叫 `layers.focus()` 可把鍵盤焦點移回目前檢視。若要讓使用者立即輸入新的搜尋詞，使用 `layers.focus('search')`。
+
+### 區塊庫的釘選偏好
+
+`createApp()`、`createEditor()` 與 `createBlocksPanel()` 都接受選項 `blockPinStorageKey`。預設使用同源瀏覽器儲存中的 `sigil-block-pins` 命名空間。宿主可依帳號或工作區指定自己的字串，或傳入 `false` 讓偏好只保留至面板卸載。釘選以區塊定義的 `id` 辨識，自訂範本重新命名時會保留偏好。文件存檔、復原與匯出只處理頁面內容。
+
+### 自訂格線欄寬的宿主限制
+
+`createApp()`、`createEditor()`、`createInspector()` 與 `createPropsPanel()` 支援 `acceptsCustomGridTracks?: (value: string) => boolean`。自訂欄寬通過瀏覽器的 CSS 語法檢查後，編輯器會將該值交給宿主判斷。若回傳 `false`，欄位會顯示提示並保留輸入供修正。Laravel 範例使用與文件存檔相同的樣式檢查規則。
+
+### 文字顏色與背景顏色的宿主限制
+
+相同四個入口都接受 `acceptsColorValue?: (value: string) => boolean`。若後端只儲存特定 CSS 色值，可傳入與存檔相同的限制。編輯器會在套用前檢查文字輸入與系統選色器的色值，頁面色票也只列出宿主可儲存的顏色。未指定時使用瀏覽器支援的 CSS 顏色語法。
+
+### 間距值的宿主限制
+
+`createApp()`、`createEditor()`、`createInspector()` 與 `createPropsPanel()` 都接受 `acceptsSpacingValue?: (value: string) => boolean`。這個函式會收到作者輸入的 CSS 內距或外距值。若後端有額外限制，回傳 `false` 會將輸入保留在欄位供修正。Laravel 範例沿用文件儲存時的 CSS 規則，可接受 `calc(1rem + 4px)`，並會在套用 `var(--card-space)` 前提示。
+
+同一組入口支援 `acceptsTypographyValue(property, value)`。宿主可以依 `font-size`、`font-weight`、`line-height` 或 `letter-spacing` 決定是否接受作者輸入的 CSS 值。任何一項遭拒時，對應的排版預設會停用。若自行組裝畫布和 Inspector，可在 `createCanvas()` 的 `onEditTypography(id, trigger)` 開啟設定面板，再呼叫 `inspector.openTypography?.(id)` 將焦點帶到預設選單。
+
 ### 插入含 HTML 錨點的元件
 
 自訂插入流程可從 `@cluion/sigil-core` 匯入 `resolveHtmlIdConflicts(subtree, documentRoot)`。它會檢查結構化 `attributes` 的 HTML ID，為衝突的副本分配名稱，並調整子樹內的頁內連結及 HTML／ARIA ID 參照。元件的 Sigil 節點 ID 由 `cloneWithNewIds()` 負責。內建複製與貼上會先重建 Sigil 節點 ID。區塊面板會對區塊工廠傳回的節點處理 HTML ID 衝突。自訂 CSS 選擇器、富文字 HTML 與 shortcode 輸出仍由宿主維護。
@@ -125,7 +204,11 @@ App／Editor 沒有 `load()` API，也不會自動呼叫 `ProjectStore.load()`�
 
 ## 擴充點與宿主責任
 
-`AppOptions` 提供 `assets`，`EditorOptions` 目前沒有這個選項；兩者均可接受文件 store、templates、blocks、shortcodes、rich text、hooks 與自訂 commands。既有 `basicBlocks` 的 record 形式與新的 `BlockDefinition[]` 都是受支援輸入，不能僅因後者較新就視前者為已移除。
+`AppOptions` 與 `EditorOptions` 均接受 `assets?: AssetStore`，可搭配文件 store、templates、blocks、shortcodes、rich text、hooks 與自訂 commands。既有 `basicBlocks` 的 record 形式與 `BlockDefinition[]` 都是受支援輸入。
+
+`createApp` 的頁尾插圖入口接受圖片網址。`AppOptions.acceptsImageAttribute(name, value)` 可依宿主的保存規則檢查 `'src'` 或 `'alt'`，回傳 `false` 會在對應欄位提示作者修改。自組選圖器可在 `openMediaPicker` 提供同一個檢查函式及 `onInsertUrl(url, alt)` 啟用此分頁。選用既有圖片時仍會呼叫 `onPick(item)`。
+
+`@cluion/sigil-ui` 提供 `collectPageImages(root, richText?)`。它依文件順序整理原生 `<img src>`，相同 `src` 共用一筆結果，`id` 是第一次使用該來源的元件 ID。`uses` 記錄使用次數，`searchTerms` 包含各處的圖層名稱、替代文字及檔名。自訂選圖介面可把這個函式接到 `openMediaPicker` 的選用回呼 `pageImages`，首次瀏覽本頁圖片時才讀取文件。
 
 `AppOptions.prepareDownload(doc, signal)` 可選填，接收開啟匯出視窗時的文件副本，回傳準備好的 `SigilDoc` 或 `Promise<SigilDoc>`。例如 Laravel 會把本站照片內嵌到下載的 HTML。關閉對話框或銷毀 App 會觸發 `AbortSignal`。處理失敗時，使用者可重試或依原網址下載。HTML 片段、複製及 `toHTML()` 都以原文件輸出。
 

@@ -21,14 +21,15 @@ final class SigilDocumentValidator
         'section', 'div', 'article', 'header', 'footer', 'main', 'nav', 'aside',
         'p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'b', 'i',
         'small', 'blockquote', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'a', 'button',
-        'img', 'figure', 'figcaption', 'hr', 'br',
+        'img', 'figure', 'figcaption', 'details', 'summary', 'hr', 'br',
     ];
 
     public const STYLE_PROPERTIES = [
         'box-sizing', 'width', 'min-width', 'max-width', 'height', 'min-height', 'max-height',
-        'display', 'flex', 'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis',
+        'display', 'flex', 'flex-flow', 'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis',
         'align-items', 'align-self', 'align-content', 'justify-content', 'justify-items',
-        'justify-self', 'gap', 'row-gap', 'column-gap', 'grid-template-columns', 'grid-template-rows',
+        'justify-self', 'gap', 'row-gap', 'column-gap', 'grid-gap', 'grid-row-gap', 'grid-column-gap',
+        'grid-template-columns', 'grid-template-rows',
         'grid-column', 'grid-row', 'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
         'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
         'overflow', 'overflow-x', 'overflow-y', 'overflow-wrap', 'color', 'background', 'background-color',

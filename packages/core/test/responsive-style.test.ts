@@ -28,6 +28,31 @@ describe('responsive style model', () => {
     expect(getStyleSource(node, 'mobile', 'padding')).toBe('mobile')
   })
 
+  it('在較窄裝置上重新套用簡寫與個別宣告，順序與匯出 CSS 相同', () => {
+    const item = {
+      style: { 'grid-column': '1 / -1', 'grid-area': '2 / 2 / 3 / 4', 'grid-column-end': '5' },
+      responsiveStyles: {
+        tablet: { 'grid-column-end': '4', 'grid-column': 'auto' },
+        mobile: { 'grid-area': '1 / 2 / 2 / 3' },
+      },
+    }
+    expect(Object.entries(getEffectiveStyle(item, 'tablet'))).toEqual([
+      ['grid-area', '2 / 2 / 3 / 4'],
+      ['grid-column-end', '4'],
+      ['grid-column', 'auto'],
+    ])
+    expect(Object.entries(getEffectiveStyle(item, 'mobile'))).toEqual([
+      ['grid-column-end', '4'],
+      ['grid-column', 'auto'],
+      ['grid-area', '1 / 2 / 2 / 3'],
+    ])
+    expect(Object.keys(getEffectiveStyle(item, 'desktop'))).toEqual([
+      'grid-column',
+      'grid-area',
+      'grid-column-end',
+    ])
+  })
+
   it('建立各裝置的 engine patch', () => {
     expect(createStylePatch('desktop', 'margin', '4px')).toEqual({
       style: { margin: '4px' },

@@ -8,6 +8,11 @@ import { createEditor, type EditorOptions, type SigilEditor } from '@cluion/sigi
 import {
   createEngine,
   resolveHtmlIdConflicts,
+  getHtmlAnchorInfo,
+  renameHtmlAnchor,
+  type HtmlAnchorInfo,
+  type HtmlAnchorResult,
+  type ComponentUpdate,
   createProjectPersistence,
   createDefaultPolicy,
   createRenderer,
@@ -21,6 +26,8 @@ import {
   type ComponentNode,
   type SigilDoc,
   type Engine,
+  type HistoryEngine,
+  type HistoryState,
   type EngineEvent,
   type ProjectStore,
   type AssetStore,
@@ -34,10 +41,24 @@ import {
   type CommandContext,
 } from '@cluion/sigil-core'
 import {
+  collectPageImages,
+  type PageImage,
+  createBlocksPanel,
   createCanvas,
+  createInspector,
+  createLayersPanel,
+  createPageLinksPanel,
+  createPropsPanel,
+  createSelectionPath,
   createTemplateLibraryController,
+  openMediaPicker,
+  openHistoryDialog,
+  openPageTextDialog,
   type CanvasHandle,
   type CanvasSelectionCommands,
+  type FAQEditingOptions,
+  type SelectionPathHandle,
+  type SelectionPathOptions,
   type RichTextAdapter,
   type RichTextSession,
   type BlocksInput as UIBlocksInput,
@@ -47,10 +68,15 @@ import {
   basicBlocks,
   basicBlockDefs,
   marketingBlockDefs,
+  accordionFAQBlockDef,
+  blockAccordionFAQ,
+  blockFAQItem,
+  blockHeading,
   blockSection,
   blockShortcode,
   templateToBlockDef,
   type BlocksInput,
+  type FAQItemOptions,
 } from '@cluion/sigil-blocks'
 import {
   defineShortcode,
@@ -91,6 +117,10 @@ export type ReturnContracts = [
   Assert<Equal<ReturnType<SigilEditor['isSaving']>, boolean>>,
   Assert<Equal<ReturnType<Engine['insert']>, string>>,
   Assert<Equal<ReturnType<Engine['subscribe']>, () => void>>,
+  Assert<Equal<ReturnType<HistoryEngine['goToHistory']>, boolean>>,
+  Assert<Equal<ReturnType<HistoryEngine['getHistory']>, HistoryState>>,
+  Assert<Equal<ReturnType<typeof createApp>['engine'], HistoryEngine>>,
+  Assert<Equal<ReturnType<typeof createEditor>['engine'], HistoryEngine>>,
   Assert<Equal<ReturnType<RichTextAdapter['start']>, RichTextSession>>,
   Assert<Equal<ReturnType<SanitizeFn>, string>>,
 ]
@@ -161,6 +191,12 @@ export const asset: AssetItem = { id: 'image', url: '/image.png', name: 'Image' 
 export const template: TemplateDef = { id: 'template', label: 'Template', node: blockSection() }
 export const insertable: ComponentNode = resolveHtmlIdConflicts(template.node, doc.root)
 export const recordBlocks: BlocksInput = basicBlocks
+export const sectionHeading: ComponentNode = blockHeading('Workshop details', 2)
+const faqItem: FAQItemOptions = { question: '何時報到？', answer: '下午兩點。' }
+export const faqEntry: ComponentNode = blockFAQItem(faqItem)
+export const faqEditing: FAQEditingOptions = { createItem: blockFAQItem }
+export const faqSection: ComponentNode = blockAccordionFAQ({ items: [faqItem] })
+export const faqBlocks: BlocksInput = [accordionFAQBlockDef]
 export const definitionBlocks: UIBlocksInput = [
   ...basicBlockDefs,
   ...marketingBlockDefs,
@@ -233,6 +269,13 @@ export const shortcode: ShortcodeDefinition = defineShortcode<{ count: number }>
 
 // Compile-only consumer: these declarations are never executed by the contract runner.
 export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): void {
+  const acceptsCustomGridTracks = (value: string) => value.length <= 256
+  const acceptsColorValue = (value: string) => !value.includes('var(')
+  const acceptsSpacingValue = (value: string) => value.length <= 256
+  const acceptsTypographyValue: NonNullable<AppOptions['acceptsTypographyValue']> = (
+    property,
+    value,
+  ) => property !== 'letter-spacing' || !value.includes('var(')
   const options: AppOptions = {
     mount,
     doc,
@@ -244,8 +287,14 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
     },
     renderPageNavigation: () => document.createElement('nav'),
     assets: asynchronousAssets,
+    acceptsImageAttribute: (name, value) => name === 'alt' || value.startsWith('/'),
     templates: asynchronousTemplates,
     blocks: definitionBlocks,
+    blockPinStorageKey: 'workshop-editor',
+    acceptsTypographyValue,
+    acceptsSpacingValue,
+    acceptsColorValue,
+    acceptsCustomGridTracks,
     shortcodes: [shortcode],
     richText,
     sanitize,
@@ -257,9 +306,15 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
   const editorOptions: EditorOptions = {
     mount,
     doc,
+    assets: synchronousAssets,
     store: synchronousProjectStore,
     templates: synchronousTemplates,
     blocks: recordBlocks,
+    blockPinStorageKey: false,
+    acceptsTypographyValue,
+    acceptsSpacingValue,
+    acceptsColorValue,
+    acceptsCustomGridTracks,
     shortcodes: [shortcode],
     richText,
     sanitize,
@@ -269,8 +324,83 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
   app.setDocumentTitle('Workshop')
   const editor: SigilEditor = createEditor(editorOptions)
   const engine = createEngine({ doc })
+  const history = engine.getHistory()
+  engine.goToHistory(history.currentId)
+  const historyDialog = openHistoryDialog({ mount: document.body, engine })
+  historyDialog.close()
+  engine.updateTextContents(new Map([['title', 'Winter workshop']]))
+  const unsubscribeText = engine.subscribe((event) => {
+    if (event.type === 'tree') event.textChanges?.patches.forEach((patch) => void patch.content)
+  })
+  unsubscribeText()
+  openPageTextDialog({
+    mount: document.body,
+    engine,
+    richText: richTextResolver,
+    device: 'mobile',
+    initialQuery: 'workshop',
+    onReveal: (id) => engine.select(id),
+  }).close()
+  const closeMedia = openMediaPicker({
+    pageImages: (): readonly PageImage[] => collectPageImages(engine.getTree(), richTextResolver),
+    onPick: (item: AssetItem) => void item.url,
+    acceptsImageAttribute: options.acceptsImageAttribute,
+    onInsertUrl: (url: string, alt: string) =>
+      engine.insert(doc.root.id, {
+        id: 'new-image',
+        type: 'image',
+        attributes: { src: url, alt },
+      }),
+    onClose() {},
+  })
+  closeMedia()
+  const links = createPageLinksPanel(doc.root, {
+    richText: richTextResolver,
+    onEdit(id) {
+      if (links.hasSource(engine.getTree(), id)) engine.select(id)
+    },
+  })
+  mount.append(links.el)
+  links.refreshLocale()
+  links.destroy()
+  const anchor: HtmlAnchorInfo | undefined = getHtmlAnchorInfo(engine.getTree(), doc.root.id)
+  if (anchor && !anchor.name) {
+    const result: HtmlAnchorResult = renameHtmlAnchor(engine, doc.root.id, 'workshop')
+    if (result.ok) {
+      const change: ComponentUpdate = { removeAttributes: ['title'] }
+      engine.update(doc.root.id, change)
+    }
+  }
+  const inspector = createInspector(engine, mount, {
+    acceptsTypographyValue,
+    acceptsSpacingValue,
+    acceptsColorValue,
+    acceptsCustomGridTracks,
+    faq: faqEditing,
+    onRevealLinkTarget: () => canvas.revealSelection?.({ focusToolbar: true }),
+  })
+  const layers = createLayersPanel(engine, mount, {
+    searchable: true,
+    headingOutline: true,
+    preserveSearchOnActivate: () => true,
+  })
+  layers.setSearchVisible(false)
+  layers.setSearchVisible(true)
+  layers.focus()
+  layers.focus('search')
+  layers.destroy()
+  createPropsPanel(engine, mount, {
+    acceptsTypographyValue,
+    faq: faqEditing,
+    acceptsSpacingValue,
+    acceptsCustomGridTracks,
+    acceptsColorValue,
+  }).destroy()
   const eventListener = (event: EngineEvent): void => {
-    void event.type
+    if (event.type === 'patch' && event.patch.type === 'update') {
+      const tag: string | undefined = event.patch.tagName
+      void tag
+    }
   }
   const unsubscribe = engine.subscribe(eventListener)
   const policy = createDefaultPolicy({ sanitize, trustedTypesPolicyName: 'host' })
@@ -283,19 +413,37 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
     registry: createCommandRegistry(),
     context: () => context,
   }
+  const pathOptions: SelectionPathOptions = {
+    compact: false,
+    onActivate: () => canvas.revealSelection?.(),
+  }
+  const selectionPath: SelectionPathHandle = createSelectionPath(engine, mount, pathOptions)
   const canvas: CanvasHandle = createCanvas(engine, mount, {
+    onModeChange: (mode) => selectionPath.setVisible(mode === 'edit'),
+    selectionToolbarContainer: document.createElement('div'),
     rendererOptions: { htmlPolicy: policy },
     richText,
     selectionCommands,
+    onEditLink: (id) => inspector.openLinkSettings?.(id),
+    onEditImageLink: (id) => inspector.openImageLink?.(id),
+    onEditTypography: (id) => inspector.openTypography?.(id),
+    onEditLeadingText: (id) => inspector.openLeadingText?.(id),
     onEditingDirtyChange: (dirty) => {
       void dirty
     },
   })
   const frame: HTMLIFrameElement = canvas.iframe
+  createBlocksPanel(engine, mount, frame, definitionBlocks, {
+    blockPinStorageKey: 'custom-library',
+  }).destroy()
   void frame
   canvas.setDevice('mobile')
+  selectionPath.setCompact(true)
+  if (canvas.canMoveSelection?.()) canvas.moveSelection?.(mount)
   canvas.commitEditing({ forSave: true })
   canvas.setMode('preview')
+  inspector.destroy()
+  selectionPath.destroy()
   const persistence = createProjectPersistence({ engine, store: synchronousProjectStore, hooks })
   const save: Promise<SigilDoc> = persistence.save()
   const transformed: Promise<SigilDoc> = runBeforeSave(hooks, doc, engine)
@@ -335,8 +483,6 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
   app.load()
   // @ts-expect-error Engine does not own a persistence adapter.
   engine.save()
-  // @ts-expect-error EditorOptions does not expose App's assets option.
-  createEditor({ mount, assets: asynchronousAssets })
   // @ts-expect-error The currently supported document version is exactly 1.
   const unsupported: SigilDoc = { ...doc, version: 2 }
   void unsupported

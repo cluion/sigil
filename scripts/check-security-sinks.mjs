@@ -91,9 +91,9 @@ export const APPROVED_FINDINGS = [
   {
     file: 'packages/core/src/renderer/renderer.ts',
     kind: 'dynamic createElement call',
-    source: 'const el = document.createElement(tag)',
+    source: 'const el = ownerDocument.createElement(tag)',
     count: 1,
-    reason: 'Known SigilDoc structural trust boundary; hosts must validate imported documents.',
+    reason: 'Mount and tag updates share the host-validated SigilDoc structural boundary.',
   },
   {
     file: 'packages/core/src/renderer/renderer.ts',

@@ -8,11 +8,40 @@ import type {
   RichTextResolver,
 } from '@cluion/sigil-core'
 import { createId, findNode, type ComponentNode } from '@cluion/sigil-core'
+import { createFAQFields, type FAQEditingOptions } from './faq-fields.js'
+import { createColorField } from './color-field.js'
+import { createTypographyFields, preserveTypographyFocus } from './typography-fields.js'
+import type { AcceptsTypographyValue } from './typography.js'
+import {
+  bindBoxShorthand,
+  createBoxSpacingField,
+  preserveBoxSpacingFocus,
+} from './box-spacing-field.js'
+import { boxSides, readBoxSpacing, setBoxShorthand, type BoxProperty } from './box-spacing.js'
+import { createAnchorField } from './anchor-field.js'
+import { createGridColumns, supportsGridColumns } from './grid-columns.js'
+import { createGridItem } from './grid-item.js'
+import { createFlexWrapField, readFlexDirection, setFlexDirection } from './flex-wrap-field.js'
+import {
+  createLayoutGapField,
+  gapValidationMessage,
+  preserveLayoutFocus,
+  readUniformGap,
+} from './layout-gap-field.js'
+import { setUniformGap } from './layout-gap.js'
+import { bindStyleDraft } from './style-draft.js'
+import { renameLayer } from './layers.js'
+import { createImageFraming, supportsImageFraming } from './image-framing.js'
 import { createPropForm } from './form.js'
 import { subscribeLocale, uiText } from './i18n.js'
-import { openMediaPicker } from './media-picker.js'
+import { createImageFields, createImageReplacement } from './image-fields.js'
+import { createImageLinkField } from './image-link-field.js'
+import { readImageLink } from './image-link.js'
 import { richTextSummary } from './rich-text.js'
-import { createLinkFields } from './link-fields.js'
+import { mountTextFormat } from './text-format.js'
+import { canEditPlainContent, createTextContent } from './text-content.js'
+import { createLinkFields, isNativeLink } from './link-fields.js'
+import { createStyleTransfer } from './style-transfer.js'
 import {
   clearDeviceStyles,
   decorateStyleControl,
@@ -25,7 +54,25 @@ import {
 
 export type InspectorTab = 'content' | 'style' | 'advanced'
 
+function hasAnchorShortcut(node: ComponentNode): boolean {
+  return (
+    !node.shortcode &&
+    (node.type === 'section' ||
+      Object.keys(node.attributes ?? {}).some((key) => key.toLowerCase() === 'id'))
+  )
+}
+
 export interface InspectorOptions {
+  /** 檢查文字樣式是否可在宿主儲存。 */
+  acceptsTypographyValue?: AcceptsTypographyValue
+  /** 檢查單邊間距是否可在宿主儲存。 */
+  acceptsSpacingValue?: (value: string) => boolean
+  /** 檢查色值是否可在宿主儲存。 */
+  acceptsColorValue?: (value: string) => boolean
+  /** 檢查通過瀏覽器語法驗證的自訂欄寬是否可在宿主儲存。 */
+  acceptsCustomGridTracks?: (value: string) => boolean
+  onRevealLinkTarget?: () => void
+  faq?: FAQEditingOptions
   getShortcodeSchema?: (name: string) => PropSchema[] | undefined
   richText?: RichTextResolver
   assets?: AssetStore
@@ -39,6 +86,11 @@ export interface InspectorHandle {
   setDevice(device: ResponsiveDevice): void
   /** Open the asset picker for the selected image and return its close callback. */
   replaceImage?: (id: string, trigger: HTMLElement) => (() => void) | undefined
+  openImageFraming?: (id: string) => void
+  openImageLink?: (id: string) => void
+  openLeadingText?: (id: string) => void
+  openLinkSettings?: (id: string, focus?: 'kind' | 'address') => void
+  openTypography?: (id: string) => void
   destroy(): void
 }
 
@@ -65,35 +117,7 @@ export function createInspector(
   let tab: InspectorTab = 'content'
   let device: ResponsiveDevice = opts?.device ?? 'desktop'
   let destroyed = false
-  let imagePicker: { id: string; close: () => void } | null = null
-
-  function replaceImage(id: string, trigger: HTMLElement): (() => void) | undefined {
-    if (destroyed || !opts?.assets || engine.getSelection() !== id) return
-    const node = findNode(engine.getTree(), id)
-    if (node?.type !== 'image' || node.locked) return
-    if (imagePicker) return imagePicker.close
-    trigger.focus({ preventScroll: true })
-    const close = openMediaPicker({
-      assets: opts.assets,
-      i18n: opts.i18n,
-      currentUrl: node.attributes?.src,
-      onPick: (item) => {
-        const current = findNode(engine.getTree(), id)
-        if (
-          engine.getSelection() === id &&
-          current?.type === 'image' &&
-          !current.locked &&
-          current.attributes?.src !== item.url
-        )
-          engine.update(id, { attributes: { src: item.url } })
-      },
-      onClose: () => {
-        imagePicker = null
-      },
-    })
-    imagePicker = { id, close }
-    return close
-  }
+  const imageReplacement = createImageReplacement(engine, opts)
   const tabBtns: Record<InspectorTab, HTMLButtonElement> = {
     content: makeTab('content', uiText(opts?.i18n, 'inspector.tab_content', '內容')),
     style: makeTab('style', uiText(opts?.i18n, 'inspector.tab_style', '樣式')),
@@ -155,17 +179,89 @@ export function createInspector(
   }
 
   const openStyleSections = new Set(['layout'])
+  const styleTransfer = createStyleTransfer(engine, opts?.i18n)
   const contentDisposers: (() => void)[] = []
   const contentLocaleRefreshers: (() => void)[] = []
+
+  function openImageFraming(id: string): void {
+    if (destroyed || engine.getSelection() !== id) return
+    const node = findNode(engine.getTree(), id)
+    if (!node || !supportsImageFraming(node)) return
+    tabBtns.style.click()
+    body.querySelector<HTMLElement>('.sigil-image-framing')?.focus()
+  }
+
+  function openLinkSettings(id: string, focus: 'kind' | 'address' = 'kind'): void {
+    if (destroyed || engine.getSelection() !== id) return
+    const node = findNode(engine.getTree(), id)
+    if (!node || !isNativeLink(node)) return
+    tabBtns.content.click()
+    const selector = focus === 'address' ? '.sigil-link-address input' : '[data-link-kind]'
+    const field = body.querySelector<HTMLInputElement | HTMLSelectElement>(selector)
+    if (field && !field.disabled) field.focus()
+    else tabBtns.content.focus()
+  }
+
+  function openImageLink(id: string): void {
+    if (destroyed || engine.getSelection() !== id) return
+    if (!readImageLink(engine.getTree(), id, { richText: opts?.richText })?.canEdit) return
+    tabBtns.content.click()
+    body.querySelector<HTMLInputElement>('input[data-image-link-address]')?.focus()
+  }
+
+  function openLeadingText(id: string): void {
+    if (destroyed || engine.getSelection() !== id) return
+    const node = findNode(engine.getTree(), id)
+    if (!node?.children?.length || node.locked || !canEditPlainContent(node)) return
+    if (opts?.richText?.supports(node)) return
+    tabBtns.content.click()
+    body.querySelector<HTMLInputElement>('input[data-leading-text]:enabled')?.focus()
+  }
+
+  function openTypography(id: string): void {
+    if (destroyed || engine.getSelection() !== id) return
+    tabBtns.style.click()
+    body
+      .querySelector<HTMLButtonElement>(
+        `button[aria-controls="${body.id}-style-typography"][aria-expanded="false"]`,
+      )
+      ?.click()
+    const preset = body.querySelector<HTMLSelectElement>('[data-typography-preset]:enabled')
+    ;(preset ?? tabBtns.style).focus()
+  }
 
   function disposeContent(): void {
     for (const dispose of contentDisposers.splice(0)) dispose()
     contentLocaleRefreshers.length = 0
   }
 
+  function addShortcut(className: string, key: string, fallback: string, open: () => void): void {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'sigil-btn sigil-btn--ghost ' + className
+    const caption = () => {
+      button.textContent = uiText(opts?.i18n, key, fallback)
+    }
+    caption()
+    button.addEventListener('click', open)
+    body.append(button)
+    contentLocaleRefreshers.push(caption)
+    contentDisposers.push(() => button.removeEventListener('click', open))
+  }
+
   function render(): void {
     if (destroyed) return
+    const refocusStyle =
+      preserveTypographyFocus(body, engine.getSelection()) ??
+      preserveBoxSpacingFocus(body, engine.getSelection()) ??
+      preserveLayoutFocus(body, engine.getSelection())
+    const active = document.activeElement
+    const restoreFormat =
+      active instanceof HTMLSelectElement &&
+      body.contains(active) &&
+      active.dataset.textFormat === engine.getSelection()
     syncTabs()
+    styleTransfer.detach()
     disposeContent()
     body.replaceChildren()
     const id = engine.getSelection()
@@ -203,7 +299,7 @@ export function createInspector(
     head.textContent = node.name?.trim() || node.type
     body.appendChild(head)
 
-    if (tab === 'content')
+    if (tab === 'content') {
       renderContent(
         body,
         engine,
@@ -211,42 +307,83 @@ export function createInspector(
         opts,
         (fn) => contentDisposers.push(fn),
         (fn) => contentLocaleRefreshers.push(fn),
-        opts?.assets ? replaceImage : undefined,
+        imageReplacement.replaceImageAttributes,
       )
-    else if (tab === 'style')
+      if (restoreFormat)
+        body.querySelector<HTMLSelectElement>('[data-text-format]')?.focus({ preventScroll: true })
+      if (supportsImageFraming(node)) {
+        addShortcut('sigil-framing-action', 'image.framing_action', '調整圖片構圖', () =>
+          openImageFraming(node.id),
+        )
+      }
+      if (hasAnchorShortcut(node)) {
+        addShortcut('sigil-anchor-action', 'anchor.edit', '編輯頁內錨點', () => {
+          tabBtns.advanced.click()
+          const field = body.querySelector<HTMLElement>('.sigil-anchor-field')
+          ;(
+            field?.querySelector<HTMLElement>('[data-anchor-name]:enabled, button:enabled') ??
+            tabBtns.advanced
+          ).focus()
+        })
+      }
+    } else if (tab === 'style') {
       renderStyle(
         body,
         engine,
         node,
         device,
         openStyleSections,
+        styleTransfer,
         (fn) => contentDisposers.push(fn),
-        opts?.i18n,
+        opts,
       )
-    else renderAdvanced(body, engine, node, opts?.i18n)
+      refocusStyle?.()
+    } else {
+      addShortcut('sigil-rename-layer', 'layers.rename', '重新命名圖層', () => {
+        const current = findNode(engine.getTree(), id)
+        if (current) renameLayer(engine, current, opts?.i18n)
+      })
+      if (!node.shortcode) {
+        const anchor = createAnchorField(engine, node, opts?.i18n)
+        body.append(anchor.el)
+        contentDisposers.push(anchor.destroy)
+        contentLocaleRefreshers.push(anchor.refreshLocale)
+      }
+      renderAdvanced(body, engine, node, opts?.i18n, (refresh) =>
+        contentLocaleRefreshers.push(refresh),
+      )
+    }
   }
 
   const unsub = engine.subscribe((ev) => {
     if (ev.type === 'selection' || ev.type === 'tree') {
-      imagePicker?.close()
       render()
-    } else if (imagePicker && ev.type === 'patch') {
-      const node = findNode(engine.getTree(), imagePicker.id)
-      if (node?.type !== 'image' || node.locked) imagePicker.close()
+    } else if (ev.type === 'patch') {
+      const selection = engine.getSelection()
+      if (ev.patch.type === 'replace' && selection && findNode(ev.patch.node, selection)) render()
+      if (ev.patch.type === 'update' && ev.patch.name !== undefined && ev.patch.id === selection) {
+        const node = findNode(engine.getTree(), ev.patch.id)
+        const head = body.querySelector<HTMLElement>('.sigil-inspector-head')
+        if (node && head) head.textContent = node.name?.trim() || node.type
+      }
     }
   })
   const unsubLocale = subscribeLocale(opts?.i18n, () => {
     tabBtns.content.textContent = uiText(opts?.i18n, 'inspector.tab_content', '內容')
     tabBtns.style.textContent = uiText(opts?.i18n, 'inspector.tab_style', '樣式')
     tabBtns.advanced.textContent = uiText(opts?.i18n, 'inspector.tab_advanced', '進階')
-    // Content controls (including an open media picker) retain their current operation.
-    if (tab === 'content') {
+    if (tab !== 'style') {
       for (const refresh of contentLocaleRefreshers) refresh()
     } else render()
   })
   render()
   return {
-    replaceImage,
+    replaceImage: imageReplacement.replaceImage,
+    openImageFraming,
+    openImageLink,
+    openLeadingText,
+    openLinkSettings,
+    openTypography,
     setDevice(next) {
       if (destroyed || device === next) return
       device = next
@@ -255,7 +392,8 @@ export function createInspector(
     destroy() {
       if (destroyed) return
       destroyed = true
-      imagePicker?.close()
+      imageReplacement.destroy()
+      styleTransfer.destroy()
       disposeContent()
       unsub()
       unsubLocale()
@@ -273,6 +411,14 @@ function renderContent(
   replaceImage?: InspectorHandle['replaceImage'],
 ): void {
   const isRichText = opts?.richText?.supports(node) ?? false
+  if (!isRichText) {
+    const faq = createFAQFields(container, engine, node, opts?.faq, opts?.i18n)
+    if (faq) {
+      registerDestroy?.(faq.destroy)
+      registerLocaleRefresh?.(faq.refreshLocale)
+      return
+    }
+  }
   if (isRichText && opts?.richText) {
     const wrap = document.createElement('div')
     wrap.className = 'sigil-field sigil-rich-text-field'
@@ -297,42 +443,38 @@ function renderContent(
         uiText(opts.i18n, 'rich_text.empty', '空白富文字')
       hint.textContent = uiText(opts.i18n, 'rich_text.canvas_hint', '請在畫布編輯富文字')
     })
-  } else if (node.type === 'text' || node.type === 'button') {
-    const contentField = field(
-      container,
+  } else if (canEditPlainContent(node)) {
+    const content = createTextContent(engine, node, opts?.i18n, () =>
       uiText(opts?.i18n, 'inspector.tab_content', '內容'),
-      () => {
-        const input = document.createElement('input')
-        input.className = 'sigil-input'
-        input.value = node.content ?? ''
-        input.addEventListener('input', () => engine.update(node.id, { content: input.value }))
-        return input
-      },
     )
-    registerLocaleRefresh?.(() => {
-      contentField.querySelector('.sigil-field-label')!.textContent = uiText(
-        opts?.i18n,
-        'inspector.tab_content',
-        '內容',
-      )
-    })
+    content.input.classList.add('sigil-input')
+    registerDestroy?.(content.destroy)
+    field(container, content.caption, () => content.input)
+    registerLocaleRefresh?.(content.refreshLocale)
+    const format = mountTextFormat(container, engine, node, opts?.richText, opts?.i18n)
+    if (format) {
+      registerDestroy?.(format.destroy)
+      registerLocaleRefresh?.(format.refreshLocale)
+    }
   }
-  if (node.tagName?.toLowerCase() === 'a' && !node.shortcode) {
-    const link = createLinkFields(engine, node, opts?.i18n)
+  if (isNativeLink(node)) {
+    const link = createLinkFields(engine, node, opts?.i18n, opts?.onRevealLinkTarget)
     container.append(link.el)
     registerDestroy?.(link.destroy)
     registerLocaleRefresh?.(link.refreshLocale)
   }
-  if (node.type === 'image') {
-    appendImageFields(
-      container,
-      engine,
-      node,
-      replaceImage,
-      opts?.i18n,
-      registerDestroy,
-      registerLocaleRefresh,
-    )
+  if (node.type === 'image' && !isRichText) {
+    const pick = supportsImageFraming(node) || opts?.assets ? replaceImage : undefined
+    const fields = createImageFields(engine, node, pick, opts?.i18n)
+    container.append(...fields.elements)
+    registerDestroy?.(fields.destroy)
+    registerLocaleRefresh?.(fields.refreshLocale)
+    if (supportsImageFraming(node)) {
+      const imageLink = createImageLinkField(engine, node, opts?.i18n, opts?.richText)
+      container.append(imageLink.el)
+      registerDestroy?.(imageLink.destroy)
+      registerLocaleRefresh?.(imageLink.refreshLocale)
+    }
   }
   if (node.shortcode) {
     const h = document.createElement('h4')
@@ -346,6 +488,7 @@ function renderContent(
         node,
         schema,
         assets: opts?.assets,
+        richText: opts?.richText,
         i18n: opts?.i18n,
         fetchJSON: opts?.fetchJSON,
       })
@@ -374,6 +517,8 @@ function renderContent(
   }
   if (
     !isRichText &&
+    !hasAnchorShortcut(node) &&
+    !isNativeLink(node) &&
     node.type !== 'text' &&
     node.type !== 'button' &&
     node.type !== 'image' &&
@@ -398,132 +543,12 @@ function renderContent(
   }
 }
 
-function appendImageFields(
-  container: HTMLElement,
-  engine: Engine,
-  node: ComponentNode,
-  replaceImage?: InspectorHandle['replaceImage'],
-  i18n?: I18n,
-  registerDestroy?: (fn: () => void) => void,
-  registerLocaleRefresh?: (fn: () => void) => void,
-): void {
-  let disposed = false
-  let closePicker: (() => void) | null = null
-  registerDestroy?.(() => {
-    disposed = true
-    closePicker?.()
-    closePicker = null
-  })
-  const wrap = document.createElement('div')
-  wrap.className = 'sigil-field'
-
-  const label = document.createElement('label')
-  label.className = 'sigil-field-label'
-  label.textContent = uiText(i18n, 'inspector.image', '圖片')
-
-  const preview = document.createElement('img')
-  preview.className = 'sigil-img-preview'
-  preview.alt = ''
-
-  const input = document.createElement('input')
-  input.id = `sigil-image-url-${createId()}`
-  label.htmlFor = input.id
-  input.className = 'sigil-input'
-  const sourceNote = document.createElement('span')
-  sourceNote.id = input.id + '-source'
-  sourceNote.className = 'sigil-muted'
-
-  function syncSource(src: string): void {
-    const embedded = /^\s*data:/i.test(src)
-    const value = embedded ? '' : src
-    if (input.value !== value) input.value = value
-    input.placeholder = embedded
-      ? uiText(i18n, 'inspector.replace_image_url', '貼上圖片網址以更換')
-      : 'https://…'
-    sourceNote.hidden = !embedded
-    if (embedded) {
-      const format = /^\s*data:image\/([a-z0-9-]{1,32})(?:\+xml)?[;,]/i.exec(src)?.[1]
-      const caption = uiText(i18n, 'inspector.embedded_image', '已嵌入圖片')
-      sourceNote.textContent = format ? caption + ' · ' + format.toUpperCase() : caption
-      input.setAttribute('aria-describedby', sourceNote.id)
-    } else {
-      sourceNote.textContent = ''
-      input.removeAttribute('aria-describedby')
-    }
-    if ((preview.getAttribute('src') ?? '') !== src) {
-      if (src) preview.src = src
-      else preview.removeAttribute('src')
-    }
-    preview.style.display = src ? '' : 'none'
-  }
-  syncSource(node.attributes?.src ?? '')
-  function updateSource(next: string): void {
-    if (disposed) return
-    const current = findNode(engine.getTree(), node.id)
-    if (!current) return
-    engine.update(node.id, { attributes: { ...current.attributes, src: next } })
-  }
-  input.addEventListener('input', () => updateSource(input.value))
-
-  const row = document.createElement('div')
-  row.className = 'sigil-field-row'
-  row.appendChild(input)
-
-  if (replaceImage) {
-    const pickBtn = document.createElement('button')
-    pickBtn.type = 'button'
-    pickBtn.className = 'sigil-btn'
-    pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
-    pickBtn.addEventListener('click', () => {
-      if (!disposed) closePicker = replaceImage(node.id, pickBtn) ?? null
-    })
-    registerLocaleRefresh?.(() => {
-      pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
-    })
-    row.appendChild(pickBtn)
-  }
-
-  wrap.append(label, preview, sourceNote, row)
-  container.appendChild(wrap)
-  const altField = field(container, uiText(i18n, 'inspector.image_alt', '替代文字'), () => {
-    const alt = document.createElement('input')
-    alt.className = 'sigil-input'
-    alt.value = node.attributes?.alt ?? ''
-    alt.addEventListener('input', () => {
-      const current = findNode(engine.getTree(), node.id)
-      if (!disposed && current)
-        engine.update(node.id, { attributes: { ...current.attributes, alt: alt.value } })
-    })
-    return alt
-  })
-  const altInput = altField.querySelector('input')!
-  registerDestroy?.(
-    engine.subscribe((event) => {
-      if (
-        event.type !== 'patch' ||
-        event.patch.type !== 'update' ||
-        event.patch.id !== node.id ||
-        !event.patch.attrs
-      )
-        return
-      const attrs = event.patch.attrs
-      if (attrs.alt !== undefined && altInput.value !== attrs.alt) altInput.value = attrs.alt
-      if (attrs.src !== undefined) syncSource(attrs.src)
-    }),
-  )
-  registerLocaleRefresh?.(() => {
-    label.textContent = uiText(i18n, 'inspector.image', '圖片')
-    syncSource(preview.getAttribute('src') ?? '')
-    altField.querySelector('.sigil-field-label')!.textContent = uiText(
-      i18n,
-      'inspector.image_alt',
-      '替代文字',
-    )
-  })
-}
-
 type StyleCaption = readonly [zh: string, en: string]
 type StyleChoice = readonly [value: string, zh: string, en: string]
+type LayoutStyleValue = DeviceStyleValue & {
+  fromFlow?: boolean
+  gap?: ReturnType<typeof readUniformGap>['gap']
+}
 
 const styleLabels: Record<string, StyleCaption> = {
   display: ['顯示方式', 'Display'],
@@ -535,8 +560,6 @@ const styleLabels: Record<string, StyleCaption> = {
   padding: ['內距', 'Padding'],
   width: ['寬度', 'Width'],
   height: ['高度', 'Height'],
-  'font-size': ['字級', 'Font size'],
-  'font-weight': ['字重', 'Font weight'],
   'text-align': ['文字對齊', 'Text alignment'],
   color: ['文字顏色', 'Text color'],
   'background-color': ['背景顏色', 'Background color'],
@@ -584,11 +607,6 @@ const styleChoices: Record<string, readonly StyleChoice[]> = {
     ['1rem', '標準', 'Standard'],
     ['2rem', '寬鬆', 'Spacious'],
   ],
-  'font-weight': [
-    ['normal', '一般', 'Regular'],
-    ['600', '半粗體', 'Semibold'],
-    ['bold', '粗體', 'Bold'],
-  ],
   'text-align': [
     ['left', '靠左', 'Left'],
     ['center', '置中', 'Center'],
@@ -607,9 +625,11 @@ function renderStyle(
   node: ComponentNode,
   device: ResponsiveDevice,
   expanded: Set<string>,
+  styleTransfer: ReturnType<typeof createStyleTransfer>,
   registerDestroy: (dispose: () => void) => void,
-  i18n?: I18n,
+  options?: InspectorOptions,
 ): void {
+  const i18n = options?.i18n
   const listeners = new AbortController()
   const { signal } = listeners
   registerDestroy(() => listeners.abort())
@@ -638,6 +658,12 @@ function renderStyle(
   contextHint.textContent = inheritanceLabel(device, i18n)
   context.append(contextTitle, contextHint)
   container.appendChild(context)
+  if (supportsImageFraming(node)) {
+    const framing = createImageFraming(engine, node, device, i18n)
+    container.appendChild(framing.el)
+    registerDestroy(framing.destroy)
+  }
+  styleTransfer.mount(container, node, device)
 
   function section(key: string, title: string): HTMLElement {
     const heading = document.createElement('h4')
@@ -671,54 +697,113 @@ function renderStyle(
   function label(prop: string): string {
     return styleCaption(i18n, `style.property.${prop}`, styleLabels[prop]!)
   }
+  function writeStyle(prop: string, value: string): void {
+    if (prop === 'gap') setUniformGap(engine, node.id, device, value)
+    else if (prop === 'flex-direction') setFlexDirection(engine, node.id, device, value)
+    else updateDeviceStyle(engine, node.id, device, prop, value)
+  }
   function bind(
     prop: string,
     input: HTMLInputElement | HTMLSelectElement,
-    refresh: (value: DeviceStyleValue) => void,
+    refresh: (value: LayoutStyleValue) => void,
   ): HTMLElement {
     input.className = 'sigil-input'
     input.dataset.styleProperty = prop
-    return decorateStyleControl(
+    function read(current: ComponentNode): LayoutStyleValue {
+      if (prop === 'flex-direction') return readFlexDirection(current, device)
+      if (prop === 'gap') return readUniformGap(current, device)
+      return getDeviceStyleValue(current, device, prop)
+    }
+    let describe!: (value: DeviceStyleValue) => void
+    const control = decorateStyleControl(
       input,
       engine,
       node,
       device,
       prop,
-      getDeviceStyleValue(node, device, prop),
+      read(node),
       i18n,
-      (describe) =>
-        watch((current) => {
-          const value = getDeviceStyleValue(current, device, prop)
-          input.disabled = !!current.locked
-          refresh(value)
-          describe(value)
-        }),
+      (refreshMetadata) => {
+        describe = refreshMetadata
+      },
       signal,
+      () => writeStyle(prop, ''),
     )
+    watch((current) => {
+      const value = read(current)
+      input.disabled = !!current.locked
+      refresh(value)
+      describe(value)
+      if (value.gap) {
+        const source = control.querySelector<HTMLElement>('[data-style-source-label]')
+        const reset = control.querySelector<HTMLButtonElement>('[data-style-reset]')
+        if (reset) {
+          if (value.override === undefined && document.activeElement === reset)
+            input.focus({ preventScroll: true })
+          reset.hidden = value.override === undefined
+          reset.textContent = value.gap.hasOwnAxis
+            ? uiText(i18n, 'layout.clear_uniform_gap', '清除共用間距')
+            : uiText(i18n, 'style.use_inheritance', '使用繼承')
+        }
+        const local = value.source === device
+        if (source) {
+          source.hidden = local && value.gap.mixed
+          if (source.hidden) input.removeAttribute('aria-describedby')
+          else input.setAttribute('aria-describedby', source.id)
+        }
+        if (local) {
+          input.title = value.gap.mixed
+            ? uiText(i18n, 'layout.mixed_gaps', '分別設定')
+            : uiText(i18n, 'style.override', '覆寫')
+          if (source) source.textContent = input.title
+        } else if (value.gap.sources.length > 1) {
+          input.title =
+            uiText(i18n, 'style.inherit', '繼承') +
+            ' ' +
+            value.gap.sources.map((at) => deviceLabel(at, i18n)).join(' / ')
+          if (source) source.textContent = input.title
+        }
+      }
+      if (value.fromFlow && value.source === device) {
+        input.title = uiText(i18n, 'layout.from_flow', '來自 flex-flow')
+        const source = control.querySelector('[data-style-source-label]')
+        if (source) source.textContent = input.title
+      }
+    })
+    return control
   }
 
-  function textField(parent: HTMLElement, prop: string, color = false): HTMLElement {
+  function textField(parent: HTMLElement, prop: string): HTMLElement {
     const input = document.createElement('input')
-    input.type = color ? 'color' : 'text'
-    if (prop === 'padding' || prop === 'margin') input.placeholder = '16px'
-    input.addEventListener(
-      'input',
-      () => updateDeviceStyle(engine, node.id, device, prop, input.value),
-      { signal },
-    )
+    input.type = 'text'
+    const spacing =
+      prop === 'padding' || prop === 'margin'
+        ? bindBoxShorthand(
+            input,
+            engine,
+            node,
+            device,
+            prop,
+            signal,
+            i18n,
+            options?.acceptsSpacingValue,
+          )
+        : undefined
+    if (spacing) input.placeholder = '16px'
+    else
+      input.addEventListener(
+        'input',
+        () => updateDeviceStyle(engine, node.id, device, prop, input.value),
+        { signal },
+      )
     const row = bind(prop, input, (value) => {
-      let next = value.override ?? ''
-      if (color) {
-        const hex = value.effective ?? ''
-        next = /^#[\da-f]{6}$/i.test(hex)
-          ? hex
-          : /^#[\da-f]{3}$/i.test(hex)
-            ? '#' + [...hex.slice(1)].map((digit) => digit + digit).join('')
-            : '#000000'
-      }
-      if (input.value !== next) input.value = next
+      const next = value.override ?? ''
+      if (spacing) spacing.sync(next, input.disabled)
+      else if (input.value !== next) input.value = next
     })
-    return field(parent, label(prop), () => row)
+    const wrap = field(parent, label(prop), () => row)
+    spacing?.appendError(wrap)
+    return wrap
   }
 
   function choiceField(parent: HTMLElement, prop: string): void {
@@ -742,56 +827,138 @@ function renderStyle(
       captions.set(value, option.textContent)
       select.appendChild(option)
     }
+    const separate = document.createElement('option')
+    separate.value = '__sigil_separate__'
+    separate.textContent = uiText(i18n, 'layout.mixed_gaps', '分別設定')
+    separate.disabled = true
+    if (prop === 'gap') select.append(separate)
     const other = document.createElement('option')
     other.value = customMode
     other.textContent = customLabel
     select.appendChild(other)
     let editing = false
     let lastOverride: string | undefined
+    const gapDraft =
+      prop === 'gap'
+        ? bindStyleDraft(custom, signal, {
+            live: true,
+            editable: () => engine.getSelection() === node.id,
+            errorClass: 'sigil-box-spacing-error sigil-layout-gap-error',
+            validate: (value) =>
+              gapValidationMessage(undefined, value, i18n, options?.acceptsSpacingValue),
+            write(value) {
+              lastOverride = value || undefined
+              setUniformGap(engine, node.id, device, value)
+            },
+          })
+        : undefined
     const row = bind(prop, select, (value) => {
       if (value.override !== lastOverride) editing = false
       lastOverride = value.override
       const explicit = value.override ?? ''
-      const inherited = value.effective ?? ''
-      empty.textContent = value.inherited
-        ? `${uiText(i18n, 'style.inherit', '繼承')} ${captions.get(inherited) ?? inherited}`
+      let inherited = value.effective ?? ''
+      let selection = explicit
+      const inherits = value.inherited
+      if (value.gap) {
+        const common = value.effective ?? ''
+        inherited = value.gap.mixed ? uiText(i18n, 'layout.mixed_gaps', '分別設定') : common
+        separate.textContent = inherited
+        const customAxes = !!common && common !== explicit && !captions.has(common)
+        selection =
+          value.source === device ? (value.gap.mixed || customAxes ? separate.value : common) : ''
+        separate.hidden = selection !== separate.value
+        for (const option of select.options) {
+          if (captions.has(option.value))
+            option.disabled = options?.acceptsSpacingValue?.(option.value) === false
+        }
+      }
+      const caption = captions.get(inherited) ?? inherited
+      empty.textContent = inherits
+        ? `${uiText(i18n, 'style.inherit', '繼承')} ${caption}`
         : uiText(i18n, 'style.unset_short', '未設')
-      const showCustom = editing || (!!explicit && !captions.has(explicit))
-      select.value = showCustom ? customMode : explicit
+      if (prop === 'flex-direction' && value.source === device && (value.fromFlow || !explicit)) {
+        selection = ''
+        empty.textContent = value.fromFlow
+          ? uiText(i18n, 'layout.from_flow', '來自 flex-flow') + ' · ' + caption
+          : caption
+      }
+      const showCustom =
+        editing || (!!selection && selection !== separate.value && !captions.has(selection))
+      select.value = showCustom ? customMode : selection
       custom.hidden = !showCustom
       custom.disabled = select.disabled
-      if (custom.value !== explicit) custom.value = explicit
-      custom.placeholder = value.inherited ? inherited : ''
+      if (gapDraft) gapDraft.sync(explicit, custom.disabled)
+      else if (custom.value !== explicit) custom.value = explicit
+      custom.placeholder = inherits ? inherited : ''
     })
     const fieldBox = field(parent, label(prop), () => row)
     fieldBox.appendChild(custom)
+    gapDraft?.appendError(fieldBox)
     select.addEventListener(
       'change',
       () => {
         editing = select.value === customMode
         custom.hidden = !editing
         if (editing) custom.focus()
-        else updateDeviceStyle(engine, node.id, device, prop, select.value)
+        else if (
+          !select.disabled &&
+          select.value !== separate.value &&
+          (prop !== 'gap' ||
+            !select.value ||
+            options?.acceptsSpacingValue?.(select.value) !== false)
+        ) {
+          gapDraft?.restore()
+          writeStyle(prop, select.value)
+        }
       },
       { signal },
     )
-    custom.addEventListener(
-      'input',
-      () => {
-        lastOverride = custom.value || undefined
-        editing = true
-        updateDeviceStyle(engine, node.id, device, prop, custom.value)
-      },
-      { signal },
-    )
+    if (!gapDraft)
+      custom.addEventListener(
+        'input',
+        () => {
+          lastOverride = custom.value || undefined
+          editing = true
+          writeStyle(prop, custom.value)
+        },
+        { signal },
+      )
   }
 
   const layout = section('layout', '版面')
+  if (node.id !== engine.getTree().id) {
+    const item = createGridItem(engine, node, device, i18n, options?.richText)
+    layout.appendChild(item.el)
+    registerDestroy(item.destroy)
+  }
   choiceField(layout, 'display')
+  const layoutContainer = supportsGridColumns(node) && !options?.richText?.supports(node)
+  if (layoutContainer) {
+    const columns = createGridColumns(engine, node, device, i18n, options?.acceptsCustomGridTracks)
+    layout.appendChild(columns.el)
+    registerDestroy(columns.destroy)
+  }
   const flex = document.createElement('div')
+  flex.dataset.layoutNode = node.id
   for (const prop of ['flex-direction', 'justify-content', 'align-items']) choiceField(flex, prop)
   const gaps = document.createElement('div')
   choiceField(gaps, 'gap')
+  if (layoutContainer) {
+    const wrapping = createFlexWrapField(engine, node, device, i18n)
+    wrapping.el.dataset.layoutNode = node.id
+    flex.append(wrapping.el)
+    registerDestroy(wrapping.destroy)
+    const separate = createLayoutGapField(
+      engine,
+      node,
+      device,
+      expanded,
+      i18n,
+      options?.acceptsSpacingValue,
+    )
+    gaps.append(separate.el)
+    registerDestroy(separate.destroy)
+  }
   layout.append(flex, gaps)
   watch((current) => {
     const tokens = (getDeviceStyleValue(current, device, 'display').effective ?? '')
@@ -820,28 +987,73 @@ function renderStyle(
     button.title = `${button.textContent} (${value})`
     button.addEventListener(
       'click',
-      () => updateDeviceStyle(engine, node.id, device, 'padding', value),
+      () => setBoxShorthand(engine, node.id, device, 'padding', value),
       { signal },
     )
     presets.appendChild(button)
   }
-  padding.insertBefore(presets, padding.lastElementChild)
+  padding.insertBefore(presets, padding.children[1]!)
   watch((current) => {
-    const value = getDeviceStyleValue(current, device, 'padding')
+    const values = readBoxSpacing(current, device, 'padding')
     for (const button of presets.querySelectorAll('button')) {
-      button.setAttribute('aria-pressed', String(button.value === value.override))
-      button.disabled = !!current.locked
+      button.setAttribute(
+        'aria-pressed',
+        String(
+          boxSides.every(
+            (side) => values[side].source === device && values[side].value === button.value,
+          ),
+        ),
+      )
+      button.disabled = !!current.locked || options?.acceptsSpacingValue?.(button.value) === false
     }
   })
-  for (const prop of ['margin', 'width', 'height']) textField(layout, prop)
+  function addSides(prop: BoxProperty): void {
+    const spacing = createBoxSpacingField(
+      engine,
+      node,
+      device,
+      prop,
+      expanded,
+      i18n,
+      options?.acceptsSpacingValue,
+    )
+    layout.append(spacing.el)
+    watch(spacing.refresh)
+    registerDestroy(spacing.destroy)
+  }
+  addSides('padding')
+  textField(layout, 'margin')
+  addSides('margin')
+  for (const prop of ['width', 'height']) textField(layout, prop)
 
+  function colorField(parent: HTMLElement, property: 'color' | 'background-color'): void {
+    const control = createColorField(
+      engine,
+      node,
+      device,
+      property,
+      label(property),
+      i18n,
+      options?.acceptsColorValue,
+    )
+    parent.append(control.el)
+    registerDestroy(control.destroy)
+  }
   const typography = section('typography', '文字')
-  textField(typography, 'font-size')
-  choiceField(typography, 'font-weight')
+  const typeFields = createTypographyFields(
+    engine,
+    node,
+    device,
+    signal,
+    i18n,
+    options?.acceptsTypographyValue,
+  )
+  typography.append(typeFields.el)
+  watch(typeFields.refresh)
   choiceField(typography, 'text-align')
-  textField(typography, 'color', true)
+  colorField(typography, 'color')
   const appearance = section('appearance', '外觀')
-  textField(appearance, 'background-color', true)
+  colorField(appearance, 'background-color')
   for (const prop of ['border', 'border-radius', 'box-shadow']) textField(appearance, prop)
 
   const reset = document.createElement('button')
@@ -863,14 +1075,22 @@ function renderAdvanced(
   container: HTMLElement,
   engine: Engine,
   node: ComponentNode,
-  i18n?: I18n,
+  i18n: I18n | undefined,
+  registerLocaleRefresh: (refresh: () => void) => void,
 ): void {
-  field(container, 'id', () => {
+  const internalId = field(container, uiText(i18n, 'inspector.component_id', '元件內部 ID'), () => {
     const input = document.createElement('input')
     input.className = 'sigil-input'
     input.value = node.id
     input.readOnly = true
     return input
+  })
+  registerLocaleRefresh(() => {
+    internalId.querySelector('label')!.textContent = uiText(
+      i18n,
+      'inspector.component_id',
+      '元件內部 ID',
+    )
   })
   field(container, 'type', () => {
     const input = document.createElement('input')
@@ -891,17 +1111,24 @@ function renderAdvanced(
     del.type = 'button'
     del.className = 'sigil-btn sigil-btn--danger'
     del.textContent = uiText(i18n, 'inspector.delete_component', '刪除元件')
+    registerLocaleRefresh(() => {
+      del.textContent = uiText(i18n, 'inspector.delete_component', '刪除元件')
+    })
     del.addEventListener('click', () => engine.remove(node.id))
     container.appendChild(del)
   }
 }
 
-function field(container: HTMLElement, label: string, control: () => HTMLElement): HTMLElement {
+function field(
+  container: HTMLElement,
+  label: string | Text,
+  control: () => HTMLElement,
+): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'sigil-field'
   const caption = document.createElement('label')
   caption.className = 'sigil-field-label'
-  caption.textContent = label
+  caption.append(label)
   const content = control()
   const input = content.matches('input,select') ? content : content.querySelector('input,select')
   if (input) {

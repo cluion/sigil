@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import type { ComponentNode } from '@cluion/sigil-core'
+import type { SigilApp } from '@cluion/sigil-app'
 import { prepareDemo } from './demo-fixture'
 
 interface DemoNode {
@@ -20,7 +22,125 @@ interface DemoApp {
   toJSON(): { root: DemoNode }
 }
 
-test('畫布元件工具列跟隨捲動，可選父層、複製、刪除及復原', async ({ page }) => {
+test('有連結的格線縮圖維持指定高度，調整欄數與構圖時連結範圍跟著圖片', async ({
+  page,
+  context,
+}) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+  await page.evaluate(() => {
+    const root: ComponentNode = {
+      id: 'gallery',
+      type: 'section',
+      style: { display: 'grid', 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' },
+      children: [
+        {
+          id: 'poster',
+          type: 'image',
+          name: '工作坊縮圖',
+          attributes: { alt: '版畫報名', src: 'https://placehold.co/200x120' },
+          style: { display: 'block', width: '70%', height: '64px', 'object-fit': 'cover' },
+        },
+        { id: 'date', type: 'text', content: '報名截止日' },
+      ],
+    }
+    localStorage.setItem('sigil-demo', JSON.stringify({ version: 1, root }))
+  })
+  await page.getByRole('button', { name: '讀 localStorage', exact: true }).click()
+  await page.evaluate(() =>
+    (window as unknown as { __sigil: SigilApp }).__sigil.engine.select('poster'),
+  )
+  const reader = await context.newPage()
+  const readerErrors = await prepareDemo(reader)
+  async function measure() {
+    const html = await page.evaluate(() =>
+      (window as unknown as { __sigil: SigilApp }).__sigil.toHTML('static'),
+    )
+    await reader.setContent(html)
+    const photo = reader.getByRole('img', { name: '版畫報名' })
+    return photo.evaluate(async (el) => {
+      await (el as HTMLImageElement).decode()
+      const box = el.getBoundingClientRect()
+      const link = el.closest('a')?.getBoundingClientRect()
+      return {
+        width: box.width,
+        height: box.height,
+        linkWidth: link?.width,
+        linkHeight: link?.height,
+      }
+    })
+  }
+  try {
+    const original = await measure()
+    expect(original.height).toBe(64)
+    const toolbar = page.getByRole('toolbar', { name: '元件操作' })
+    await toolbar.getByRole('button', { name: '圖片連結' }).click()
+    const address = page.getByRole('textbox', { name: '圖片連結' })
+    await address.fill('/registration')
+    await address.press('Enter')
+    const linked = await measure()
+    expect(linked).toEqual({ ...original, linkWidth: original.width, linkHeight: 64 })
+    await toolbar.getByRole('button', { name: '調整圖片構圖' }).click()
+    await page.getByRole('button', { name: '橫跨整列', exact: true }).click()
+    const full = await measure()
+    expect(full.width).toBeGreaterThan(original.width * 1.9)
+    expect(full.linkWidth).toBe(full.width)
+    expect(full.height).toBe(64)
+    await page.locator('select[data-framing="ratio"]').selectOption('1 / 1')
+    const square = await measure()
+    expect(square.height).toBeCloseTo(square.width, 0)
+    expect(square.linkHeight).toBeCloseTo(square.height, 0)
+    await page.getByRole('button', { name: '復原', exact: true }).click()
+    expect(await measure()).toEqual(full)
+    expect([...errors, ...readerErrors]).toEqual([])
+  } finally {
+    await reader.close()
+  }
+})
+
+test('深層元件路徑可在有限寬度定位當前項，並以鍵盤跳到任意上層', async ({ page }) => {
+  const errors = await prepareDemo(page)
+  await page.setViewportSize({ width: 1000, height: 768 })
+  await page.goto('/')
+  await page.evaluate(() => {
+    let branch: ComponentNode = {
+      id: 'path-end',
+      type: 'text',
+      name: '報名連結的補充說明',
+      content: '請攜帶報名確認信',
+    }
+    for (let depth = 16; depth > 0; depth--) {
+      branch = {
+        id: 'section-' + depth,
+        type: 'section',
+        name: '工作坊場次與報名資訊第 ' + depth + ' 層',
+        children: [branch],
+      }
+    }
+    localStorage.setItem('sigil-demo', JSON.stringify({ version: 1, root: branch }))
+  })
+  await page.getByRole('button', { name: '讀 localStorage', exact: true }).click()
+  await page.evaluate(() => {
+    const app = (window as unknown as { __sigil: DemoApp }).__sigil
+    app.engine.select('path-end')
+  })
+  const path = page.getByRole('navigation', { name: '元件路徑', exact: true })
+  const current = path.locator('[aria-current="location"]')
+  await expect(current).toHaveText('報名連結的補充說明')
+  await expect(current).toBeInViewport({ ratio: 0.9 })
+  const ancestor = path.getByRole('button', { name: '工作坊場次與報名資訊第 2 層', exact: true })
+  await ancestor.focus()
+  await expect(ancestor).toBeInViewport({ ratio: 0.9 })
+  await ancestor.press('Enter')
+  await expect(current).toHaveText('工作坊場次與報名資訊第 2 層')
+  await expect(path.getByRole('button')).toHaveText(['工作坊場次與報名資訊第 1 層'])
+  await expect(page.locator('.sigil-inspector-head')).toHaveText('工作坊場次與報名資訊第 2 層')
+  expect(await page.locator('html').evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0)
+  await expect(page.getByRole('button', { name: '存檔', exact: true })).toBeDisabled()
+  expect(errors).toEqual([])
+})
+
+test('畫布元件工具列停靠在畫布下方，可選父層、複製、刪除及復原', async ({ page }) => {
   const errors = await prepareDemo(page)
   await page.goto('/')
   await page.evaluate(() => {
@@ -64,10 +184,12 @@ test('畫布元件工具列跟隨捲動，可選父層、複製、刪除及復�
   await expect(toolbar).toContainText('活動標題')
   const beforeScroll = await toolbar.boundingBox()
   if (!beforeScroll) throw new Error('找不到畫布工具列')
+  const iframeBox = (await page.locator('iframe[title="編輯畫布"]').boundingBox())!
+  expect(beforeScroll.y).toBeGreaterThanOrEqual(iframeBox.y + iframeBox.height - 1)
+  const titleBefore = (await title.boundingBox())!
   await frame.locator('body').evaluate((el) => el.ownerDocument.defaultView!.scrollBy(0, 50))
-  await expect
-    .poll(async () => Math.round(beforeScroll.y - ((await toolbar.boundingBox())?.y ?? 0)))
-    .toBe(50)
+  await expect.poll(async () => Math.round(titleBefore.y - (await title.boundingBox())!.y)).toBe(50)
+  expect((await toolbar.boundingBox())!.y).toBeCloseTo(beforeScroll.y)
   const parent = toolbar.getByRole('button', { name: '選取父層' })
   await parent.focus()
   await parent.press('Enter')
@@ -99,6 +221,90 @@ test('畫布元件工具列跟隨捲動，可選父層、複製、刪除及復�
   await expect(toolbar.getByRole('button')).toHaveCount(0)
   await page.getByRole('button', { name: '預覽', exact: true }).click()
   await expect(toolbar).toBeHidden()
+  expect(errors).toEqual([])
+})
+
+test('匯入格線區域與個別欄線後，畫布和成品依相同斷點順序套用配置', async ({ page }, testInfo) => {
+  const errors = await prepareDemo(page)
+  await page.goto('/')
+  const doc = {
+    version: 1,
+    root: {
+      id: 'schedule',
+      type: 'section',
+      name: '場次表',
+      style: { display: 'grid', 'grid-template-columns': 'repeat(4, 1fr)' },
+      children: [
+        {
+          id: 'session',
+          type: 'text',
+          tagName: 'h2',
+          name: '場次標題',
+          content: '午後場次',
+          style: { 'grid-column': '1 / -1', 'grid-area': '2 / 2 / 3 / 4', 'grid-column-end': '5' },
+          responsiveStyles: {
+            tablet: { 'grid-column-end': '4', 'grid-column': 'auto' },
+            mobile: { 'grid-area': '1 / 2 / 2 / 3' },
+          },
+        },
+      ],
+    },
+  }
+  await page.evaluate((data) => localStorage.setItem('sigil-demo', JSON.stringify(data)), doc)
+  await page.getByRole('button', { name: '讀 localStorage' }).click()
+  const title = page
+    .frameLocator('iframe[title="編輯畫布"]')
+    .getByRole('heading', { name: '午後場次' })
+  const scenarios = [
+    { device: '桌面', width: 1100, area: '2 / 2 / 3 / 5' },
+    { device: '平板', width: 700, area: '2 / auto / 3 / auto' },
+    { device: '手機', width: 400, area: '1 / 2 / 2 / 3' },
+  ]
+  async function expectArea(element: typeof title, area: string) {
+    await expect
+      .poll(() =>
+        element.evaluate((node) => {
+          const style = getComputedStyle(node)
+          return [
+            style.gridRowStart,
+            style.gridColumnStart,
+            style.gridRowEnd,
+            style.gridColumnEnd,
+          ].join(' / ')
+        }),
+      )
+      .toBe(area)
+  }
+  for (const { device, area } of scenarios) {
+    await page.getByRole('button', { name: device, exact: true }).click()
+    await expectArea(title, area)
+  }
+  await page.getByRole('button', { name: '桌面', exact: true }).click()
+  const root = page.getByRole('treeitem', { name: '場次表', exact: true })
+  if ((await root.getAttribute('aria-expanded')) === 'false') await root.press('ArrowRight')
+  await page.getByRole('treeitem', { name: '場次標題', exact: true }).click()
+  await page.getByRole('tab', { name: '樣式', exact: true }).click()
+  const controls = page.getByRole('group', { name: '格線項目配置' })
+  await controls.getByRole('button', { name: '橫跨整列' }).click()
+  await expectArea(title, '2 / 1 / 3 / -1')
+  await page.getByRole('button', { name: '復原', exact: true }).click()
+  await expectArea(title, scenarios[0]!.area)
+  await page.getByRole('button', { name: '匯出', exact: true }).click()
+  const downloading = page.waitForEvent('download')
+  await page
+    .getByRole('dialog', { name: '匯出 HTML' })
+    .getByRole('button', { name: '下載 .html' })
+    .click()
+  const file = testInfo.outputPath('grid-schedule.html')
+  await (await downloading).saveAs(file)
+  await page.route('**/grid-schedule', (route) =>
+    route.fulfill({ contentType: 'text/html;charset=utf-8', path: file }),
+  )
+  await page.goto('/grid-schedule')
+  for (const { width, area } of scenarios) {
+    await page.setViewportSize({ width, height: 800 })
+    await expectArea(page.getByRole('heading', { name: '午後場次' }), area)
+  }
   expect(errors).toEqual([])
 })
 
@@ -353,7 +559,12 @@ test('範本流程：另存、重命名、再插入與刪除', async ({ page }) 
   await expect(page.getByRole('button', { name: 'E2E 範本 範本操作', exact: true })).toBeVisible()
 
   const search = page.getByRole('searchbox', { name: '搜尋區塊', exact: true })
-  await search.fill('E2E')
+  await search.fill('範本 Ｅ２Ｅ')
+  const pinnedOnly = page.getByRole('button', { name: '只看已釘選', exact: true })
+  const pin = page.getByRole('button', { name: '釘選 E2E 範本', exact: true })
+  await pin.press('Enter')
+  await expect(pin).toHaveAttribute('aria-pressed', 'true')
+  await pinnedOnly.click()
   await page.getByRole('button', { name: 'E2E 範本 範本操作', exact: true }).click()
   page.once('dialog', async (dialog) => {
     expect(dialog.type()).toBe('prompt')
@@ -361,7 +572,11 @@ test('範本流程：另存、重命名、再插入與刪除', async ({ page }) 
   })
   await page.getByRole('menuitem', { name: '重新命名', exact: true }).click()
   await expect(page.getByRole('button', { name: 'E2E 已改名 範本操作', exact: true })).toBeVisible()
-  await expect(search).toHaveValue('E2E')
+  await expect(search).toHaveValue('範本 Ｅ２Ｅ')
+  await expect(page.getByRole('button', { name: '釘選 E2E 已改名', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
 
   const canvasButtons = page
     .frameLocator('iframe[title="編輯畫布"]')
@@ -380,6 +595,10 @@ test('範本流程：另存、重命名、再插入與刪除', async ({ page }) 
     0,
   )
   await expect(canvasButtons).toHaveCount(previousCount + 1)
+  await expect(page.getByText('尚無已釘選區塊', { exact: true })).toBeVisible()
+  await pinnedOnly.click()
+  await search.fill('')
+  await expect(page.getByRole('button', { name: '插入 Hero 組合', exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })
 
@@ -671,7 +890,7 @@ test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) =>
 
   await settingsToggle.click()
   await expect(settings).toHaveAttribute('data-open', 'true')
-  await expect(settings.getByRole('button', { name: '關閉面板' })).toBeFocused()
+  await expect(settings.getByRole('button', { name: '圖層', exact: true })).toBeFocused()
   const targets = app.locator('.sigil-topbar button:visible, [data-open="true"] .sigil-panel-close')
   const smallestTarget = await targets.evaluateAll((buttons) =>
     Math.min(
@@ -683,22 +902,24 @@ test('390px compact：抽屜、焦點、主題與 overflow', async ({ page }) =>
   )
   expect(smallestTarget).toBeGreaterThanOrEqual(44)
   expect((await app.locator('.sigil-canvas-wrap').boundingBox())!.height).toBeGreaterThan(300)
+  const heroLayer = settings.getByRole('treeitem', { name: '主圖', exact: true })
+  await heroLayer.press('Enter')
   const contentTab = settings.getByRole('tab', { name: '內容' })
-  await contentTab.focus()
+  await expect(contentTab).toBeFocused()
   await contentTab.press('ArrowRight')
   const styleTab = settings.getByRole('tab', { name: '樣式' })
   await expect(styleTab).toBeFocused()
   await expect(settings.getByRole('tabpanel', { name: '樣式' })).toBeVisible()
   await styleTab.press('Home')
   await expect(contentTab).toBeFocused()
-  const heroLayer = settings.getByRole('treeitem', { name: '主圖', exact: true })
+  await settings.getByRole('button', { name: '圖層', exact: true }).click()
   await heroLayer.click()
   const pick = settings.getByRole('button', { name: '選圖', exact: true })
   await pick.click()
   const media = page.getByRole('dialog', { name: '媒體庫', exact: true })
   await expect(media).toBeVisible()
   await media.getByRole('button', { name: '關閉', exact: true }).press('Delete')
-  await expect(heroLayer).toHaveCount(1)
+  await expect(settings.locator('[role="treeitem"][aria-label="主圖"]')).toHaveCount(1)
   await page.keyboard.press('Escape')
   await expect(media).toHaveCount(0)
   await expect(pick).toBeFocused()
@@ -792,6 +1013,9 @@ test('runtime locale：保留 App 狀態、套用 override 與更新完整介面
   await expect(app).toHaveAttribute('data-layout', 'desktop')
   await expect(page.locator('.sigil-topbar-brand')).toHaveText('Sigil Demo')
   await expect(page.locator('.sigil-status-dirty')).toHaveText('Unsaved')
+  const localizedPath = page.getByRole('navigation', { name: 'Component path', exact: true })
+  await expect(localizedPath.getByRole('button', { name: '首區', exact: true })).toBeVisible()
+  await expect(localizedPath.locator('[aria-current="location"]')).toHaveText('富文字')
   await expect(page.getByRole('button', { name: 'Tablet', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -827,6 +1051,8 @@ test('runtime locale：保留 App 狀態、套用 override 與更新完整介面
   await expect(page.locator('.sigil-inspector .sigil-field-label')).toHaveText([
     'Image',
     'Alternative text',
+    'Image link',
+    'Link to section',
   ])
   await page.getByRole('button', { name: 'Choose image', exact: true }).click()
   const media = page.getByRole('dialog', { name: 'Media library', exact: true })

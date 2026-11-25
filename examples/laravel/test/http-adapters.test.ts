@@ -4,6 +4,7 @@ import type { SigilDoc } from '@cluion/sigil-core'
 import { createHttpProjectStore, HttpError } from '../resources/js/http-project-store'
 import { createHttpAssetStore } from '../resources/js/http-asset-store'
 import { createActivityDownload } from '../resources/js/activity-download'
+import { acceptsImageAttribute, assertDocument } from '../resources/js/document-validation'
 
 const doc: SigilDoc = {
   version: 1,
@@ -32,6 +33,44 @@ const asset = {
   name: '圖.png',
   mimeType: 'image/png',
 }
+
+describe('image URL insertion in the activity editor', () => {
+  it('matches persisted src and alt limits in UTF-8 bytes', () => {
+    const src = '/' + '圖'.repeat(682) + 'a'
+    const alt = '海'.repeat(682) + 'ab'
+    expect(acceptsImageAttribute('src', src)).toBe(true)
+    expect(acceptsImageAttribute('alt', alt)).toBe(true)
+    expect(acceptsImageAttribute('alt', '')).toBe(true)
+    expect(acceptsImageAttribute('src', src + 'b')).toBe(false)
+    expect(acceptsImageAttribute('alt', alt + 'a')).toBe(false)
+    expect(acceptsImageAttribute('alt', 'a' + String.fromCharCode(127))).toBe(false)
+    expect(() =>
+      assertDocument({
+        version: 1,
+        root: { id: 'photo', type: 'image', attributes: { src, alt } },
+      }),
+    ).not.toThrow()
+  })
+
+  it('accepts root-relative Unicode paths and HTTP(S) addresses in the PHP storage format', () => {
+    for (const src of [
+      '/海報.webp',
+      'https://cdn.example/%E5%9C%96.png',
+      'http://[::1]:8080/photo.jpg',
+    ])
+      expect(acceptsImageAttribute('src', src)).toBe(true)
+    for (const src of [
+      '',
+      '//cdn.example/x',
+      'https://user@example.org/x',
+      'https://example.com/圖.webp',
+      'https://_cdn.example/a',
+      'https:///a.jpg',
+      'https://a:00000080/x',
+    ])
+      expect(acceptsImageAttribute('src', src)).toBe(false)
+  })
+})
 
 describe('activity HTML download images', () => {
   const origin = 'https://workshop.test'

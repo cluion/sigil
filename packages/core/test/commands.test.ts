@@ -233,9 +233,9 @@ describe('move-up / move-down 命令', () => {
     expect(down.when!(ctx)).toBe(false)
   })
 
-  it('鎖定節點不能移動', () => {
+  it.each(['b', 'r'])('鎖定來源或父節點 %s 時不能上移或下移', (id) => {
     const { engine, up, down, ctx } = setup()
-    engine.update('b', { locked: true })
+    engine.update(id, { locked: true })
     engine.select('b')
     expect(up.when!(ctx)).toBe(false)
     expect(down.when!(ctx)).toBe(false)

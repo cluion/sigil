@@ -1,6 +1,6 @@
 import type { ComponentNode } from './types.js'
 
-const IDREF_ATTRIBUTES = new Set([
+export const IDREF_ATTRIBUTES = new Set([
   'for',
   'form',
   'list',
@@ -28,11 +28,19 @@ function visitIds(node: ComponentNode, visit: (node: ComponentNode, id: string) 
   for (const child of node.children ?? []) visitIds(child, visit)
 }
 
-function decodeFragment(value: string): string {
+export function decodeFragment(value: string): string {
   if (!value.includes('%')) return value
   // Preserve fragment punctuation while using the URL parser's forgiving UTF-8 percent decoder.
   const escaped = value.replaceAll('+', '%2B').replaceAll('&', '%26')
   return new URLSearchParams('id=' + escaped).get('id')!
+}
+
+export function parseLocalFragment(value: string) {
+  const match = /^([\t\n\f\r ]*#)(.*?)(:~:.*|[\t\n\f\r ]*)$/s.exec(value)
+  if (!match) return
+  const fragment = match[2]!
+  const literal = new URL('about:blank#' + fragment).hash.slice(1)
+  return { prefix: match[1]!, fragment, literal, suffix: match[3]! }
 }
 
 function rewriteFragment(
@@ -40,11 +48,10 @@ function rewriteFragment(
   targets: Map<string, string>,
   documentIds: Set<string>,
 ): string {
-  const match = /^([\t\n\f\r ]*#)(.*?)(:~:.*|[\t\n\f\r ]*)$/s.exec(value)
-  if (!match) return value
-  const fragment = match[2]!
+  const parts = parseLocalFragment(value)
+  if (!parts) return value
+  const { fragment, literal: serialized } = parts
   // HTML first tries the serialized fragment, then its UTF-8 percent-decoded form.
-  const serialized = new URL('about:blank#' + fragment).hash.slice(1)
   const literal = targets.has(serialized) || documentIds.has(serialized)
   const id = literal ? serialized : decodeFragment(serialized)
   const target = targets.get(id)
@@ -54,7 +61,7 @@ function rewriteFragment(
     : literal
       ? target
       : encodeURIComponent(target)
-  return match[1] + renamed + match[3]
+  return parts.prefix + renamed + parts.suffix
 }
 
 /**

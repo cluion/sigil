@@ -50,6 +50,45 @@ function setup(save: ProjectStore['save'] = vi.fn(), hooks?: EditorHooks) {
 }
 
 describe('Editor persistence contract', () => {
+  it('keeps the saved step available while typing continues and updates an open history dialog after acknowledgement', async () => {
+    const write = deferred<void>()
+    const save = vi
+      .fn()
+      .mockReturnValueOnce(write.promise)
+      .mockRejectedValueOnce(new Error('offline'))
+    const { subject, mount } = setup(save)
+    subject.setLocale('en')
+    subject.engine.update('text', { content: 'Open registration' })
+    const submitted = subject.engine.getHistory().currentId
+    const pending = subject.save()
+    subject.engine.update('text', { content: 'Registration closed' })
+    const latest = subject.engine.getHistory().currentId
+    expect(latest).not.toBe(submitted)
+
+    const trigger = mount.querySelector<HTMLButtonElement>('[data-command-id="edit-history"]')!
+    expect(trigger.textContent).toBe('Edit history')
+    trigger.click()
+    const dialog = mount.querySelector<HTMLDialogElement>('.sigil-history-dialog')!
+    expect(dialog.querySelector('[data-history-saved]')).toBeNull()
+    write.resolve()
+    await pending
+    const saved = dialog.querySelector<HTMLElement>('[data-history-saved="true"]')!
+    expect(saved.dataset.historyId).toBe(String(submitted))
+    await expect(subject.save()).rejects.toThrow('offline')
+    expect(dialog.querySelector('[data-history-saved="true"]')).toBe(saved)
+    subject.setLocale('zh')
+    expect(trigger.textContent).toBe('編輯歷程')
+    dialog.querySelector<HTMLElement>('[data-history-saved="true"]')!.click()
+    expect(subject.toJSON()).toEqual(documentWith('Registration closed'))
+    dialog.querySelector<HTMLButtonElement>('.sigil-history-restore')!.click()
+    expect(subject.toJSON()).toEqual(documentWith('Open registration'))
+    expect(subject.isDirty()).toBe(false)
+    expect(document.activeElement).toBe(trigger)
+    expect(await subject.runCommand('edit-history')).toBe(true)
+    subject.destroy()
+    expect(mount.querySelector('.sigil-history-dialog')).toBeNull()
+  })
+
   it('saves from its own property field and leaves native editing keys and host fields alone', async () => {
     const storeSave = vi.fn()
     const { subject, mount } = setup(storeSave)
@@ -99,6 +138,38 @@ describe('Editor persistence contract', () => {
     expect(subject.isDirty()).toBe(false)
     await subject.runCommand('undo')
     expect(subject.toJSON()).toEqual(documentWith())
+  })
+
+  it('keeps the canvas draft while translating its edit, finish and cancel controls', async () => {
+    const storeSave = vi.fn()
+    const { subject, mount } = setup(storeSave)
+    const dock = mount.querySelector<HTMLElement>('.sigil-canvas-actions')!
+    const frame = mount.querySelector('iframe')!
+    await vi.waitFor(() =>
+      expect(frame.contentDocument?.querySelector('[data-sigil-id="text"]')).toBeTruthy(),
+    )
+    subject.engine.select('text')
+    const edit = dock.querySelector<HTMLButtonElement>('button[aria-label="編輯文字"]')!
+    edit.click()
+    const draft = frame.contentDocument!.querySelector<HTMLElement>('[contenteditable="true"]')!
+    draft.textContent = '未送出的文字'
+    draft.dispatchEvent(new Event('input', { bubbles: true }))
+
+    subject.setLocale('en')
+    const group = dock.querySelector<HTMLElement>('[role="group"][aria-label="Editing text"]')!
+    expect(group.hidden).toBe(false)
+    const [finish, cancel] = group.querySelectorAll('button')
+    expect(finish?.textContent).toBe('Done editing')
+    expect(cancel?.textContent).toBe('Cancel editing')
+    expect(draft.isConnected).toBe(true)
+    expect(subject.toJSON()).toEqual(documentWith())
+    expect(subject.isDirty()).toBe(true)
+
+    cancel!.click()
+    expect(subject.isDirty()).toBe(false)
+    expect(subject.toJSON()).toEqual(documentWith())
+    expect(dock.querySelector('[aria-label="Edit text"]')).toBeTruthy()
+    expect(storeSave).not.toHaveBeenCalled()
   })
 
   it('toJSON returns a synchronous snapshot without writing or invoking save hooks', async () => {

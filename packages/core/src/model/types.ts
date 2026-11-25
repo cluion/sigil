@@ -57,6 +57,10 @@ export interface SigilDocMeta {
 }
 
 export type Attrs = Record<string, string>
+export interface ComponentUpdate extends Partial<ComponentNode> {
+  /** Remove these HTML attributes after merging attributes, ignoring ASCII case. */
+  removeAttributes?: readonly string[]
+}
 export type Style = Record<string, string>
 export type ResponsiveDevice = 'desktop' | 'tablet' | 'mobile'
 export type ResponsiveBreakpoint = Exclude<ResponsiveDevice, 'desktop'>

@@ -119,7 +119,7 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
         const node = findNode(c.engine.getTree(), id)
         if (!node || node.locked) return false
         const parent = findParent(c.engine.getTree(), id)
-        if (!parent?.children) return false
+        if (!parent?.children || parent.locked) return false
         const idx = parent.children.findIndex((ch) => ch.id === id)
         return idx > 0
       },
@@ -142,7 +142,7 @@ export function createDefaultEditingCommands(): CommandDefinition[] {
         const node = findNode(c.engine.getTree(), id)
         if (!node || node.locked) return false
         const parent = findParent(c.engine.getTree(), id)
-        if (!parent?.children) return false
+        if (!parent?.children || parent.locked) return false
         const idx = parent.children.findIndex((ch) => ch.id === id)
         return idx >= 0 && idx < parent.children.length - 1
       },

@@ -2,6 +2,8 @@ export * from './types.js'
 export { createId } from './id.js'
 export type { IdFactory } from './id.js'
 export { resolveHtmlIdConflicts } from './html-ids.js'
+export { getHtmlAnchorInfo, renameHtmlAnchor } from './html-anchor.js'
+export type { HtmlAnchorInfo, HtmlAnchorResult } from './html-anchor.js'
 export { createTypeRegistry } from './registry.js'
 export type { TypeRegistry, TypeEntry } from './registry.js'
 export {

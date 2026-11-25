@@ -1,15 +1,20 @@
 import type {
+  ComponentNode,
   Engine,
   EngineEvent,
   RendererOptions,
   I18n,
   ResponsiveDevice,
 } from '@cluion/sigil-core'
-import { createRenderer, findNode } from '@cluion/sigil-core'
+import { createRenderer, createTypeRegistry, findNode } from '@cluion/sigil-core'
 // findNode 用於鎖定檢查
 import { hitTest, startMoveDrag, affectsShortcodeSlot } from './dnd.js'
 import { subscribeLocale, uiText } from './i18n.js'
+import { supportsImageFraming } from './image-framing.js'
+import { canEditPlainContent } from './text-content.js'
+import { createPlainEditingSurface } from './plain-text-editing.js'
 import { createSelectionToolbar, type CanvasSelectionCommands } from './selection-toolbar.js'
+import { resolveLinkFragment } from './link-fragment.js'
 import type { RichTextAdapter, RichTextSession } from './rich-text.js'
 
 export type CanvasMode = 'edit' | 'preview'
@@ -31,6 +36,11 @@ export interface CanvasHandle {
   cancelEditing: () => void
   /** 目前是否正在編輯，與其 id */
   getEditingId: () => string | null
+  /** 在畫布內捲動，顯示目前選取元件。 */
+  revealSelection?: (options?: { focusToolbar?: boolean }) => void
+  /** 目前選取的元件可開啟搬移對話框。 */
+  canMoveSelection?: () => boolean
+  moveSelection?: (trigger?: HTMLElement) => void
   destroy: () => void
 }
 
@@ -45,10 +55,28 @@ export interface CanvasOptions {
   i18n?: I18n
   /** false 時隱藏內建裝置／編輯切換，改由產品殼 Topbar 控制 */
   chrome?: boolean
+  /** 畫布完成編輯／預覽模式切換後通知宿主。 */
+  onModeChange?: (mode: CanvasMode) => void
   /** 宿主提供的命令與上下文，同時套用命令的啟用條件。 */
   selectionCommands?: CanvasSelectionCommands
+  /** Mount component actions in a dedicated host slot. Omit to float them beside the selection. */
+  selectionToolbarContainer?: HTMLElement
   /** Open a replacement UI for a native image. Its optional close callback also runs on preview or teardown. */
   onReplaceImage?: (id: string, trigger: HTMLElement) => void | (() => void)
+  /** 開啟所選圖片的構圖控制項。 */
+  onFrameImage?: (id: string, trigger: HTMLElement) => void
+  /** 從圖片的工具列開啟連結設定。 */
+  onEditImageLink?: (id: string, trigger: HTMLElement) => void
+  /** 從原生連結的畫布工具列開啟目的地設定。 */
+  onEditLink?: (id: string, trigger: HTMLElement) => void
+  /** 從畫布開啟文字元件的排版設定。 */
+  onEditTypography?: (id: string, trigger: HTMLElement) => void
+  /** 開啟混合內容元件在第一個子元件之前的文字欄位。 */
+  onEditLeadingText?: (id: string, trigger: HTMLElement) => void
+  /** 完成搬移後、畫布捲到元件前通知宿主。 */
+  onComponentMoved?: (id: string) => void
+  /** 在所選元件後開啟區塊選擇器，回傳函式可在預覽或卸載時關閉。 */
+  onInsertAfter?: (id: string, trigger: HTMLElement) => void | (() => void)
   /** 右鍵選單命中節點與游標座標 */
   onContextMenu?: (id: string | null, x: number, y: number) => void
   /** 富文字 session 生命週期錯誤 */
@@ -61,11 +89,13 @@ interface PlainEditingState {
   kind: 'plain'
   id: string
   element: HTMLElement
+  original: HTMLElement
   initialValue: string
-  cancelledByKey: boolean
+  restore(latest: ComponentNode | undefined): void
 }
 
 type EditEnd = 'commit' | 'cancel' | 'discard'
+type EndFocus = 'legacy' | 'toolbar' | 'external'
 
 interface RichEditingState {
   kind: 'rich'
@@ -118,20 +148,32 @@ export function createCanvas(
   let editing: EditingState | null = null
   let editingDirty = false
   let composing = false
+  let pendingPlainBlur = false
+  let blurTimer: number | undefined
+  let returnToEditAction = false
   let editingObserver: MutationObserver | null = null
   const deviceListeners = new Set<(device: CanvasDevice) => void>()
-  const selectionToolbar = createSelectionToolbar(
-    container,
-    iframe,
-    engine,
-    i18n,
-    opts?.selectionCommands,
-    opts?.onReplaceImage,
-  )
+  const selectionToolbar = createSelectionToolbar(container, iframe, engine, opts, {
+    canEdit: canEditText,
+    canEditLeadingText: (node) =>
+      !!node.children?.length &&
+      supportsPlainText(node) &&
+      !opts?.richText?.resolver.supports(node),
+    start: (id) => setEditing(id, true),
+    end: finishFromToolbar,
+    resume: resumeEditing,
+    leave() {
+      if (editing?.kind === 'plain') finishPlainBlur(editing)
+    },
+  })
   let injectedStyle: HTMLStyleElement | null = null
 
   function setMode(next: CanvasMode): void {
+    const changed = next !== mode
     if (editing) endEditing('commit')
+    if (mode === 'edit' && next === 'preview' && iframe.contentDocument) {
+      restoreDisclosureDefaults(iframe.contentDocument)
+    }
     mode = next
     if (injectedStyle && iframe.contentDocument) injectStyle(iframe.contentDocument)
     iframe.style.pointerEvents = next === 'preview' ? 'auto' : 'none'
@@ -146,15 +188,20 @@ export function createCanvas(
       hoverId = null
       paintHover()
       selectionToolbar.show(null, null)
+      selectionToolbar.cancelInsertAfter()
+      selectionToolbar.cancelMove()
       overlay.style.cursor = 'default'
     } else {
       paintSelection()
     }
+    if (changed) opts?.onModeChange?.(next)
   }
   toggle.addEventListener('click', () => setMode(mode === 'edit' ? 'preview' : 'edit'))
 
+  const registry = opts?.rendererOptions?.registry ?? createTypeRegistry()
   const renderer = createRenderer({
     ...opts?.rendererOptions,
+    registry,
     richTextResolver: opts?.richText?.resolver ?? opts?.rendererOptions?.richTextResolver,
     device,
   })
@@ -197,14 +244,13 @@ export function createCanvas(
   }
   setDevice('desktop')
 
+  let previousClickId: string | null = null
+  let lastClickId: string | null = null
   function onOverlayClick(e: MouseEvent): void {
     const id = hitTest(iframe, e.clientX, e.clientY)
-    // 點空白時取消選取
-    if (!id) {
-      engine.select(null)
-      return
-    }
-    engine.select(id)
+    previousClickId = lastClickId
+    lastClickId = id
+    if (engine.getSelection() !== id) engine.select(id)
   }
 
   function onOverlayPointerDown(e: PointerEvent): void {
@@ -300,41 +346,71 @@ export function createCanvas(
   }
 
   // —— 雙擊 inline 編輯文字 ——
-  function setEditing(id: string | null): void {
-    if (editing) endEditing('commit')
+  function canEditText(node: ComponentNode | null): boolean {
+    if (!node || node.shortcode || node.type === 'shortcode' || node.children?.length) return false
+    return !!opts?.richText?.resolver.supports(node) || supportsPlainText(node)
+  }
+
+  function supportsPlainText(node: ComponentNode): boolean {
+    const tag = (node.tagName ?? registry.get(node.type)?.tagName ?? 'div').toLowerCase()
+    return (
+      canEditPlainContent(node, tag) && !opts?.rendererOptions?.richTextResolver?.supports(node)
+    )
+  }
+
+  function resumeEditing(): void {
+    container.ownerDocument.defaultView?.clearTimeout(blurTimer)
+    pendingPlainBlur = false
+    try {
+      iframe.contentWindow?.focus()
+      if (editing?.kind === 'rich') editing.session?.focus()
+      else editing?.element.focus({ preventScroll: true })
+    } catch (error) {
+      reportEditingError(error)
+    }
+  }
+
+  function setEditing(id: string | null, fromToolbar = false): void {
     if (!id) return
     const doc = iframe.contentDocument
     if (!doc || mode !== 'edit') return
     const node = findNode(engine.getTree(), id)
-    if (!node || node.locked || container.closest('[inert]')) return
+    if (!node || !canEditText(node) || node.locked || container.closest('[inert]')) return
     const el = doc.querySelector(`[data-sigil-id="${escapeCssId(id)}"]`) as HTMLElement | null
     if (!el) return
+    if (editing?.id === id) return resumeEditing()
+    if (composing) return
+    if (editing) endEditing('commit')
+    returnToEditAction = fromToolbar || !!opts?.selectionToolbarContainer
 
     if (opts?.richText?.resolver.supports(node)) {
       startRichTextEditing(node, el, doc)
       return
     }
-    if (node.type !== 'text' && node.type !== 'button') return
-
-    engine.select(id)
+    if (engine.getSelection() !== id) engine.select(id)
+    const surface = createPlainEditingSurface(
+      el,
+      node,
+      node.name?.trim() || uiText(i18n, 'canvas.edit_text', '編輯文字'),
+    )
     editing = {
       kind: 'plain',
       id,
-      element: el,
-      initialValue: el.textContent ?? '',
-      cancelledByKey: false,
+      original: el,
+      ...surface,
+      initialValue: surface.element.textContent ?? '',
     }
     selectionToolbar.show(null, null)
+    selectionToolbar.showEditing(node.name?.trim() || node.type)
 
     // 讓 iframe 能接收 pointer 以操作 caret
     iframe.style.pointerEvents = 'auto'
     overlay.style.display = 'none'
 
-    el.setAttribute('contenteditable', 'true')
-    el.focus()
-    selectAll(el, doc)
+    surface.element.focus()
+    selectAll(surface.element, doc)
 
-    el.addEventListener('blur', onEditingBlur)
+    surface.element.addEventListener('blur', onEditingBlur)
     watchEditing(editing)
   }
 
@@ -362,7 +438,11 @@ export function createCanvas(
 
   function onComposition(e: Event): void {
     composing = e.type === 'compositionstart'
-    if (!composing) checkEditingDirty()
+    selectionToolbar.setComposing(composing)
+    if (!composing) {
+      checkEditingDirty()
+      if (pendingPlainBlur) onEditingBlur()
+    }
   }
 
   function watchEditing(state: EditingState): void {
@@ -383,7 +463,7 @@ export function createCanvas(
     }
   }
 
-  function endEditing(action: EditEnd, forSave = false): void {
+  function endEditing(action: EditEnd, forSave = false, focus: EndFocus = 'legacy'): void {
     const current = editing
     if (!current) return
     if (forSave && (composing || (current.kind === 'rich' && current.starting))) {
@@ -408,6 +488,9 @@ export function createCanvas(
     }
     editing = null
     composing = false
+    container.ownerDocument.defaultView?.clearTimeout(blurTimer)
+    pendingPlainBlur = false
+    selectionToolbar.hideEditing()
     editingObserver?.disconnect()
     editingObserver = null
     current.element.removeEventListener('input', checkEditingDirty)
@@ -416,7 +499,7 @@ export function createCanvas(
     current.element.removeEventListener('keydown', onEditingKeydown)
     if (current.kind === 'plain') {
       current.element.removeEventListener('blur', onEditingBlur)
-      current.element.removeAttribute('contenteditable')
+      current.restore(findNode(engine.getTree(), current.id) ?? undefined)
     } else {
       current.document.removeEventListener('keydown', onRichEditingKeydown, true)
       destroyRichTextSession(current.session)
@@ -436,20 +519,50 @@ export function createCanvas(
           ) ?? element
       }
     }
-    restoreEditingChrome(element, current.kind === 'rich')
+    restoreEditingChrome(element, focus === 'legacy' && current.kind === 'rich')
     if (next !== null && next !== current.initialValue) {
       const content = next
       engine.batch(() => engine.update(current.id, { content }))
-      // 重觸發 selection 讓未訂閱 patch 的面板同步 content
-      engine.select(current.id)
+      if (focus !== 'external' && (current.kind === 'rich' || engine.getSelection() !== current.id))
+        engine.select(current.id)
     }
     setEditingDirty(false)
     paintSelection()
+    if (focus === 'toolbar' && engine.getSelection() === current.id)
+      selectionToolbar.focusEditAction()
+  }
+
+  function finishFromToolbar(action: 'commit' | 'cancel'): void {
+    if (!editing || composing || container.closest('[inert]')) return
+    const focus = returnToEditAction ? 'toolbar' : 'legacy'
+    try {
+      endEditing(action, action === 'commit', focus)
+    } catch (error) {
+      selectionToolbar.showEditingError()
+      reportEditingError(error)
+    }
+  }
+
+  function finishPlainBlur(state: PlainEditingState): void {
+    if (editing !== state || selectionToolbar.hasEditingFocus()) return
+    if (composing) pendingPlainBlur = true
+    else endEditing('commit', false, 'external')
   }
 
   function onEditingBlur(): void {
-    // blur 預設提交，Escape 先標記取消再 blur
-    if (editing?.kind === 'plain') endEditing(editing.cancelledByKey ? 'cancel' : 'commit')
+    const state = editing
+    if (state?.kind !== 'plain') return
+    // Across iframe boundaries relatedTarget can be null until the host receives focus.
+    const win = container.ownerDocument.defaultView
+    win?.clearTimeout(blurTimer)
+    blurTimer = win?.setTimeout(() => {
+      if (
+        container.ownerDocument.activeElement === iframe &&
+        state.element.ownerDocument.activeElement === state.element
+      )
+        return
+      finishPlainBlur(state)
+    }, 0)
   }
 
   function onEditingKeydown(e: KeyboardEvent): void {
@@ -470,14 +583,21 @@ export function createCanvas(
       }
     }
     if (editing.kind !== 'plain') return
-    if (e.key === 'Enter') {
+    if (
+      e.key === 'Tab' &&
+      !e.shiftKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      selectionToolbar.focusEditingAction()
+    ) {
       e.preventDefault()
-      // 提交：blur handler 會寫回
-      ;(e.target as HTMLElement).blur()
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      finishFromToolbar('commit')
     } else if (e.key === 'Escape') {
       e.preventDefault()
-      if (editing?.kind === 'plain') editing.cancelledByKey = true
-      ;(e.target as HTMLElement).blur()
+      finishFromToolbar('cancel')
     }
   }
 
@@ -500,6 +620,8 @@ export function createCanvas(
     }
     editing = state
     engine.select(node.id)
+    selectionToolbar.show(null, null)
+    selectionToolbar.showEditing(node.name?.trim() || node.type)
     iframe.style.pointerEvents = 'auto'
     overlay.style.display = 'none'
     doc.addEventListener('keydown', onRichEditingKeydown, true)
@@ -524,8 +646,9 @@ export function createCanvas(
         }
       }
       if (state.pendingEnd !== null) {
-        endEditing(state.pendingEnd)
-        return
+        if (state.pendingEnd === 'discard') endEditing('discard')
+        else finishFromToolbar(state.pendingEnd)
+        if (editing !== state) return
       }
       state.session.focus()
       if (editing === state) watchEditing(state)
@@ -533,10 +656,15 @@ export function createCanvas(
       state.starting = false
       if (editing === state) {
         editing = null
+        selectionToolbar.hideEditing()
         doc.removeEventListener('keydown', onRichEditingKeydown, true)
         destroyRichTextSession(state.session)
-        restoreEditingChrome(el, true)
+        restoreEditingChrome(el, !returnToEditAction)
         paintSelection()
+        if (returnToEditAction) {
+          selectionToolbar.focusEditAction()
+          selectionToolbar.showCommandError()
+        }
         setEditingDirty(false)
       }
       reportEditingError(error)
@@ -544,8 +672,9 @@ export function createCanvas(
   }
 
   function requestRichTextEnd(state: RichEditingState, action: 'commit' | 'cancel'): void {
-    if (editing !== state) return
-    endEditing(action)
+    if (editing !== state || composing) return
+    if (state.starting) state.pendingEnd = action
+    else finishFromToolbar(action)
   }
 
   function onRichEditingKeydown(e: KeyboardEvent): void {
@@ -559,7 +688,7 @@ export function createCanvas(
       return
     e.preventDefault()
     e.stopPropagation()
-    endEditing('cancel')
+    finishFromToolbar('cancel')
   }
 
   function destroyRichTextSession(session: RichTextSession | null): void {
@@ -603,9 +732,14 @@ export function createCanvas(
   function onOverlayDblClick(e: MouseEvent): void {
     if (mode !== 'edit') return
     const id = hitTest(iframe, e.clientX, e.clientY)
-    if (!id) return
+    if (!id || (e.detail >= 2 && (previousClickId !== id || lastClickId !== id))) return
     const node = findNode(engine.getTree(), id)
-    if (opts?.onReplaceImage && node?.type === 'image' && !node.shortcode) {
+    if (
+      opts?.onReplaceImage &&
+      node &&
+      supportsImageFraming(node) &&
+      !opts.richText?.resolver.supports(node)
+    ) {
       if (node.locked) return
       if (engine.getSelection() !== id) engine.select(id)
       selectionToolbar.replaceImage()
@@ -633,6 +767,21 @@ export function createCanvas(
   overlay.addEventListener('touchmove', onTouchMove, { passive: false })
   overlay.addEventListener('touchend', endTouch)
   overlay.addEventListener('touchcancel', endTouch)
+
+  function restoreDisclosureDefaults(doc: Document): void {
+    const elements = doc.querySelectorAll<HTMLDetailsElement>('details[data-sigil-id]')
+    if (!elements.length) return
+    const byId = new Map(Array.from(elements, (el) => [el.dataset.sigilId, el]))
+    function restore(node: ComponentNode): void {
+      const el = byId.get(node.id)
+      if (el) {
+        const open = Object.keys(node.attributes ?? {}).some((key) => key.toLowerCase() === 'open')
+        el.toggleAttribute('open', open)
+      }
+      node.children?.forEach(restore)
+    }
+    restore(engine.getTree())
+  }
 
   function injectStyle(doc: Document): void {
     if (injectedStyle?.ownerDocument !== doc) {
@@ -666,6 +815,7 @@ export function createCanvas(
       /* 選取焦點 */
       '[data-sigil-id][data-sigil-selected="1"]{outline:2px solid #4f46e5!important;outline-offset:2px;box-shadow:0 0 0 4px rgba(79,70,229,0.18)!important;position:relative;z-index:1}',
       /* 編輯狀態 */
+      'details[data-sigil-id]::details-content{content-visibility:visible;display:block}',
       '[data-sigil-id][data-sigil-locked="1"]{outline:1px dashed #94a3b8!important;outline-offset:1px}',
       '[data-sigil-id][data-sigil-hidden="1"]{opacity:0.4!important}',
     ].join('')
@@ -730,28 +880,28 @@ export function createCanvas(
     }
     const anchor = (event.target as Element | null)?.closest?.('a')
     if (!anchor || anchor.hasAttribute('download')) return
-    const target = anchor.getAttribute('target')
-    if (target && target.toLowerCase() !== '_self') return
+    const target = anchor.getAttribute('target')?.toLowerCase()
+    if (target && target !== '_self' && target !== '_blank') return
     const href = anchor.getAttribute('href')
     if (!href?.startsWith('#')) return
 
     // srcdoc resolves fragment URLs against the host page; keep these jumps in the canvas.
     event.preventDefault()
     const doc = anchor.ownerDocument
-    if (href === '#') {
-      doc.defaultView?.scrollTo(0, 0)
-      return
-    }
-    let id = href.slice(1)
-    try {
-      id = decodeURIComponent(id)
-    } catch {
-      // A malformed escape may still be the literal id of an element.
-    }
-    const destination =
+    const findAnchor = (id: string) =>
       doc.getElementById(id) ??
       Array.from(doc.getElementsByName(id)).find((element) => element.localName === 'a')
-    destination?.scrollIntoView()
+    const id = resolveLinkFragment(href, (literal) => !!findAnchor(literal))
+    const destination = id && findAnchor(id)
+    if (destination) {
+      for (let parent = destination.parentElement; parent; parent = parent.parentElement) {
+        if (parent.localName !== 'details' || parent.hasAttribute('open')) continue
+        const summary = Array.from(parent.children).find((child) => child.localName === 'summary')
+        if (!summary?.contains(destination)) parent.setAttribute('open', '')
+      }
+      destination.scrollIntoView()
+      destination.focus?.({ preventScroll: true })
+    } else if (!id || id.toLowerCase() === 'top') doc.defaultView?.scrollTo(0, 0)
   }
 
   function onFrameLoad(): void {
@@ -772,10 +922,28 @@ export function createCanvas(
   else iframe.srcdoc = FRAME_DOCUMENT
   iframe.addEventListener('load', onFrameLoad)
 
+  let renderedTree = engine.getTree()
   const unsub = engine.subscribe((ev: EngineEvent) => {
+    const previousTree = renderedTree
+    if (ev.type === 'patch' || ev.type === 'tree') renderedTree = engine.getTree()
     const d = iframe.contentDocument
     if (!d) return
     if (ev.type === 'patch') {
+      if (
+        editing &&
+        ((ev.patch.type === 'insert' && ev.patch.parentId === editing.id) ||
+          (ev.patch.type === 'move' && ev.patch.newParentId === editing.id) ||
+          (ev.patch.type === 'update' &&
+            ev.patch.id === editing.id &&
+            !canEditText(findNode(renderedTree, editing.id))))
+      ) {
+        // A remote structural change takes ownership of the editable element and its children.
+        endEditing('discard', false, 'external')
+        renderer.reconcile(renderedTree)
+        paintSelection()
+        paintHover()
+        return
+      }
       if (editing && ev.patch.type === 'update' && ev.patch.id === editing.id && ev.patch.locked) {
         endEditing('cancel')
       } else if (
@@ -783,21 +951,53 @@ export function createCanvas(
         ((ev.patch.type === 'update' &&
           ev.patch.id === editing.id &&
           ev.patch.content !== undefined) ||
-          (ev.patch.type === 'replace' && ev.patch.id === editing.id) ||
+          (ev.patch.type === 'replace' && queryById(d, ev.patch.id)?.contains(editing.element)) ||
           (ev.patch.type === 'remove' && !findNode(engine.getTree(), editing.id)))
       ) {
         endEditing('discard')
+      } else if (
+        editing &&
+        ((ev.patch.type === 'update' &&
+          ev.patch.tagName !== undefined &&
+          queryById(d, ev.patch.id)?.contains(editing.element)) ||
+          (ev.patch.type === 'move' && ev.patch.id === editing.id))
+      ) {
+        endEditing('commit', false, 'external')
       }
-      if (affectsShortcodeSlot(ev.patch, engine.getTree())) renderer.reconcile(engine.getTree())
-      else renderer.applyPatch(ev.patch)
+      if (affectsShortcodeSlot(ev.patch, previousTree)) {
+        if (editing) endEditing('commit', false, 'external')
+        renderer.reconcile(renderedTree)
+      } else if (
+        editing?.kind === 'plain' &&
+        editing.original !== editing.element &&
+        (ev.patch.type === 'insert' || ev.patch.type === 'move') &&
+        ev.patch.beforeId === editing.id
+      ) {
+        // The renderer uses the original button as the insertBefore reference.
+        const anchor = editing.original
+        editing.element.before(anchor)
+        try {
+          renderer.applyPatch(ev.patch)
+        } finally {
+          anchor.remove()
+        }
+      } else renderer.applyPatch(ev.patch)
       paintSelection()
       paintHover()
     } else if (ev.type === 'tree') {
-      if (editing) endEditing('discard')
-      renderer.reconcile(ev.tree)
+      const changes = ev.textChanges
+      if (changes && changes.from === previousTree && ev.tree === renderedTree) {
+        if (editing && changes.patches.some((patch) => patch.id === editing?.id))
+          endEditing('discard', false, 'external')
+        for (const patch of changes.patches) renderer.applyPatch(patch)
+      } else {
+        if (editing) endEditing('discard')
+        renderer.reconcile(renderedTree)
+      }
       paintSelection()
       paintHover()
     } else if (ev.type === 'selection') {
+      if (editing && ev.id !== editing.id) endEditing('commit', false, 'external')
       paintSelection()
       paintHover()
     }
@@ -816,6 +1016,11 @@ export function createCanvas(
 
   return {
     iframe,
+    revealSelection: selectionToolbar.revealSelection,
+    canMoveSelection: () => mode === 'edit' && !editing && selectionToolbar.canMoveSelection(),
+    moveSelection(trigger) {
+      if (mode === 'edit' && !editing) selectionToolbar.moveSelection(trigger)
+    },
     setMode,
     setDevice,
     startEditing(id) {

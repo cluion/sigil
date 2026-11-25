@@ -1,5 +1,5 @@
 import type { ProjectStore } from './adapters.js'
-import type { Engine } from './engine/types.js'
+import type { Engine, HistoryEngine } from './engine/types.js'
 import type { EditorHooks } from './hooks.js'
 import { runBeforeSave, runAfterSave, runOnSaveError } from './hooks.js'
 import type { SigilDoc } from './model/types.js'
@@ -20,9 +20,11 @@ export function createProjectPersistence(options: {
   hooks?: EditorHooks
   /** Observer only; exceptions must not change write outcomes or queue accounting. */
   onStateChange?: () => void
-}): ProjectPersistence {
+}): ProjectPersistence & { getSavedHistoryId(): number | undefined } {
   const { engine, store, hooks } = options
+  const history = engine as Partial<HistoryEngine>
   let savedTree = engine.getTree()
+  let savedHistoryId: number | undefined
   let pending = 0
   let destroyed = false
   let tail: Promise<void> = Promise.resolve()
@@ -44,6 +46,8 @@ export function createProjectPersistence(options: {
     async save() {
       if (destroyed) throw new Error('Cannot save a destroyed editor')
       const submittedTree = engine.getTree()
+      const submittedHistoryId =
+        typeof history.checkpointHistory === 'function' ? history.checkpointHistory() : undefined
       // Hooks and adapters receive detached data, never mutable engine/history references.
       const snapshot = structuredClone(engine.toJSON())
       pending += 1
@@ -57,6 +61,7 @@ export function createProjectPersistence(options: {
           if (!destroyed) {
             // Checkpoint the submitted revision, not whatever is currently being edited.
             savedTree = submittedTree
+            savedHistoryId = submittedHistoryId
             try {
               await runAfterSave(hooks, structuredClone(doc), engine)
             } catch {
@@ -80,6 +85,7 @@ export function createProjectPersistence(options: {
       return result
     },
     isDirty: () => engine.getTree() !== savedTree,
+    getSavedHistoryId: () => savedHistoryId,
     isSaving: () => pending > 0,
     destroy() {
       destroyed = true

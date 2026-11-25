@@ -8,7 +8,15 @@
     "style": {},
     "responsiveStyles": {
       "tablet": {},
-      "mobile": { "padding": "1rem", "width": "calc(100% - 2rem)" }
+      "mobile": {
+        "padding": "1rem",
+        "width": "calc(100% - 2rem)",
+        "display": "flex",
+        "flex-flow": "row wrap",
+        "grid-gap": "1rem 2rem",
+        "grid-row-gap": "calc(0.5rem + 2px)",
+        "grid-column-gap": "2%"
+      }
     },
     "className": "activity event-page",
     "name": "活動頁",

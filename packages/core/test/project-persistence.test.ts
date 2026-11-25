@@ -2,6 +2,26 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEngine, createProjectPersistence, type SigilDoc } from '../src/index.js'
 
 describe('project persistence data boundaries', () => {
+  it('does not mark a completed history step when a save captured the middle of a batch', async () => {
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'title', type: 'text', content: 'First' } },
+    })
+    const persistence = createProjectPersistence({ engine, store: { load: () => null, save() {} } })
+    engine.update('title', { content: 'Confirmed' })
+    await persistence.save()
+    expect(persistence.getSavedHistoryId()).toBe(engine.getHistory().currentId)
+    let write!: Promise<SigilDoc>
+    engine.batch(() => {
+      engine.update('title', { content: 'Submitted' })
+      write = persistence.save()
+      engine.update('title', { content: 'Still editing' })
+    })
+    expect((await write).root.content).toBe('Submitted')
+    expect(persistence.isDirty()).toBe(true)
+    expect(persistence.getSavedHistoryId()).toBeUndefined()
+    persistence.destroy()
+  })
+
   it('isolates state observers from both acknowledged writes and adapter failures', async () => {
     const engine = createEngine()
     const failure = new Error('adapter failure')

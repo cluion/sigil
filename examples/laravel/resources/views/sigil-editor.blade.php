@@ -45,7 +45,7 @@
         <button class="host-primary" id="create-page" type="submit">建立活動頁</button>
       </form>
     </section>
-    <main id="sigil-root" data-page-key="{{ $pageKey }}" aria-label="活動頁編輯器"></main>
+    <main id="sigil-root" data-page-key="{{ $pageKey }}" data-block-pin-scope="sigil-activities:{{ auth()->id() }}" aria-label="活動頁編輯器"></main>
     <template id="activity-switcher">
       <details class="activity-switcher">
         <summary>切換活動頁</summary>

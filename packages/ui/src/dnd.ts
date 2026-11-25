@@ -152,7 +152,7 @@ export function computeDrop(
 }
 
 /**
- * 計算移動的 drop 目標,排除拖到來源自身或其子樹
+ * 計算移動的合法落點，索引以移除來源後的目的子項為準。
  */
 export function computeDropForMove(
   iframe: HTMLIFrameElement,
@@ -161,10 +161,18 @@ export function computeDropForMove(
   clientX: number,
   clientY: number,
 ): DropTarget | null {
-  const t = computeDrop(iframe, root, clientX, clientY)
-  if (!t) return null
-  if (isMoveIntoSelf(root, sourceId, t.parentId)) return null
-  return t
+  const target = computeDrop(iframe, root, clientX, clientY)
+  if (!target || target.hitId === sourceId) return null
+  const parent = findParent(root, sourceId)
+  if (!parent?.children || parent.locked) return null
+  const from = parent.children.findIndex((child) => child.id === sourceId)
+  const source = parent.children[from]!
+  if (source.locked) return null
+  if (target.parentId === parent.id) {
+    return from < target.index ? { ...target, index: target.index - 1 } : target
+  }
+  if (findNode(root, target.parentId)?.locked || contains(source, target.parentId)) return null
+  return target
 }
 
 export type IndicatorKind = 'valid' | 'invalid' | 'none'
@@ -547,7 +555,6 @@ export function startMoveDrag(opts: {
   const indicator = makeIndicator(iframe)
   const guides = makeGuides(iframe)
   let started = false
-  let target: DropTarget | null = null
 
   function onMove(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
@@ -558,9 +565,7 @@ export function startMoveDrag(opts: {
     }
     autoScrollNearEdge(iframe, e.clientX, e.clientY)
     const root = engine.getTree()
-    const raw = computeDrop(iframe, root, e.clientX, e.clientY)
-    const forbidden = raw ? isMoveIntoSelf(root, id, raw.parentId) : false
-    target = raw && !forbidden ? raw : null
+    const target = computeDropForMove(iframe, root, id, e.clientX, e.clientY)
     const overCanvas = isOverIframe(iframe, e.clientX, e.clientY)
 
     if (target) {
@@ -581,17 +586,13 @@ export function startMoveDrag(opts: {
       } else {
         guides.clear()
       }
-    } else if (overCanvas && (forbidden || !!raw || !!hitTest(iframe, e.clientX, e.clientY))) {
+    } else if (overCanvas) {
       setDragCursor('not-allowed')
       indicator.show({
         target: null,
         invalid: true,
-        hitId: raw?.hitId ?? hitTest(iframe, e.clientX, e.clientY),
+        hitId: hitTest(iframe, e.clientX, e.clientY) ?? id,
       })
-      guides.clear()
-    } else if (overCanvas) {
-      setDragCursor('not-allowed')
-      indicator.show({ target: null, invalid: true, hitId: id })
       guides.clear()
     } else {
       setDragCursor('grabbing')
@@ -602,17 +603,24 @@ export function startMoveDrag(opts: {
   function onUp(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return
     cleanup()
-    if (started && target) engine.move(id, target.parentId, target.index)
+    if (!started) return
+    const target = computeDropForMove(iframe, engine.getTree(), id, e.clientX, e.clientY)
+    if (target) engine.move(id, target.parentId, target.index)
+  }
+  function onCancel(e: PointerEvent): void {
+    if (e.pointerId === pointerId) cleanup()
   }
   function cleanup(): void {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onCancel)
     indicator.clear()
     guides.clear()
     setDragCursor(null)
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onCancel)
   return { cancel: cleanup }
 }
 

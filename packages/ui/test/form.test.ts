@@ -262,6 +262,70 @@ describe('createPropForm', () => {
     expect(engine.getTree().shortcode!.props.src).toBe('https://b.test/y.png')
   })
 
+  it('shortcode 媒體欄可重用原生圖，略過宿主富文字與其他 shortcode 的圖片', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            {
+              id: 'widget',
+              type: 'shortcode',
+              shortcode: { name: 'hero', props: { src: '/old.png', caption: 'Hero' } },
+            },
+            { id: 'native', type: 'image', attributes: { src: '/pick.png', alt: 'Pick' } },
+            {
+              id: 'custom',
+              type: 'section',
+              children: [{ id: 'hidden', type: 'image', attributes: { src: '/host.png' } }],
+            },
+            {
+              id: 'short',
+              type: 'shortcode',
+              shortcode: { name: 'host', props: { src: '/private.png' } },
+            },
+          ],
+        },
+      },
+    })
+    const supports = vi.fn((node: { id: string }) => node.id === 'custom')
+    const form = createPropForm({
+      engine,
+      node: engine.getTree().children![0]!,
+      schema: [{ name: 'src', type: 'media' }],
+      richText: { supports },
+    })
+    document.body.append(form.el)
+    try {
+      const input = form.el.querySelector<HTMLInputElement>('input')!
+      const button = form.el.querySelector<HTMLButtonElement>('button')!
+      expect(supports).not.toHaveBeenCalled()
+      button.click()
+      const cards = document.querySelectorAll<HTMLButtonElement>('.sigil-media-card')
+      expect(cards).toHaveLength(1)
+      expect(cards[0]!.querySelector('.sigil-media-name')?.textContent).toBe('Pick')
+      cards[0]!.click()
+      expect(input.value).toBe('/pick.png')
+      expect(engine.getTree().children![0]!.shortcode?.props).toEqual({
+        src: '/pick.png',
+        caption: 'Hero',
+      })
+      engine.undo()
+      expect(input.value).toBe('/old.png')
+      expect(engine.canUndo()).toBe(false)
+      button.click()
+      engine.update('widget', { locked: true })
+      expect(button.disabled).toBe(true)
+      expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
+    } finally {
+      form.destroy()
+      form.el.remove()
+      engine.destroy()
+    }
+  })
+
   it('date 生成 input[type=date]，變動寫入字串', () => {
     const { engine, form } = setup([{ name: 'd', type: 'date' }], { d: '2026-07-01' })
     const input = form.querySelector('input') as HTMLInputElement

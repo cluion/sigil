@@ -3,6 +3,13 @@ import { basicBlockDefs, blockImage, marketingBlockDefs } from '@cluion/sigil-bl
 import { findNode, type SigilDoc } from '@cluion/sigil-core'
 import { activityTemplateTitle, createActivityDocument } from './activity-template'
 import { createActivityDownload } from './activity-download'
+import {
+  acceptsColorValue,
+  acceptsCustomGridTracks,
+  acceptsImageAttribute,
+  acceptsSpacingValue,
+  acceptsTypographyValue,
+} from './document-validation'
 import { createHttpAssetStore } from './http-asset-store'
 import { createHttpProjectStore, HttpError } from './http-project-store'
 import '../css/editor.css'
@@ -180,6 +187,12 @@ function mountDocument(doc: SigilDoc): void {
     doc,
     store,
     assets,
+    blockPinStorageKey: mount.dataset.blockPinScope ?? false,
+    acceptsCustomGridTracks,
+    acceptsImageAttribute,
+    acceptsColorValue,
+    acceptsSpacingValue,
+    acceptsTypographyValue,
     locale: 'zh',
     renderPageNavigation: createPageNavigation,
     messages: {

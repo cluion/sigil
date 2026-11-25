@@ -36,6 +36,8 @@ const tags = new Set([
   'img',
   'figure',
   'figcaption',
+  'details',
+  'summary',
   'hr',
   'br',
 ])
@@ -63,6 +65,7 @@ const styleProperties = new Set([
   'max-height',
   'display',
   'flex',
+  'flex-flow',
   'flex-direction',
   'flex-wrap',
   'flex-grow',
@@ -77,6 +80,9 @@ const styleProperties = new Set([
   'gap',
   'row-gap',
   'column-gap',
+  'grid-gap',
+  'grid-row-gap',
+  'grid-column-gap',
   'grid-template-columns',
   'grid-template-rows',
   'grid-column',
@@ -186,16 +192,19 @@ function assertFields(value: Record<string, unknown>, allowed: string[], path: s
   if (Object.keys(value).some((key) => !allowed.includes(key))) invalid(path)
 }
 
-function assertText(value: unknown, maxBytes: number, path: string): asserts value is string {
-  if (
-    typeof value !== 'string' ||
-    encoder.encode(value).length > maxBytes ||
-    Array.from(value).some((character) => {
+function isValidText(value: unknown, maxBytes: number): value is string {
+  return (
+    typeof value === 'string' &&
+    encoder.encode(value).length <= maxBytes &&
+    Array.from(value).every((character) => {
       const code = character.charCodeAt(0)
-      return code === 127 || (code < 32 && ![9, 10, 13].includes(code))
+      return code !== 127 && (code >= 32 || [9, 10, 13].includes(code))
     })
   )
-    invalid(path)
+}
+
+function assertText(value: unknown, maxBytes: number, path: string): asserts value is string {
+  if (!isValidText(value, maxBytes)) invalid(path)
 }
 
 function assertIdentifier(value: unknown, path: string): asserts value is string {
@@ -240,6 +249,24 @@ export function isPersistentAssetUrl(value: unknown): value is string {
   )
 }
 
+/** Match new image attributes to the PHP document validator before preview and insertion. */
+export function acceptsImageAttribute(name: 'src' | 'alt', value: string): boolean {
+  if (name === 'alt') return isValidText(value, 2048)
+  if (!isPersistentAssetUrl(value)) return false
+  if (value.startsWith('/')) return true
+
+  // FILTER_VALIDATE_URL checks the original ASCII URL and hostname before browser normalization.
+  if (!/^[!-~]+$/.test(value)) return false
+  const host = /^https?:\/\/(\[[a-f\d:.]+\]|[a-z\d.-]+)(?::\d{0,5})?(?:[/?#]|$)/i.exec(value)?.[1]
+  if (!host || host === '0') return false
+  if (host.startsWith('[')) return true
+  const domain = host.replace(/\.$/, '')
+  return (
+    domain.length <= 253 &&
+    domain.split('.').every((label) => /^[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?$/i.test(label))
+  )
+}
+
 function assertAttributes(value: unknown, path: string): void {
   assertRecord(value, path)
   for (const [name, attribute] of Object.entries(value)) {
@@ -258,36 +285,50 @@ function assertAttributes(value: unknown, path: string): void {
   }
 }
 
-function assertCssValue(value: unknown, property: string, path: string): void {
-  assertText(value, 2048, path)
-  if (!value.trim()) invalid(path)
+function isAcceptedCssValue(value: unknown, property: string): boolean {
+  if (!isValidText(value, 2048) || !value.trim()) return false
   if (property === 'font-family') {
     const family = '(?:[A-Za-z][A-Za-z0-9 -]*|"[A-Za-z0-9 -]+"|\'[A-Za-z0-9 -]+\')'
-    if (!matchesEntire(value, new RegExp(`^${family}(?:\\s*,\\s*${family})*$`))) invalid(path)
-    return
+    return matchesEntire(value, new RegExp(`^${family}(?:\\s*,\\s*${family})*$`))
   }
   if (
     !matchesEntire(value, /^[A-Za-z0-9#.,%+*/() -]+$/) ||
     value.includes('/*') ||
     value.includes('*/')
   )
-    invalid(path)
+    return false
   for (const match of value.matchAll(/([A-Za-z][A-Za-z0-9-]*)\s*\(/g)) {
-    if (!styleFunctions.has(match[1]!.toLowerCase())) invalid(path)
+    if (!styleFunctions.has(match[1]!.toLowerCase())) return false
   }
   let depth = 0
   for (const character of value) {
-    if (character === '(' && ++depth > 16) invalid(path)
-    if (character === ')' && --depth < 0) invalid(path)
+    if (character === '(' && ++depth > 16) return false
+    if (character === ')' && --depth < 0) return false
   }
-  if (depth !== 0) invalid(path)
+  return depth === 0
+}
+
+export function acceptsCustomGridTracks(value: string): boolean {
+  return isAcceptedCssValue(value, 'grid-template-columns')
+}
+
+export function acceptsColorValue(value: string): boolean {
+  return isAcceptedCssValue(value, 'color')
+}
+
+export function acceptsSpacingValue(value: string): boolean {
+  return isAcceptedCssValue(value, 'padding')
+}
+
+export function acceptsTypographyValue(property: string, value: string): boolean {
+  return isAcceptedCssValue(value, property)
 }
 
 function assertStyle(value: unknown, path: string): void {
   assertRecord(value, path)
   for (const [property, declaration] of Object.entries(value)) {
     if (!styleProperties.has(property)) invalid(path)
-    assertCssValue(declaration, property, `${path}.${property}`)
+    if (!isAcceptedCssValue(declaration, property)) invalid(`${path}.${property}`)
   }
 }
 

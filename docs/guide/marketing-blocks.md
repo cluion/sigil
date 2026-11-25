@@ -95,12 +95,43 @@ const faq = blockFAQ({
 })
 ```
 
-問答列表使用 `dl`，每組問答以 `div` 包住一個 `dt` 與 `dd`。Desktop 兩欄，Tablet／Mobile 單欄；問題與答案預設完整顯示，沒有隱藏狀態或 accordion runtime。
+「FAQ 常見問題」使用 `dl`，每組問答以 `div` 包住一個 `dt` 與 `dd`。問題與答案會完整顯示，Desktop 為兩欄，Tablet 與 Mobile 為單欄。
+
+## 折疊式 FAQ
+
+在活動頁放入報到時間、工具或材料等常見問題，讓讀者自行展開需要的答案。已在 `createApp` 的 `blocks` 加入 `marketingBlockDefs` 的宿主可直接使用。
+
+1. 打開「區塊」，搜尋「折疊式 FAQ」並插入。預設有三題，第一題是「需要自備工具嗎？」。
+2. 選取「折疊式 FAQ」區塊，在檢查器點選一個題目，或選「新增問答」。
+3. 填寫「問題」和「答案」。選「返回問答清單」可依最新題目找到對應的問答。單題的預設圖層名稱為「問答項目」，可依需要重新命名。
+4. 切到「預覽」，點選題目展開或收合答案。也可用 Tab 移至題目，再按 Enter 或空白鍵操作。
+5. 選「匯出」再選「下載 .html」。用瀏覽器打開下載檔時，每題預設收合，可直接展開閱讀。
+
+宿主也可以用 `blockAccordionFAQ()` 建立整組問答，或用 `blockFAQItem()` 在既有區塊末尾新增一題。
+
+```ts
+import { blockAccordionFAQ, blockFAQItem } from '@cluion/sigil-blocks'
+
+const faq = blockAccordionFAQ({
+  title: '行前準備',
+  items: [{ question: '需要自備工具嗎？', answer: '活動現場會提供所需工具與材料。' }],
+})
+
+// 先插入整組，再加入另一題。app 為上方 createApp 建立的實例。
+app.engine.insert(app.engine.getTree().id, faq)
+app.engine.insert(
+  faq.id,
+  blockFAQItem({ question: '幾點開始報到？', answer: '上午九點開放報到。' }),
+)
+```
+
+區塊的每題都是 `section` 下的直屬 `details`，首個子節點 `summary` 是問題，接著的 `p` 是答案。下載檔使用瀏覽器內建的展開行為。
+
+直接使用 `@cluion/sigil-ui` 組裝面板時，可在 `createInspector` 或 `createPropsPanel` 的選項傳入 `faq: { createItem: blockFAQItem }`，讓作者能從面板新增問答。
 
 ## 設計邊界
 
 - 不依賴 shortcode、富文字 adapter 或第三方 runtime
 - 不寫死遠端圖片、品牌字型或全域 CSS selector
 - CTA 使用 `type="button"`，實際 click 行為由宿主接管
-- FAQ 不包含互動折疊；若需要 accordion，應由後續獨立契約處理
-- `marketingBlockDefs` 包含 Hero、Pricing 與 FAQ
+- `marketingBlockDefs` 包含 Hero、Pricing、FAQ 常見問題與折疊式 FAQ
