@@ -2,6 +2,7 @@ import {
   expect,
   test,
   type Browser,
+  type BrowserContext,
   type Download,
   type Page,
   type Response,
@@ -66,20 +67,42 @@ async function assertCSP(response: Response): Promise<void> {
   expect(policy).toContain('trusted-types sigil#template sigil#sanitized')
 }
 
-async function createActivity(page: Page, key: string, email = 'editor@sigil.test'): Promise<void> {
+type SessionCookies = Awaited<ReturnType<BrowserContext['cookies']>>
+// Copy only login cookies into each fresh context; browser drafts and account preferences stay isolated.
+const workerSessions = new Map<string, SessionCookies>()
+
+async function createActivity(
+  page: Page,
+  key: string,
+  email = 'editor@sigil.test',
+  session: 'worker' | 'fresh' = 'worker',
+): Promise<void> {
+  const cookies = session === 'worker' ? workerSessions.get(email) : undefined
+  if (cookies) await page.context().addCookies(cookies)
   const missing = waitForPageResponse(page, key, 'GET')
-  await page.goto(`/editor/${key}`)
-  await expect(page.getByRole('heading', { name: 'Sigil 活動頁後台' })).toBeVisible()
-  await page.getByLabel('電子郵件').fill(email)
-  await page.getByLabel('密碼').fill(password)
-  const editorResponse = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === `/editor/${key}` &&
-      response.request().resourceType() === 'document',
-  )
-  await page.getByRole('button', { name: '登入', exact: true }).click()
-  await page.waitForURL(`**/editor/${key}`)
-  await assertCSP(await editorResponse)
+  const navigation = await page.goto(`/editor/${key}`)
+  if (cookies) {
+    expect(navigation?.status()).toBe(200)
+    await assertCSP(navigation!)
+  } else {
+    await expect(page.getByRole('heading', { name: 'Sigil 活動頁後台' })).toBeVisible()
+    await page.getByLabel('電子郵件').fill(email)
+    await page.getByLabel('密碼').fill(password)
+    const editorResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/editor/${key}` &&
+        response.request().resourceType() === 'document',
+    )
+    const loggedIn = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/login' && response.request().method() === 'POST',
+    )
+    await page.getByRole('button', { name: '登入', exact: true }).click()
+    expect((await loggedIn).status()).toBe(302)
+    await page.waitForURL(`**/editor/${key}`)
+    await assertCSP(await editorResponse)
+    if (session === 'worker') workerSessions.set(email, await page.context().cookies())
+  }
   expect((await missing).status()).toBe(404)
   await expect(page.locator('#page-status')).toHaveText('此頁尚未建立。')
 
@@ -185,7 +208,7 @@ test('同一個瀏覽器切換 Laravel 帳號後各自保有區塊釘選', async
   const toggle = page.getByRole('button', { name: '新增區塊', exact: true })
   const pin = library.getByRole('button', { name: '釘選 折疊式 FAQ', exact: true })
   const pinnedOnly = library.getByRole('button', { name: '只看已釘選', exact: true })
-  await createActivity(page, key)
+  await createActivity(page, key, 'editor@sigil.test', 'fresh')
   await selectLayer(page, '活動標題', ['活動頁', '主視覺', '活動簡介'])
   await toggle.click()
   await pin.press('Enter')
@@ -197,7 +220,7 @@ test('同一個瀏覽器切換 Laravel 帳號後各自保有區塊釘選', async
   await page.getByRole('button', { name: '登出', exact: true }).click()
   await page.waitForURL('**/login')
 
-  await createActivity(page, key, 'other@sigil.test')
+  await createActivity(page, key, 'other@sigil.test', 'fresh')
   await toggle.click()
   await expect(pin).toHaveAttribute('aria-pressed', 'false')
   await pinnedOnly.click()

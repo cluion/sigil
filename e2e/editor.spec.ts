@@ -608,6 +608,9 @@ test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', 
 
   const frame = page.frameLocator('iframe[title="編輯畫布"]')
   const rich = frame.locator('[data-sigil-id="rich-demo"]')
+  const editText = page
+    .getByRole('toolbar', { name: '元件操作', exact: true })
+    .getByRole('button', { name: '編輯文字', exact: true })
   await expect(rich.locator('strong')).toHaveText('粗體')
   await expect(rich.locator('em')).toHaveText('斜體')
   await expect(rich.locator('a')).toHaveAttribute('href', 'https://example.com/')
@@ -627,11 +630,13 @@ test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', 
   await rich.locator('p').fill('取消這次修改')
   await rich.press('Escape')
   await expect(rich.locator('strong')).toHaveText('粗體')
+  await expect(editText).toBeFocused()
+  await page.keyboard.press('Enter')
   await expect(rich).toBeFocused()
-  await page.mouse.dblclick(richBox.x + richBox.width / 2, richBox.y + richBox.height / 2)
   await rich.press('Control+Enter')
   await expect(rich).not.toHaveAttribute('contenteditable', 'true')
-  await page.mouse.dblclick(richBox.x + richBox.width / 2, richBox.y + richBox.height / 2)
+  await expect(editText).toBeFocused()
+  await page.keyboard.press('Enter')
   await rich.locator('p').fill('富文字 E2E')
   await rich.locator('p').selectText()
   await frame.getByRole('button', { name: '粗體', exact: true }).click()
@@ -641,7 +646,7 @@ test('富文字：編輯、undo／redo、範本、save／load 與安全匯出', 
 
   await expect(rich).not.toHaveAttribute('contenteditable', 'true')
   await expect(rich.locator('strong em a[href="https://example.com/"]')).toHaveText('富文字 E2E')
-  await expect(rich).toBeFocused()
+  await expect(editText).toBeFocused()
 
   const undo = page.getByRole('button', { name: '復原', exact: true })
   const redo = page.getByRole('button', { name: '重做', exact: true })
@@ -1041,6 +1046,7 @@ test('runtime locale：保留 App 狀態、套用 override 與更新完整介面
     'Delete / Backspace — Delete',
     'Ctrl/Cmd+Z — Undo',
     'Ctrl/Cmd+Shift+Z / Y — Redo',
+    'Ctrl/Cmd+Shift+F — Find and replace',
     'Ctrl/Cmd+C / V — Copy / Paste',
     'Ctrl/Cmd+S — Save',
   ])
