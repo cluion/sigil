@@ -6,19 +6,20 @@ export type { SelectionPathHandle, SelectionPathOptions } from './selection-path
 export type { RichTextAdapter, RichTextEditContext, RichTextSession } from './rich-text.js'
 export { createPropsPanel } from './props.js'
 export type { PropsPanelHandle, PropsPanelOptions } from './props.js'
+export type { AcceptsTypographyValue, TypographyProperty } from './typography.js'
 export type { FAQEditingOptions } from './faq-fields.js'
 export { createInspector } from './inspector.js'
 export type { InspectorHandle, InspectorOptions, InspectorTab } from './inspector.js'
 export { openMediaPicker } from './media-picker.js'
-export { openHistoryDialog } from './history-dialog.js'
-export { openPageTextDialog } from './page-text-dialog.js'
+export { openHistoryDialog, type HistoryDialogOptions } from './history-dialog.js'
+export { openPageTextDialog, type PageTextDialogOptions } from './page-text-dialog.js'
 export type { MediaPickerOptions } from './media-picker.js'
 export { collectPageImages, type PageImage } from './page-images.js'
 export { createPropForm } from './form.js'
 export type { FormOptions, PropFormHandle } from './form.js'
 export { createBlocksPanel } from './blocks-panel.js'
 export { createLayersPanel } from './layers.js'
-export { createPageLinksPanel } from './page-links.js'
+export { createPageLinksPanel, type PageLinksPanelOptions } from './page-links.js'
 export type {
   BlockFactory,
   BlockDef,

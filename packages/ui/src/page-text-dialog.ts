@@ -100,7 +100,8 @@ const styles = `
 }
 `
 
-interface PageTextDialogOptions {
+/** 設定搜尋範圍、上次使用的查詢，以及選定結果後的畫布定位。 */
+export interface PageTextDialogOptions {
   mount: HTMLElement
   engine: Engine
   i18n?: I18n

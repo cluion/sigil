@@ -54,6 +54,11 @@ import {
   openMediaPicker,
   openHistoryDialog,
   openPageTextDialog,
+  type AcceptsTypographyValue,
+  type TypographyProperty,
+  type HistoryDialogOptions,
+  type PageLinksPanelOptions,
+  type PageTextDialogOptions,
   type CanvasHandle,
   type CanvasSelectionCommands,
   type FAQEditingOptions,
@@ -272,10 +277,8 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
   const acceptsCustomGridTracks = (value: string) => value.length <= 256
   const acceptsColorValue = (value: string) => !value.includes('var(')
   const acceptsSpacingValue = (value: string) => value.length <= 256
-  const acceptsTypographyValue: NonNullable<AppOptions['acceptsTypographyValue']> = (
-    property,
-    value,
-  ) => property !== 'letter-spacing' || !value.includes('var(')
+  const acceptsTypographyValue: AcceptsTypographyValue = (property: TypographyProperty, value) =>
+    property !== 'letter-spacing' || !value.includes('var(')
   const options: AppOptions = {
     mount,
     doc,
@@ -326,21 +329,23 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
   const engine = createEngine({ doc })
   const history = engine.getHistory()
   engine.goToHistory(history.currentId)
-  const historyDialog = openHistoryDialog({ mount: document.body, engine })
+  const historyOptions: HistoryDialogOptions = { mount: document.body, engine }
+  const historyDialog = openHistoryDialog(historyOptions)
   historyDialog.close()
   engine.updateTextContents(new Map([['title', 'Winter workshop']]))
   const unsubscribeText = engine.subscribe((event) => {
     if (event.type === 'tree') event.textChanges?.patches.forEach((patch) => void patch.content)
   })
   unsubscribeText()
-  openPageTextDialog({
+  const findOptions: PageTextDialogOptions = {
     mount: document.body,
     engine,
     richText: richTextResolver,
     device: 'mobile',
     initialQuery: 'workshop',
     onReveal: (id) => engine.select(id),
-  }).close()
+  }
+  openPageTextDialog(findOptions).close()
   const closeMedia = openMediaPicker({
     pageImages: (): readonly PageImage[] => collectPageImages(engine.getTree(), richTextResolver),
     onPick: (item: AssetItem) => void item.url,
@@ -354,12 +359,13 @@ export function composePublicAPIs(mount: HTMLElement, sanitize: SanitizeFn): voi
     onClose() {},
   })
   closeMedia()
-  const links = createPageLinksPanel(doc.root, {
+  const linkOptions: PageLinksPanelOptions = {
     richText: richTextResolver,
     onEdit(id) {
       if (links.hasSource(engine.getTree(), id)) engine.select(id)
     },
-  })
+  }
+  const links = createPageLinksPanel(doc.root, linkOptions)
   mount.append(links.el)
   links.refreshLocale()
   links.destroy()

@@ -204,6 +204,7 @@
     "@cluion/sigil-ui": {
       "subpaths": ["."],
       "types": [
+        "AcceptsTypographyValue",
         "AlignLine",
         "BlockDef",
         "BlockFactory",
@@ -224,6 +225,7 @@
         "FAQEditingOptions",
         "FormOptions",
         "GapHint",
+        "HistoryDialogOptions",
         "IndicatorKind",
         "IndicatorShowOpts",
         "InspectorHandle",
@@ -236,6 +238,8 @@
         "MenuSeparatorItem",
         "Orient",
         "PageImage",
+        "PageLinksPanelOptions",
+        "PageTextDialogOptions",
         "PropFormHandle",
         "PropsPanelHandle",
         "PropsPanelOptions",
@@ -248,7 +252,8 @@
         "Side",
         "TemplateLibraryController",
         "TemplateLibraryOptions",
-        "ThemeChoice"
+        "ThemeChoice",
+        "TypographyProperty"
       ],
       "values": [
         "ALIGN_THRESHOLD",

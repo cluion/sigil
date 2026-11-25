@@ -4,7 +4,8 @@ import { uiText } from './i18n.js'
 import { attribute, isHiddenTarget } from './link-destination.js'
 import { resolveLinkFragment } from './link-fragment.js'
 
-interface Options {
+/** 設定匯出前連結檢查的翻譯、富文字判斷及返回編輯的動作。 */
+export interface PageLinksPanelOptions {
   i18n?: I18n
   richText?: Pick<RichTextResolver, 'supports'>
   onEdit?: (id: string) => void
@@ -37,7 +38,7 @@ function isShortcode(node: ComponentNode): boolean {
   return !!node.shortcode || node.type === 'shortcode'
 }
 
-function isRich(node: ComponentNode, richText: Options['richText']): boolean {
+function isRich(node: ComponentNode, richText: PageLinksPanelOptions['richText']): boolean {
   return node.type === 'rich-text' || !!richText?.supports(node)
 }
 
@@ -73,7 +74,7 @@ function statusFor(
   return opaque || textDirective ? 'unconfirmed' : 'missing'
 }
 
-function indexLinks(root: ComponentNode, richText: Options['richText']) {
+function indexLinks(root: ComponentNode, richText: PageLinksPanelOptions['richText']) {
   const ids = new Map<string, Target>()
   const names = new Map<string, Target>()
   const sources: { id: string; href: string; name: string }[] = []
@@ -150,7 +151,7 @@ function needsAttention(status: Status): boolean {
 }
 
 /** Inspect authored links in an export snapshot when its disclosure is opened. */
-export function createPageLinksPanel(root: ComponentNode, opts: Options = {}) {
+export function createPageLinksPanel(root: ComponentNode, opts: PageLinksPanelOptions = {}) {
   const t = (key: string, fallback: string) => uiText(opts.i18n, 'page_links.' + key, fallback)
   const el = document.createElement('details')
   el.className = 'sigil-page-links'

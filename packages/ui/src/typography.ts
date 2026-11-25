@@ -7,7 +7,9 @@ import {
 } from '@cluion/sigil-core'
 import type { DeviceStyleValue } from './style-device.js'
 
+/** 元件文字面板可依裝置調整的 CSS 屬性。 */
 export type TypographyProperty = 'font-size' | 'line-height' | 'font-weight' | 'letter-spacing'
+/** 宿主回傳此文字屬性和值是否可保存。 */
 export type AcceptsTypographyValue = (property: TypographyProperty, value: string) => boolean
 
 export const presets = {

@@ -123,7 +123,8 @@ const styles = `
 @media (max-height: 440px) { .sigil-history-list { max-height: 36dvh; } }
 `
 
-interface HistoryDialogOptions {
+/** 在指定容器開啟引擎的編輯歷程，可標記最近一次儲存的步驟。 */
+export interface HistoryDialogOptions {
   mount: HTMLElement
   engine: HistoryEngine
   i18n?: I18n
