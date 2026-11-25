@@ -7,6 +7,13 @@ const REPO_ROOT = resolve(dirname(SCRIPT_PATH), '..')
 const SOURCE_ROOTS = ['packages', 'demo', 'examples', 'scripts']
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.svelte', '.ts', '.tsx', '.vue'])
 const IGNORED_DIRECTORIES = new Set(['__tests__', 'dist', 'node_modules', 'test', 'tests'])
+// Composer dependencies and generated bundles are not authored source. The Laravel
+// resources/js directory remains scanned with the rest of the examples.
+const GENERATED_DIRECTORIES = new Set([
+  'examples/laravel/vendor',
+  'examples/laravel/public/build',
+  'examples/laravel/storage',
+])
 const IGNORED_FILES = new Set([
   'scripts/check-security-sinks.mjs',
   'scripts/check-security-sinks.test.mjs',
@@ -44,7 +51,7 @@ export const APPROVED_FINDINGS = [
     kind: 'Trusted Types policy creation',
     source: 'const policy = tt.createPolicy(name, { createHTML: (s) => s })',
     count: 1,
-    reason: 'All Sigil named policy creation is centralized and cached here.',
+    reason: 'Core template and sanitized policy creation is centralized and cached here.',
   },
   {
     file: 'packages/core/src/policy/html-policy.ts',
@@ -84,9 +91,9 @@ export const APPROVED_FINDINGS = [
   {
     file: 'packages/core/src/renderer/renderer.ts',
     kind: 'dynamic createElement call',
-    source: 'const el = document.createElement(tag)',
+    source: 'const el = ownerDocument.createElement(tag)',
     count: 1,
-    reason: 'Known SigilDoc structural trust boundary; hosts must validate imported documents.',
+    reason: 'Mount and tag updates share the host-validated SigilDoc structural boundary.',
   },
   {
     file: 'packages/core/src/renderer/renderer.ts',
@@ -118,10 +125,19 @@ export const APPROVED_FINDINGS = [
   },
   {
     file: 'demo/rich-text.ts',
-    kind: 'DOMParser parseFromString call',
-    source: "return new DOMParser().parseFromString(input, 'text/html').body",
+    kind: 'Trusted Types policy creation',
+    source: "policy = tt.createPolicy('sigil-demo#parse', { createHTML: (value) => value })",
     count: 1,
-    reason: 'Legacy demo fallback; enforcement browsers must provide the safe setHTML API.',
+    reason:
+      'Private cached policy only feeds inert DOMParser; nodes must pass the demo allowlist before live DOM use.',
+  },
+  {
+    file: 'demo/rich-text.ts',
+    kind: 'DOMParser parseFromString call',
+    source: "return new DOMParser().parseFromString(parserInput as string, 'text/html').body",
+    count: 1,
+    reason:
+      'Inert parsing fallback, including Trusted Types without native setHTML; output is rebuilt through the demo allowlist.',
   },
   {
     file: 'demo/rich-text.ts',
@@ -269,6 +285,7 @@ async function collectSourceFiles(directory) {
     if (entry.isDirectory() && IGNORED_DIRECTORIES.has(entry.name)) continue
 
     const absolutePath = join(directory, entry.name)
+    if (entry.isDirectory() && GENERATED_DIRECTORIES.has(toRepoPath(absolutePath))) continue
     if (entry.isDirectory()) {
       files.push(...(await collectSourceFiles(absolutePath)))
       continue

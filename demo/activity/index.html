@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>活動頁範例 — Sigil</title>
+  </head>
+  <body class="host-workspace">
+    <header class="host-header">
+      <div class="host-trail">
+        <a href="../">工程示例</a>
+        <span aria-hidden="true">/</span>
+        <strong id="workspace-title">活動頁範例</strong>
+      </div>
+      <details class="host-options">
+        <summary>本機草稿</summary>
+        <div class="host-options-body">
+          <p id="storage-guide">按「存檔」將活動頁存在此瀏覽器，下次開啟可繼續編輯。</p>
+          <p>
+            草稿中的裝置照片儲存在此瀏覽器。下載 HTML 時會一併存入用到的裝置照片與範本封面。 可加入
+            PNG、JPEG、WebP，每張最多 2 MiB、長寬各最多 4096 像素，總容量取決於瀏覽器剩餘空間。
+          </p>
+          <button id="reload-page" type="button">重新載入</button>
+        </div>
+      </details>
+    </header>
+    <div class="host-feedback" hidden>
+      <p id="page-status" role="status" data-error="true"></p>
+    </div>
+    <main id="sigil-root" aria-label="活動頁編輯器"></main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

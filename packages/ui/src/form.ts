@@ -1,4 +1,5 @@
 import {
+  createId,
   findNode,
   isPropVisible,
   type AssetStore,
@@ -6,15 +7,18 @@ import {
   type ComponentNode,
   type I18n,
   type PropSchema,
+  type RichTextResolver,
 } from '@cluion/sigil-core'
 import { subscribeLocale, uiText } from './i18n.js'
 import { openMediaPicker } from './media-picker.js'
+import { collectPageImages } from './page-images.js'
 
 export interface FormOptions {
   engine: Engine
   node: ComponentNode
   schema: PropSchema[]
   assets?: AssetStore
+  richText?: Pick<RichTextResolver, 'supports'>
   i18n?: I18n
   /** select optionsFrom 用的非同步能力；未注入時動態 select 顯示「無法載入」 */
   fetchJSON?: (url: string, signal?: AbortSignal) => Promise<unknown>
@@ -31,7 +35,7 @@ export interface PropFormHandle {
  * optionsFrom select 會訂閱 engine，dependsOn prop 變動時重載
  */
 export function createPropForm(opts: FormOptions): PropFormHandle {
-  const { engine, schema, assets, i18n, fetchJSON } = opts
+  const { engine, schema, i18n, fetchJSON } = opts
   const nodeId = opts.node.id
   const wrap = document.createElement('div')
   wrap.className = 'sigil-prop-form'
@@ -70,9 +74,13 @@ export function createPropForm(opts: FormOptions): PropFormHandle {
 
     let field: HTMLElement
     if (s.type === 'media') {
-      field = createMediaField(engine, nodeId, s, currentProps()[s.name], assets, i18n, () => {
-        refreshVisibility()
-      })
+      field = createMediaField(
+        opts,
+        nodeId,
+        s,
+        () => refreshVisibility(),
+        (dispose) => disposers.push(dispose),
+      )
     } else {
       field = createField(engine, nodeId, s, currentProps()[s.name], i18n, () => {
         refreshVisibility()
@@ -271,26 +279,29 @@ function readControl(schema: PropSchema, control: HTMLElement): Record<string, u
 }
 
 function createMediaField(
-  engine: Engine,
+  opts: FormOptions,
   nodeId: string,
   schema: PropSchema,
-  value: unknown,
-  assets: AssetStore | undefined,
-  i18n: I18n | undefined,
   onChanged: () => void,
+  registerDestroy: (dispose: () => void) => void,
 ): HTMLElement {
+  const { engine, assets, i18n } = opts
+  let disposed = false
+  let closePicker: (() => void) | null = null
+  registerDestroy(() => {
+    disposed = true
+    closePicker?.()
+    closePicker = null
+  })
   const wrap = document.createElement('div')
   wrap.className = 'sigil-field'
-  const span = document.createElement('span')
+  const span = document.createElement('label')
   span.className = 'sigil-field-label'
   span.textContent = schema.label ?? schema.name
 
-  const url = String(value ?? '')
   const preview = document.createElement('img')
   preview.className = 'sigil-img-preview'
   preview.alt = ''
-  if (url) preview.src = url
-  else preview.style.display = 'none'
 
   const row = document.createElement('div')
   row.className = 'sigil-field-row'
@@ -298,45 +309,68 @@ function createMediaField(
   input.className = 'sigil-input'
   input.type = 'text'
   input.dataset.prop = schema.name
-  input.value = url
+  input.id = 'sigil-media-url-' + createId()
+  span.htmlFor = input.id
   input.placeholder = 'https://…'
   input.addEventListener('input', () => {
-    const next = input.value
-    setProp(engine, nodeId, schema.name, next)
-    if (next) {
-      preview.src = next
-      preview.style.display = ''
-    } else {
-      preview.removeAttribute('src')
-      preview.style.display = 'none'
-    }
+    if (disposed || input.disabled) return
+    setProp(engine, nodeId, schema.name, input.value)
     onChanged()
   })
   row.appendChild(input)
 
-  if (assets) {
-    const pickBtn = document.createElement('button')
-    pickBtn.type = 'button'
-    pickBtn.className = 'sigil-btn sigil-media-pick'
-    pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
-    pickBtn.addEventListener('click', () => {
-      openMediaPicker({
-        assets,
-        i18n,
-        currentUrl: input.value,
-        onPick: (item) => {
-          input.value = item.url
+  const pickBtn = document.createElement('button')
+  pickBtn.type = 'button'
+  pickBtn.className = 'sigil-btn sigil-media-pick'
+  pickBtn.setAttribute('aria-haspopup', 'dialog')
+  pickBtn.textContent = uiText(i18n, 'form.pick_image', '選圖')
+  pickBtn.addEventListener('click', () => {
+    const current = findNode(engine.getTree(), nodeId)
+    if (disposed || closePicker || !current?.shortcode || current.locked) return
+    pickBtn.focus({ preventScroll: true })
+    closePicker = openMediaPicker({
+      assets,
+      i18n,
+      pageImages: () => collectPageImages(engine.getTree(), opts.richText),
+      currentUrl: String(current.shortcode.props[schema.name] ?? ''),
+      onPick: (item) => {
+        const target = findNode(engine.getTree(), nodeId)
+        if (disposed || !target?.shortcode || target.locked) return
+        if (target.shortcode.props[schema.name] !== item.url)
           setProp(engine, nodeId, schema.name, item.url)
-          preview.src = item.url
-          preview.style.display = ''
-          onChanged()
-        },
-        onClose: () => {},
-      })
+        onChanged()
+      },
+      onClose: () => {
+        closePicker = null
+      },
     })
-    row.appendChild(pickBtn)
+  })
+  function sync() {
+    const current = findNode(engine.getTree(), nodeId)
+    const url = String(current?.shortcode?.props[schema.name] ?? '')
+    if (input.value !== url) input.value = url
+    if ((preview.getAttribute('src') ?? '') !== url) {
+      if (url) preview.src = url
+      else preview.removeAttribute('src')
+    }
+    preview.style.display = url ? '' : 'none'
+    input.disabled = pickBtn.disabled = !current?.shortcode || !!current.locked
+    if (pickBtn.disabled) closePicker?.()
   }
-
+  sync()
+  registerDestroy(
+    engine.subscribe((event) => {
+      if (
+        event.type === 'tree' ||
+        (event.type === 'patch' &&
+          (event.patch.type === 'remove' ||
+            event.patch.type === 'replace' ||
+            (event.patch.type === 'update' && event.patch.id === nodeId)))
+      )
+        sync()
+    }),
+  )
+  row.appendChild(pickBtn)
   wrap.append(span, preview, row)
   return wrap
 }

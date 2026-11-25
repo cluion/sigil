@@ -24,6 +24,83 @@ function ctxOf(
   }
 }
 
+describe('selected component commands', () => {
+  it('keeps each duplicate and pasted section linked to itself across undo and redo', async () => {
+    const source = {
+      id: 'activity',
+      type: 'section',
+      attributes: { id: 'event-info' },
+      children: [{ id: 'link', type: 'text', tagName: 'a', attributes: { href: '#event-info' } }],
+    }
+    const engine = createEngine({
+      doc: { version: 1, root: { id: 'r', type: 'section', children: [source] } },
+    })
+    const ctx = ctxOf(engine)
+    const registry = createCommandRegistry(createDefaultEditingCommands())
+    engine.select(source.id)
+    await registry.run('copy', ctx)
+    await registry.run('duplicate', ctx)
+    await registry.run('duplicate', ctx)
+    await registry.run('paste', ctx)
+    const sections = engine.getTree().children!
+    const ids = sections.map((section) => section.attributes?.id)
+    expect(ids).toEqual(['event-info', 'event-info-copy', 'event-info-copy-2', 'event-info-copy-3'])
+    expect(sections.map((section) => section.children?.[0]?.attributes?.href)).toEqual(
+      ids.map((id) => '#' + id),
+    )
+    expect(ctx.clipboard.get()).toEqual(source)
+    engine.undo()
+    expect(engine.getTree().children).toEqual(sections.slice(0, -1))
+    engine.redo()
+    expect(engine.getTree().children).toEqual(sections)
+  })
+
+  it('duplicates a subtree beside the source, preserves the clipboard and provides a single undo step', async () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            {
+              id: 'group',
+              type: 'section',
+              children: [{ id: 'child', type: 'text', content: '標題' }],
+            },
+            { id: 'last', type: 'text' },
+          ],
+        },
+      },
+    })
+    const ctx = ctxOf(engine)
+    const registry = createCommandRegistry(createDefaultEditingCommands())
+    engine.select('child')
+    expect(await registry.run('select-parent', ctx)).toBe(true)
+    expect(engine.getSelection()).toBe('group')
+    expect(await registry.run('duplicate', ctx)).toBe(true)
+    const copy = engine.getTree().children![1]!
+    expect(copy.id).not.toBe('group')
+    expect(copy.children?.[0]?.id).not.toBe('child')
+    expect(copy.children?.[0]?.content).toBe('標題')
+    expect(engine.getSelection()).toBe(copy.id)
+    expect(engine.getTree().children?.[2]?.id).toBe('last')
+    expect(ctx.clipboard.get()).toBeNull()
+    engine.undo()
+    expect(engine.getTree().children?.map((n) => n.id)).toEqual(['group', 'last'])
+    expect(engine.canUndo()).toBe(false)
+    engine.redo()
+    expect(engine.getTree().children?.[1]?.id).toBe(copy.id)
+    engine.update(copy.id, { locked: true })
+    expect(await registry.run('duplicate', ctx)).toBe(false)
+    expect(await registry.run('delete', ctx)).toBe(false)
+    expect(await registry.run('select-parent', ctx)).toBe(true)
+    expect(engine.getSelection()).toBe('r')
+    expect(await registry.run('duplicate', ctx)).toBe(false)
+    expect(await registry.run('select-parent', ctx)).toBe(false)
+  })
+})
+
 describe('matchShortcut', () => {
   it('mod+s 匹配 ctrl/meta + s', () => {
     expect(matchShortcut('mod+s', new KeyboardEvent('keydown', { key: 's', ctrlKey: true }))).toBe(
@@ -156,9 +233,9 @@ describe('move-up / move-down 命令', () => {
     expect(down.when!(ctx)).toBe(false)
   })
 
-  it('鎖定節點不能移動', () => {
+  it.each(['b', 'r'])('鎖定來源或父節點 %s 時不能上移或下移', (id) => {
     const { engine, up, down, ctx } = setup()
-    engine.update('b', { locked: true })
+    engine.update(id, { locked: true })
     engine.select('b')
     expect(up.when!(ctx)).toBe(false)
     expect(down.when!(ctx)).toBe(false)

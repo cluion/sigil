@@ -1,7 +1,22 @@
-import { describe, it, expect, vi } from 'vitest'
-import { createEngine, type PropSchema } from '@cluion/sigil-core'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { createEngine, createI18n, type AssetItem, type PropSchema } from '@cluion/sigil-core'
 import { createPropForm } from '../src/form.js'
 import { createEnglishUiI18n } from './i18n.js'
+
+const mediaCleanups: Array<() => void> = []
+afterEach(() => {
+  for (const cleanup of mediaCleanups.splice(0).reverse()) cleanup()
+})
+
+function deferredMedia() {
+  let resolve!: (value: AssetItem) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<AssetItem>((onResolve, onReject) => {
+    resolve = onResolve
+    reject = onReject
+  })
+  return { promise, resolve, reject }
+}
 
 function setup(schema: PropSchema[], props: Record<string, unknown> = {}) {
   const engine = createEngine({
@@ -245,6 +260,70 @@ describe('createPropForm', () => {
     })
     ;(document.querySelector('.sigil-media-card') as HTMLButtonElement).click()
     expect(engine.getTree().shortcode!.props.src).toBe('https://b.test/y.png')
+  })
+
+  it('shortcode 媒體欄可重用原生圖，略過宿主富文字與其他 shortcode 的圖片', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'r',
+          type: 'section',
+          children: [
+            {
+              id: 'widget',
+              type: 'shortcode',
+              shortcode: { name: 'hero', props: { src: '/old.png', caption: 'Hero' } },
+            },
+            { id: 'native', type: 'image', attributes: { src: '/pick.png', alt: 'Pick' } },
+            {
+              id: 'custom',
+              type: 'section',
+              children: [{ id: 'hidden', type: 'image', attributes: { src: '/host.png' } }],
+            },
+            {
+              id: 'short',
+              type: 'shortcode',
+              shortcode: { name: 'host', props: { src: '/private.png' } },
+            },
+          ],
+        },
+      },
+    })
+    const supports = vi.fn((node: { id: string }) => node.id === 'custom')
+    const form = createPropForm({
+      engine,
+      node: engine.getTree().children![0]!,
+      schema: [{ name: 'src', type: 'media' }],
+      richText: { supports },
+    })
+    document.body.append(form.el)
+    try {
+      const input = form.el.querySelector<HTMLInputElement>('input')!
+      const button = form.el.querySelector<HTMLButtonElement>('button')!
+      expect(supports).not.toHaveBeenCalled()
+      button.click()
+      const cards = document.querySelectorAll<HTMLButtonElement>('.sigil-media-card')
+      expect(cards).toHaveLength(1)
+      expect(cards[0]!.querySelector('.sigil-media-name')?.textContent).toBe('Pick')
+      cards[0]!.click()
+      expect(input.value).toBe('/pick.png')
+      expect(engine.getTree().children![0]!.shortcode?.props).toEqual({
+        src: '/pick.png',
+        caption: 'Hero',
+      })
+      engine.undo()
+      expect(input.value).toBe('/old.png')
+      expect(engine.canUndo()).toBe(false)
+      button.click()
+      engine.update('widget', { locked: true })
+      expect(button.disabled).toBe(true)
+      expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
+    } finally {
+      form.destroy()
+      form.el.remove()
+      engine.destroy()
+    }
   })
 
   it('date 生成 input[type=date]，變動寫入字串', () => {
@@ -493,5 +572,111 @@ describe('createPropForm', () => {
     const sel = handle.el.querySelector('select') as HTMLSelectElement
     expect(sel.options[0]?.textContent).toBe('無法載入')
     handle.destroy()
+  })
+})
+
+describe('createPropForm — media lifecycle', () => {
+  it.each(['resolve', 'reject'] as const)(
+    'destroy 關閉 picker，延遲 %s 與舊控制項都不再更新 engine',
+    async (outcome) => {
+      const gate = deferredMedia()
+      const engine = createEngine({
+        doc: {
+          version: 1,
+          root: {
+            id: 'media',
+            type: 'shortcode',
+            shortcode: { name: 'hero', props: { src: 'original.png' } },
+          },
+        },
+      })
+      const list = vi.fn(() => [])
+      const handle = createPropForm({
+        engine,
+        node: engine.getTree(),
+        schema: [{ name: 'src', type: 'media' }],
+        assets: { list, upload: () => gate.promise },
+      })
+      document.body.append(handle.el)
+      mediaCleanups.push(() => {
+        handle.destroy()
+        handle.el.remove()
+        engine.destroy()
+      })
+      const pick = handle.el.querySelector('button') as HTMLButtonElement
+      const input = handle.el.querySelector('input') as HTMLInputElement
+      pick.click()
+      pick.click()
+      expect(list).toHaveBeenCalledOnce()
+      expect(document.querySelectorAll('.sigil-media-backdrop')).toHaveLength(1)
+      const dialog = document.querySelector('.sigil-media-backdrop') as HTMLElement
+      const file = dialog.querySelector<HTMLInputElement>('input[type="file"]')!
+      Object.defineProperty(file, 'files', { value: [new File(['image'], 'image.png')] })
+      file.dispatchEvent(new Event('change'))
+
+      handle.destroy()
+      expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
+      pick.click()
+      input.value = 'stale.png'
+      input.dispatchEvent(new Event('input'))
+      if (outcome === 'resolve') gate.resolve({ id: 'new', url: 'late-upload.png' })
+      else gate.reject(new Error('late error'))
+      await gate.promise.catch(() => {})
+      expect(engine.getTree().shortcode?.props.src).toBe('original.png')
+      expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
+      expect(dialog.isConnected).toBe(false)
+    },
+  )
+
+  it('runtime locale 原地更新開啟的 picker，上傳完成仍套用至存活表單', async () => {
+    const gate = deferredMedia()
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'media',
+          type: 'shortcode',
+          shortcode: { name: 'hero', props: { src: '' } },
+        },
+      },
+    })
+    const i18n = createI18n({
+      zh: {},
+      en: {
+        'media.title': 'Media library',
+        'media.uploading': 'Uploading…',
+        'form.pick_image': 'Choose image',
+      },
+    })
+    const handle = createPropForm({
+      engine,
+      node: engine.getTree(),
+      i18n,
+      schema: [{ name: 'src', type: 'media' }],
+      assets: { list: () => [], upload: () => gate.promise },
+    })
+    document.body.append(handle.el)
+    mediaCleanups.push(() => {
+      handle.destroy()
+      handle.el.remove()
+      engine.destroy()
+    })
+    const pick = handle.el.querySelector('button') as HTMLButtonElement
+    pick.click()
+    const dialog = document.querySelector('.sigil-media-backdrop') as HTMLElement
+    const file = dialog.querySelector<HTMLInputElement>('input[type="file"]')!
+    Object.defineProperty(file, 'files', { value: [new File(['image'], 'image.png')] })
+    file.dispatchEvent(new Event('change'))
+    i18n.setLocale('en')
+    expect(document.querySelector('.sigil-media-backdrop')).toBe(dialog)
+    expect(dialog.querySelector('h3')?.textContent).toBe('Media library')
+    expect(dialog.querySelector('.sigil-media-actions button')?.textContent).toBe('Uploading…')
+    expect(pick.textContent).toBe('Choose image')
+    gate.resolve({ id: 'new', url: 'uploaded.png' })
+    await gate.promise
+    expect(engine.getTree().shortcode?.props.src).toBe('uploaded.png')
+    expect(document.querySelector('.sigil-media-backdrop')).toBeNull()
+    pick.click()
+    expect(document.querySelector('.sigil-media-backdrop')).toBeTruthy()
   })
 })

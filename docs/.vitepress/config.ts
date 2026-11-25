@@ -58,6 +58,12 @@ export default defineConfig({
           text: '指南',
           items: [
             { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: '保存、載入與遷移', link: '/guide/persistence' },
+            { text: '公開 API 與相容承諾', link: '/guide/public-api' },
+            { text: '升級指南', link: '/guide/upgrading' },
+            { text: '瀏覽器支援', link: '/guide/browser-support' },
+            { text: '效能與容量預算', link: '/guide/performance' },
+            { text: '15 分鐘活動頁試用', link: '/guide/usability-check' },
             { text: '官方行銷區塊', link: '/guide/marketing-blocks' },
             { text: '可選富文字 Adapter', link: '/guide/rich-text' },
             { text: '安全模型', link: '/guide/security' },

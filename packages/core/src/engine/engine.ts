@@ -1,43 +1,132 @@
 import type { ComponentNode } from '../model/types.js'
 import { insertNode, removeNode, updateNode, moveNode, findNode, createId } from '../model/index.js'
-import type { Engine, EngineEvent, EngineOptions, Patch } from './types.js'
+import { updateAlongPath } from '../model/tree.js'
+import type {
+  EngineEvent,
+  EngineOptions,
+  HistoryEngine,
+  HistoryEntry,
+  HistoryKind,
+  Patch,
+} from './types.js'
+import { describeChange, sameSnapshot, updateKind } from './history.js'
 
 /**
  * 建立 Engine
  *
  * 管理不可變樹 歷史與選取
  */
-export function createEngine(opts: EngineOptions = {}): Engine {
+export function createEngine(opts: EngineOptions = {}): HistoryEngine {
   const idFactory = opts.idFactory ?? createId
-  let root: ComponentNode = opts.doc?.root ?? { id: idFactory(), type: 'section', children: [] }
+  const { root: initialRoot, ...documentFields } = opts.doc ?? {
+    version: 1 as const,
+    root: { id: idFactory(), type: 'section', children: [] },
+  }
+  let root: ComponentNode = initialRoot
   let selection: string | null = null
-  const undoStack: ComponentNode[] = []
-  const redoStack: ComponentNode[] = []
+  let suspendedSelection: string | null = null
+  const initial: HistoryEntry = Object.freeze({ id: 0, kind: 'initial', target: '' })
+  const frames = [{ entry: initial, tree: root }]
+  let cursor = 0
+  let navigation = 0
+  let nextId = 1
+  let cachedEntries: readonly HistoryEntry[] | undefined
   const listeners = new Set<(e: EngineEvent) => void>()
-  let batching = false
-  let batchSnapshot: ComponentNode | null = null
-  let lastMergeKey: string | null = null
-  let lastMergeTime = 0
+  type Change = Omit<HistoryEntry, 'id'>
+  type PendingBatch = { change?: Change; targetId?: string | null; multiple: boolean }
+  let batch: PendingBatch | null = null
+  let lastMerge: { key: string; time: number; before: ComponentNode } | undefined
   const MERGE_MS = 500
 
-  function emit(e: EngineEvent): void {
-    for (const l of listeners) l(e)
-  }
-
-  function emitHistory(): void {
-    emit({ type: 'history', canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 })
-  }
-
-  // batch 只記第一個 snapshot
-  function pushHistory(prev: ComponentNode): void {
-    if (batching) {
-      if (batchSnapshot === null) batchSnapshot = prev
-      return
+  function emit(e: EngineEvent): boolean {
+    const startedAt = navigation
+    for (const listener of listeners) {
+      listener(e)
+      // A subscriber can synchronously jump to another tree, superseding this event.
+      if (navigation !== startedAt) return false
     }
-    undoStack.push(prev)
-    redoStack.length = 0
-    lastMergeKey = null
+    return true
+  }
+
+  function emitHistory(): boolean {
+    return emit({ type: 'history', canUndo: cursor > 0, canRedo: cursor + 1 < frames.length })
+  }
+
+  function append(change: Change): void {
+    frames.length = cursor + 1
+    frames.push({ tree: root, entry: Object.freeze({ id: nextId++, ...change }) })
+    cursor++
+    cachedEntries = undefined
+  }
+
+  function record(
+    kind: HistoryKind,
+    node: ComponentNode,
+    key?: string,
+    before?: ComponentNode,
+    removedSelection?: string | null,
+  ): boolean {
+    if (removedSelection != null || !batch?.change) suspendedSelection = removedSelection ?? null
+    const change = describeChange(kind, node)
+    if (batch) {
+      if (!batch.change) {
+        batch.change = change
+        batch.targetId = node.id
+      } else {
+        batch.multiple = true
+        if (batch.targetId !== node.id) batch.targetId = null
+        batch.change =
+          batch.targetId && batch.change.kind === kind
+            ? change
+            : { kind: 'group', target: batch.targetId ? change.target : '' }
+      }
+      return true
+    }
+    const now = Date.now()
+    if (key && lastMerge?.key === key && now - lastMerge.time < MERGE_MS) {
+      if (sameSnapshot(lastMerge.before, node)) {
+        frames.pop()
+        root = frames[--cursor]!.tree
+        cachedEntries = undefined
+        lastMerge = undefined
+      } else {
+        const frame = frames[cursor]!
+        frame.tree = root
+        if (frame.entry.target !== change.target || frame.entry.detail !== change.detail) {
+          frame.entry = Object.freeze({ id: frame.entry.id, ...change })
+          cachedEntries = undefined
+        }
+        lastMerge.time = now
+      }
+    } else {
+      append(change)
+      lastMerge = key && before ? { key, time: now, before } : undefined
+    }
+    return emitHistory()
+  }
+
+  function navigate(index: number): boolean {
+    if (batch || index === cursor || index < 0 || index >= frames.length) return false
+    lastMerge = undefined
+    cursor = index
+    navigation++
+    root = frames[index]!.tree
+    const previousSelection = selection
+    const candidate = selection ?? suspendedSelection
+    const nextSelection = candidate !== null && findNode(root, candidate) ? candidate : null
+    // Keep a missing selection only while navigating the same history.
+    suspendedSelection = nextSelection === null ? candidate : null
+    selection = nextSelection
+    if (!emit({ type: 'tree', tree: root })) return true
+    if (
+      previousSelection !== nextSelection &&
+      selection === nextSelection &&
+      (nextSelection !== null || suspendedSelection === candidate) &&
+      !emit({ type: 'selection', id: nextSelection })
+    )
+      return true
     emitHistory()
+    return true
   }
 
   function beforeIdOf(parentId: string, index?: number): string | null {
@@ -52,7 +141,7 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       return root
     },
     toJSON() {
-      return { version: 1 as const, root }
+      return { ...documentFields, root }
     },
     getSelection() {
       return selection
@@ -62,48 +151,74 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       const beforeId = beforeIdOf(parentId, index)
       const prev = root
       root = insertNode(root, parentId, node, index)
-      pushHistory(prev)
+      if (root === prev) return node.id
+      if (!record('insert', node)) return node.id
       emit({ type: 'patch', patch: { type: 'insert', parentId, beforeId, node } })
       return node.id
     },
 
     remove(id) {
       const node = findNode(root, id)
-      if (node?.locked) return
-      const prev = root
+      if (!node || node.locked || node === root) return
       root = removeNode(root, id)
-      if (selection === id) selection = null
-      pushHistory(prev)
-      emit({ type: 'patch', patch: { type: 'remove', id } })
+      const lost = selection !== null && findNode(node, selection) ? selection : null
+      if (lost !== null) selection = null
+      if (!record('remove', node, undefined, undefined, lost)) return
+      if (!emit({ type: 'patch', patch: { type: 'remove', id } })) return
+      if (lost && selection === null) emit({ type: 'selection', id: null })
     },
 
     update(id, patch) {
       const node = findNode(root, id)
-      if (node?.locked) {
+      if (!node) return
+      if (node.locked) {
         // 鎖定時只允許圖層狀態
-        const keys = Object.keys(patch) as (keyof ComponentNode)[]
+        const keys = Object.keys(patch)
         const ok = keys.every((k) => k === 'locked' || k === 'hidden' || k === 'name')
         if (!ok) return
       }
-      const prev = root
-      root = updateNode(root, id, patch)
-      // 合併同欄位的連續輸入
-      const key =
-        patch.content !== undefined
-          ? `${id}:content`
-          : patch.className !== undefined
-            ? `${id}:className`
-            : null
-      const now = Date.now()
-      if (key !== null && key === lastMergeKey && now - lastMergeTime < MERGE_MS) {
-        // 沿用上一個 undo step
-      } else {
-        pushHistory(prev)
+      const tagChanged = patch.tagName !== undefined && patch.tagName !== node.tagName
+      if (patch.tagName !== undefined && !tagChanged && Object.keys(patch).length === 1) return
+      const replaceChildren = patch.children !== undefined
+      const updated = updateNode(node, id, patch)
+      if (sameSnapshot(node, updated)) return
+      root = updateAlongPath(root, id, (current) =>
+        current === node ? updated : updateNode(current, id, patch),
+      )
+      const keys = Object.keys(patch)
+      const field =
+        keys.length === 1 && (keys[0] === 'content' || keys[0] === 'className') ? keys[0] : null
+      const lostSelection =
+        replaceChildren &&
+        selection !== null &&
+        selection !== id &&
+        !!findNode(node, selection) &&
+        !findNode(updated, selection)
+          ? selection
+          : null
+      if (lostSelection !== null) selection = null
+      if (
+        !record(
+          updateKind(patch),
+          updated,
+          field ? id + ':' + field : undefined,
+          node,
+          lostSelection,
+        )
+      )
+        return
+      if (
+        replaceChildren ||
+        (tagChanged && (node.shortcode || patch.shortcode || patch.type !== undefined))
+      ) {
+        if (!emit({ type: 'patch', patch: { type: 'replace', id, node: updated } })) return
+        if (lostSelection && selection === null) emit({ type: 'selection', id: null })
+        return
       }
-      lastMergeKey = key
-      lastMergeTime = now
       const p: Extract<Patch, { type: 'update' }> = { type: 'update', id }
+      if (tagChanged) p.tagName = patch.tagName
       if (patch.attributes) p.attrs = patch.attributes
+      if (patch.removeAttributes?.length) p.removeAttributes = patch.removeAttributes
       if (patch.style) p.style = patch.style
       if (patch.responsiveStyles !== undefined) p.responsiveStyles = patch.responsiveStyles
       if (patch.content !== undefined) p.content = patch.content
@@ -115,59 +230,128 @@ export function createEngine(opts: EngineOptions = {}): Engine {
       emit({ type: 'patch', patch: p })
     },
 
+    updateTextContents(updates) {
+      if (!updates.size) return
+      const patches: { type: 'update'; id: string; content: string }[] = []
+      function visit(node: ComponentNode): ComponentNode {
+        if (node.locked || node.shortcode || node.type === 'shortcode' || node.type === 'rich-text')
+          return node
+        let next = node
+        const content = updates.get(node.id)
+        if (typeof content === 'string' && content !== (node.content ?? '')) {
+          next = { ...node, content }
+          patches.push({ type: 'update', id: node.id, content })
+        }
+        let children: ComponentNode[] | undefined
+        node.children?.forEach((child, index) => {
+          const changed = visit(child)
+          if (changed !== child) {
+            children ??= node.children!.slice()
+            children[index] = changed
+          }
+        })
+        return children ? { ...next, children } : next
+      }
+      const previous = root
+      const updated = visit(previous)
+      if (updated === previous) return
+      root = updated
+      navigation++
+      if (!record('replace-text', updated)) return
+      emit(
+        root === updated
+          ? { type: 'tree', tree: updated, textChanges: { from: previous, patches } }
+          : { type: 'tree', tree: root },
+      )
+    },
+
     move(id, newParentId, index) {
-      if (findNode(root, id)?.locked) return
-      const beforeId = beforeIdOf(newParentId, index)
       const prev = root
       root = moveNode(root, id, newParentId, index)
-      pushHistory(prev)
+      if (root === prev) return
+      const siblings = findNode(root, newParentId)!.children!
+      const position = siblings.findIndex((child) => child.id === id)
+      const beforeId = siblings[position + 1]?.id ?? null
+      if (!record('move', siblings[position]!)) return
       emit({ type: 'patch', patch: { type: 'move', id, newParentId, beforeId } })
     },
 
     batch(fn) {
-      batching = true
-      batchSnapshot = null
+      if (batch) return fn()
+      const pending: PendingBatch = { multiple: false }
+      lastMerge = undefined
+      batch = pending
       try {
         fn()
       } finally {
-        batching = false
-        if (batchSnapshot !== null) {
-          undoStack.push(batchSnapshot)
-          redoStack.length = 0
-          emitHistory()
+        batch = null
+        if (pending.change) {
+          const previous = frames[cursor]!.tree
+          if (pending.multiple && sameSnapshot(previous, root)) {
+            root = previous
+            const restored =
+              selection === null &&
+              suspendedSelection !== null &&
+              findNode(root, suspendedSelection)
+                ? suspendedSelection
+                : null
+            if (restored !== null) {
+              selection = restored
+              suspendedSelection = null
+            }
+            // The last patch was observed with a provisional root reference.
+            if (emit({ type: 'tree', tree: root }) && restored !== null && selection === restored)
+              emit({ type: 'selection', id: restored })
+          } else {
+            append(pending.change)
+            emitHistory()
+          }
         }
-        batchSnapshot = null
       }
     },
 
     select(id) {
+      suspendedSelection = null
       selection = id
       emit({ type: 'selection', id })
     },
 
     undo() {
-      const prev = undoStack.pop()
-      if (prev === undefined) return
-      redoStack.push(root)
-      root = prev
-      emit({ type: 'tree', tree: root })
-      emitHistory()
+      navigate(cursor - 1)
     },
-
     redo() {
-      const next = redoStack.pop()
-      if (next === undefined) return
-      undoStack.push(root)
-      root = next
-      emit({ type: 'tree', tree: root })
-      emitHistory()
+      navigate(cursor + 1)
     },
-
     canUndo() {
-      return undoStack.length > 0
+      return cursor > 0
     },
     canRedo() {
-      return redoStack.length > 0
+      return cursor + 1 < frames.length
+    },
+
+    getHistory() {
+      cachedEntries ??= Object.freeze(frames.map((frame) => frame.entry))
+      return { entries: cachedEntries, currentId: frames[cursor]!.entry.id }
+    },
+
+    checkpointHistory() {
+      if (batch) return
+      lastMerge = undefined
+      return frames[cursor]!.entry.id
+    },
+
+    goToHistory(id) {
+      if (!Number.isSafeInteger(id) || batch) return false
+      let low = 0,
+        high = frames.length - 1
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2),
+          entryId = frames[mid]!.entry.id
+        if (entryId === id) return navigate(mid)
+        if (entryId < id) low = mid + 1
+        else high = mid - 1
+      }
+      return false
     },
 
     subscribe(listener) {

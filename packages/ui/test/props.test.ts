@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { createEngine, type Engine, type PropSchema } from '@cluion/sigil-core'
+import { describe, it, expect, vi } from 'vitest'
+import { createEngine, createI18n, type Engine, type PropSchema } from '@cluion/sigil-core'
 import { createPropsPanel } from '../src/props.js'
 import { createEnglishUiI18n } from './i18n.js'
 
@@ -19,6 +19,146 @@ function panel(schema: PropSchema[] | undefined, props: Record<string, unknown> 
 }
 
 describe('createPropsPanel — shortcode props', () => {
+  it('shortcode 選圖預設開啟宿主素材庫，切換至本頁來源或語系仍寫入相同欄位', async () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'page',
+          type: 'section',
+          children: [
+            {
+              id: 'widget',
+              type: 'shortcode',
+              shortcode: { name: 'hero', props: { image: '', title: 'Banner' } },
+            },
+            { id: 'photo', type: 'image', attributes: { src: '/photo.jpg' } },
+          ],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    document.body.append(box)
+    const i18n = createEnglishUiI18n()
+    i18n.setLocale('zh')
+    const list = vi.fn(() => [{ id: 'store', url: '/store.jpg' }])
+    const props = createPropsPanel(engine, box, {
+      assets: { list },
+      i18n,
+      getShortcodeSchema: () => [{ name: 'image', type: 'media' }],
+    })
+    try {
+      engine.select('widget')
+      const pick = box.querySelector<HTMLButtonElement>('.sigil-media-pick')!
+      pick.click()
+      const dialog = document.querySelector<HTMLElement>('.sigil-media-backdrop')!
+      await vi.waitFor(() =>
+        expect(dialog.querySelector('.sigil-media-name')?.textContent).toBe('store'),
+      )
+      expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('素材庫')
+      dialog.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="false"]')!.click()
+      i18n.setLocale('en')
+      expect(document.querySelector('.sigil-media-backdrop')).toBe(dialog)
+      expect(dialog.querySelector('.sigil-media-name')?.textContent).toBe('photo.jpg')
+      dialog.querySelector<HTMLButtonElement>('.sigil-media-card')!.click()
+      expect(engine.getTree().children![0]!.shortcode?.props).toEqual({
+        image: '/photo.jpg',
+        title: 'Banner',
+      })
+      expect(document.activeElement).toBe(pick)
+      expect(list).toHaveBeenCalledOnce()
+    } finally {
+      props.destroy()
+      box.remove()
+      engine.destroy()
+    }
+  })
+
+  it('SDK 子項配置依直接父層更新，離開格線或宿主富文字內部時保留文件資料', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'page',
+          type: 'section',
+          children: [
+            { id: 'intro', type: 'section', children: [{ id: 'photo', type: 'image' }] },
+            { id: 'cards', type: 'section', style: { display: 'grid' }, children: [] },
+            { id: 'rich', type: 'section', style: { display: 'grid' }, children: [] },
+          ],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const panel = createPropsPanel(engine, box, {
+      richText: { supports: (node) => node.id === 'rich', read: () => '' },
+    })
+    try {
+      engine.select('photo')
+      const group = () => box.querySelector<HTMLElement>('.sigil-grid-item')!
+      expect(group().hidden).toBe(true)
+      engine.move('photo', 'cards')
+      expect(group().hidden).toBe(false)
+      group().querySelector<HTMLButtonElement>('[data-grid-item="full"]')!.click()
+      engine.move('photo', 'rich')
+      expect(group().hidden).toBe(true)
+      engine.undo()
+      expect(group().hidden).toBe(false)
+      const automatic = group().querySelector<HTMLButtonElement>('[data-grid-item="auto"]')!
+      engine.select('cards')
+      const tree = engine.getTree()
+      automatic.click()
+      expect(engine.getTree()).toBe(tree)
+      expect(engine.getTree().children?.[1]?.children?.[0]?.style?.['grid-column']).toBe('1 / -1')
+    } finally {
+      panel.destroy()
+      engine.destroy()
+    }
+  })
+
+  it('SDK 容器樣式可設定格線，語系與裝置切換後反映各自的欄數', () => {
+    const engine = createEngine({
+      doc: {
+        version: 1,
+        root: {
+          id: 'cards',
+          type: 'column',
+          children: [
+            { id: 'photo', type: 'image' },
+            { id: 'rich', type: 'section', tagName: 'div' },
+          ],
+        },
+      },
+    })
+    const box = document.createElement('div')
+    const i18n = createI18n({ zh: {}, en: { 'grid.title': 'Grid columns' } })
+    const panel = createPropsPanel(engine, box, {
+      i18n,
+      richText: { supports: (node) => node.id === 'rich', read: () => '' },
+    })
+    engine.select('cards')
+    const cols = (n: number) => box.querySelector<HTMLButtonElement>(`[data-grid-columns="${n}"]`)!
+    cols(3).click()
+    panel.setDevice('mobile')
+    cols(1).click()
+    const tree = engine.getTree()
+    i18n.setLocale('en')
+    expect(box.querySelector('.sigil-grid-title')?.textContent).toBe('Grid columns')
+    expect(cols(1).getAttribute('aria-pressed')).toBe('true')
+    expect(engine.getTree()).toBe(tree)
+    panel.setDevice('desktop')
+    expect(cols(3).getAttribute('aria-pressed')).toBe('true')
+    const old = cols(4)
+    for (const id of ['photo', 'rich']) {
+      engine.select(id)
+      expect(box.querySelector('.sigil-grid-columns')).toBeNull()
+    }
+    old.click()
+    expect(engine.getTree()).toBe(tree)
+    panel.destroy()
+    engine.destroy()
+  })
+
   it('runtime locale 切換更新欄位與樣式並保留裝置狀態', () => {
     const engine = createEngine({
       doc: {

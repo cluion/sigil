@@ -5,8 +5,10 @@ import {
   isMoveIntoSelf,
   autoScrollNearEdge,
   computeDrop,
+  computeDropForMove,
+  startMoveDrag,
 } from '../src/dnd.js'
-import type { ComponentNode, Patch } from '@cluion/sigil-core'
+import { createEngine, type ComponentNode, type Patch } from '@cluion/sigil-core'
 
 const tree: ComponentNode = {
   id: 'root',
@@ -228,5 +230,77 @@ describe('computeDrop', () => {
       hitRect: { left: 0, top: 0, width: 0, height: 0 },
     })
     expect(computeDrop(iframe, dropTree, 100, 100)).toBeNull()
+  })
+})
+
+describe('畫布移動', () => {
+  const root: ComponentNode = {
+    id: 'r',
+    type: 'section',
+    children: [
+      { id: 'a', type: 'text' },
+      { id: 'b', type: 'text' },
+      { id: 'c', type: 'text' },
+      { id: 'locked', type: 'section', locked: true, children: [{ id: 'held', type: 'text' }] },
+      { id: 'group', type: 'section', children: [{ id: 'inner', type: 'section' }] },
+    ],
+  }
+  const hitRect = new DOMRect(50, 50, 100, 100)
+
+  it.each([
+    ['locked', 'c'],
+    ['held', 'c'],
+    ['a', 'locked'],
+    ['a', 'a'],
+    ['group', 'inner'],
+    ['r', 'c'],
+    ['missing', 'c'],
+  ])('不能將 %s 拖至 %s', (source, hitId) => {
+    const iframe = mockIframe({ width: 300, height: 300, hitId, hitRect })
+    expect(computeDropForMove(iframe, root, source, 100, 100)).toBeNull()
+  })
+
+  it('跨層落點保留目的索引，同層 append 排除來源', () => {
+    const to = (hitId: string) => mockIframe({ width: 300, height: 300, hitId, hitRect })
+    expect(computeDropForMove(to('group'), root, 'a', 100, 100)?.index).toBe(1)
+    expect(computeDropForMove(to('r'), root, 'a', 100, 100)?.index).toBe(4)
+  })
+
+  it('依放開時的位置插入，取消拖曳保留原樹與歷史', () => {
+    const engine = createEngine({ doc: { version: 1, root } })
+    const doc = document.implementation.createHTMLDocument()
+    const hit = doc.createElement('span')
+    hit.setAttribute('data-sigil-id', 'c')
+    hit.getBoundingClientRect = () => hitRect
+    doc.body.append(hit)
+    doc.elementFromPoint = () => hit
+    const iframe = {
+      contentDocument: doc,
+      getBoundingClientRect: () => new DOMRect(0, 0, 300, 300),
+    } as HTMLIFrameElement
+    function drag() {
+      startMoveDrag({ engine, iframe, id: 'a', pointerId: 1, startX: 0, startY: 0 })
+      pointer('pointermove', 140)
+    }
+    function pointer(type: string, x: number) {
+      window.dispatchEvent(new PointerEvent(type, { pointerId: 1, clientX: x, clientY: 100 }))
+    }
+    drag()
+    pointer('pointerup', 60)
+    expect(engine.getTree().children?.map((child) => child.id)).toEqual([
+      'b',
+      'a',
+      'c',
+      'locked',
+      'group',
+    ])
+    engine.undo()
+    expect(engine.getTree()).toBe(root)
+    expect(engine.canUndo()).toBe(false)
+    drag()
+    pointer('pointercancel', 60)
+    pointer('pointerup', 60)
+    expect(engine.getTree()).toBe(root)
+    expect(engine.canRedo()).toBe(true)
   })
 })

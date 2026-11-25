@@ -1,4 +1,4 @@
-import type { ComponentNode } from './types.js'
+import type { Attrs, ComponentNode, ComponentUpdate } from './types.js'
 import { createId } from './id.js'
 import { mergeResponsiveStyles, mergeStyle } from './responsive-style.js'
 
@@ -29,7 +29,7 @@ export function findParent(root: ComponentNode, id: string): ComponentNode | nul
 /**
  * 沿路徑更新目標 id 節點，未變子樹共享
  */
-function updateAlongPath(
+export function updateAlongPath(
   root: ComponentNode,
   id: string,
   fn: (n: ComponentNode) => ComponentNode,
@@ -88,14 +88,39 @@ export function removeNode(root: ComponentNode, id: string): ComponentNode {
   return filterNode(root, id)
 }
 
+export function updateAttributes(
+  node: ComponentNode,
+  attrs?: Attrs,
+  remove?: readonly string[],
+): void {
+  if (!attrs && !remove?.length) return
+  const next = { ...node.attributes, ...attrs }
+  if (attrs) {
+    const written = new Map(Object.keys(attrs).map((key) => [htmlAttributeName(key), key]))
+    for (const key of Object.keys(next)) {
+      const spelling = written.get(htmlAttributeName(key))
+      if (spelling !== undefined && spelling !== key) delete next[key]
+    }
+  }
+  if (remove?.length) {
+    const names = new Set(remove.map(htmlAttributeName))
+    for (const key of Object.keys(next)) if (names.has(htmlAttributeName(key))) delete next[key]
+    if (!Object.keys(next).length) {
+      delete node.attributes
+      return
+    }
+  }
+  node.attributes = next
+}
+
+export function htmlAttributeName(key: string): string {
+  return key.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
+}
+
 /**
  * 不可變更新，attributes／style／responsiveStyles 合併，其餘欄位取代
  */
-export function updateNode(
-  root: ComponentNode,
-  id: string,
-  patch: Partial<ComponentNode>,
-): ComponentNode {
+export function updateNode(root: ComponentNode, id: string, patch: ComponentUpdate): ComponentNode {
   return updateAlongPath(root, id, (n) => {
     const next: ComponentNode = { ...n }
     if (patch.type !== undefined) next.type = patch.type
@@ -104,7 +129,7 @@ export function updateNode(
     if (patch.content !== undefined) next.content = patch.content
     if (patch.children !== undefined) next.children = patch.children
     if (patch.shortcode !== undefined) next.shortcode = patch.shortcode
-    if (patch.attributes) next.attributes = { ...n.attributes, ...patch.attributes }
+    updateAttributes(next, patch.attributes, patch.removeAttributes)
     // 合併 style patch
     if (patch.style !== undefined) {
       const merged = mergeStyle(n.style, patch.style)
@@ -136,7 +161,7 @@ export function updateNode(
 }
 
 /**
- * 不可變移動，先移除再插入
+ * 將節點移到移除來源後的目的索引，省略索引時排在最後。
  */
 export function moveNode(
   root: ComponentNode,
@@ -144,10 +169,24 @@ export function moveNode(
   newParentId: string,
   index?: number,
 ): ComponentNode {
-  const node = findNode(root, id)
-  if (!node || node.id === root.id) return root
-  const removed = removeNode(root, id)
-  return insertNode(removed, newParentId, node, index)
+  if (id === root.id) return root
+  const parent = findParent(root, id)
+  if (!parent?.children || parent.locked) return root
+  const from = parent.children.findIndex((child) => child.id === id)
+  const node = parent.children[from]!
+  if (node.locked) return root
+
+  if (parent.id === newParentId) {
+    const children = [...parent.children]
+    children.splice(from, 1)
+    children.splice(index ?? children.length, 0, node)
+    if (children[from] === node) return root
+    return updateAlongPath(root, parent.id, (current) => ({ ...current, children }))
+  }
+
+  const destination = findNode(root, newParentId)
+  if (!destination || destination.locked || findNode(node, newParentId)) return root
+  return insertNode(removeNode(root, id), newParentId, node, index)
 }
 
 /**

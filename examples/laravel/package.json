@@ -1,0 +1,16 @@
+{
+  "name": "sigil-example-laravel",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cluion/sigil-app": "workspace:*",
+    "@cluion/sigil-blocks": "workspace:*",
+    "@cluion/sigil-core": "workspace:*"
+  }
+}

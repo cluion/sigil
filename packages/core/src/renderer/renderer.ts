@@ -1,6 +1,7 @@
 import type { ComponentNode, ResponsiveDevice, ResponsiveStyles, Style } from '../model/types.js'
 import type { TypeRegistry } from '../model/registry.js'
 import { createTypeRegistry } from '../model/registry.js'
+import { htmlAttributeName, updateAttributes } from '../model/tree.js'
 import { getEffectiveStyle, mergeResponsiveStyles, mergeStyle } from '../model/responsive-style.js'
 import type { HtmlPolicy } from '../policy/html-policy.js'
 import type { Patch } from '../engine/types.js'
@@ -46,6 +47,8 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
   const map = new Map<string, HTMLElement>()
   const nodes = new Map<string, ComponentNode>()
   const richTextMarkup = new Map<string, string>()
+  const contentEnds = new WeakMap<HTMLElement, Comment>()
+  const shortcodeHosts = new WeakSet<HTMLElement>()
   const shortcodeInstances = new Map<string, ShortcodeInstance>()
   const presentation = new Map<string, PresentationState>()
   const appliedStyleKeys = new Map<string, Set<string>>()
@@ -82,6 +85,57 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
     else el.textContent = markup
   }
 
+  // Keep the authored prefix separate from child components and shortcode-owned DOM.
+  function markContentEnd(el: HTMLElement): void {
+    const existing = contentEnds.get(el)
+    if (existing?.parentNode === el || shortcodeHosts.has(el)) return
+    const end = el.ownerDocument.createComment('')
+    el.append(end)
+    contentEnds.set(el, end)
+  }
+
+  function clearEmptyContentEnd(el: HTMLElement | null): void {
+    if (!el || shortcodeHosts.has(el)) return
+    const end = contentEnds.get(el)
+    if (end?.parentNode !== el || end.nextSibling) return
+    end.remove()
+    contentEnds.delete(el)
+  }
+
+  function replaceOwnContent(el: HTMLElement, node: ComponentNode, markup: string | null): void {
+    const end = contentEnds.get(el)
+    if (end?.parentNode !== el) {
+      // A shortcode that replaces its host contents owns the entire surface.
+      if (shortcodeHosts.has(el)) return
+      if (markup === null) el.textContent = node.content ?? ''
+      else setRichText(el, markup)
+      return
+    }
+    const first = el.firstChild
+    if (
+      (markup === null || !htmlPolicy) &&
+      first?.nodeType === el.TEXT_NODE &&
+      first.nextSibling === end
+    ) {
+      const text = first as Text
+      const next = markup ?? node.content ?? ''
+      if (text.data !== next) text.data = next
+      return
+    }
+    const next = el.ownerDocument.createDocumentFragment()
+    if (markup !== null && htmlPolicy) {
+      // Parse in the original element's context (e.g. table), without detaching its children.
+      const context = el.cloneNode(false) as HTMLElement
+      setRichText(context, markup)
+      while (context.firstChild) next.append(context.firstChild)
+    } else {
+      const text = markup ?? node.content
+      if (text) next.append(text)
+    }
+    while (el.firstChild && el.firstChild !== end) el.firstChild.remove()
+    end.before(next)
+  }
+
   function applyInitialContent(node: ComponentNode, el: HTMLElement): void {
     const markup = resolveRichText(node)
     if (markup !== null) {
@@ -97,7 +151,8 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
     patch: Extract<Patch, { type: 'update' }>,
   ): ComponentNode {
     const next: ComponentNode = { ...node }
-    if (patch.attrs) next.attributes = { ...node.attributes, ...patch.attrs }
+    if (patch.tagName !== undefined) next.tagName = patch.tagName
+    updateAttributes(next, patch.attrs, patch.removeAttributes)
     if (patch.style !== undefined) {
       const merged = mergeStyle(node.style, patch.style)
       if (Object.keys(merged).length) next.style = merged
@@ -127,14 +182,13 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
     const nextMarkup = resolveRichText(node)
 
     if (nextMarkup !== null) {
+      if (!wasRichText || previousMarkup !== nextMarkup) replaceOwnContent(el, node, nextMarkup)
       richTextMarkup.set(node.id, nextMarkup)
-      if (!wasRichText || previousMarkup !== nextMarkup) setRichText(el, nextMarkup)
       return
     }
 
+    if (wasRichText || contentChanged) replaceOwnContent(el, node, null)
     richTextMarkup.delete(node.id)
-    if (wasRichText) el.textContent = node.content ?? ''
-    else if (contentChanged) el.textContent = node.content ?? ''
   }
 
   function applyPresentation(id: string): void {
@@ -164,12 +218,23 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
     else el.removeAttribute('data-sigil-locked')
   }
 
+  function createNodeElement(node: ComponentNode, ownerDocument: Document): HTMLElement {
+    const tag = node.tagName ?? registry.get(node.type)?.tagName ?? 'div'
+    const el = ownerDocument.createElement(tag)
+    el.setAttribute('data-sigil-id', node.id)
+    if (node.attributes) {
+      for (const [k, v] of Object.entries(node.attributes)) el.setAttribute(k, v)
+    }
+    if (node.className) el.className = node.className
+    if (node.shortcode) el.setAttribute('data-shortcode', node.shortcode.name)
+    return el
+  }
+
   /**
    * 把節點遞迴渲染成 DOM，順便填入 id→Element map
    */
   function renderNode(node: ComponentNode): HTMLElement {
-    const tag = node.tagName ?? registry.get(node.type)?.tagName ?? 'div'
-    const el = document.createElement(tag)
+    const el = createNodeElement(node, document)
     map.set(node.id, el)
     nodes.set(node.id, node)
     presentation.set(node.id, {
@@ -178,18 +243,14 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
       hidden: node.hidden,
       locked: node.locked,
     })
-    el.setAttribute('data-sigil-id', node.id)
-    if (node.attributes) {
-      for (const [k, v] of Object.entries(node.attributes)) el.setAttribute(k, v)
-    }
-    if (node.className) el.className = node.className
     applyInitialContent(node, el)
     applyPresentation(node.id)
-    if (node.shortcode) {
-      el.setAttribute('data-shortcode', node.shortcode.name)
-      if (shortcodeResolver) {
-        const inst = shortcodeResolver.resolve(node, el, 'edit')
-        if (inst) shortcodeInstances.set(node.id, inst)
+    if (node.children?.length || (node.shortcode && shortcodeResolver)) markContentEnd(el)
+    if (node.shortcode && shortcodeResolver) {
+      const inst = shortcodeResolver.resolve(node, el, 'edit')
+      if (inst) {
+        shortcodeInstances.set(node.id, inst)
+        shortcodeHosts.add(el)
       }
     }
     if (node.children?.length) {
@@ -220,12 +281,17 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
           const el = renderNode(patch.node)
           const parent = map.get(patch.parentId)
           const before = patch.beforeId ? map.get(patch.beforeId) : null
-          parent?.insertBefore(el, before ?? null)
+          if (parent) {
+            markContentEnd(parent)
+            parent.insertBefore(el, before ?? null)
+          }
           break
         }
         case 'remove': {
           const el = map.get(patch.id)
+          const parent = el?.parentElement ?? null
           el?.remove()
+          clearEmptyContentEnd(parent)
           forgetElement(patch.id, el)
           break
         }
@@ -233,20 +299,57 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
           const el = map.get(patch.id)
           const parent = map.get(patch.newParentId)
           const before = patch.beforeId ? map.get(patch.beforeId) : null
-          if (el && parent) parent.insertBefore(el, before ?? null)
+          if (el && parent) {
+            const previousParent = el.parentElement
+            markContentEnd(parent)
+            parent.insertBefore(el, before ?? null)
+            if (previousParent !== parent) clearEmptyContentEnd(previousParent)
+          }
           break
         }
         case 'update': {
-          const el = map.get(patch.id)
-          if (!el) break
+          let el = map.get(patch.id)
           const currentNode = nodes.get(patch.id)
-          const nextNode = currentNode ? updateTrackedNode(currentNode, patch) : null
-          if (nextNode) nodes.set(patch.id, nextNode)
+          if (!el || !currentNode) break
+          let restorePresentation = false
+          if (patch.tagName !== undefined && patch.tagName.toLowerCase() !== el.localName) {
+            const replacement = createNodeElement(
+              { ...currentNode, tagName: patch.tagName },
+              el.ownerDocument,
+            )
+            while (el.firstChild) replacement.appendChild(el.firstChild)
+            const end = contentEnds.get(el)
+            if (end) contentEnds.set(replacement, end)
+            if (shortcodeHosts.has(el)) shortcodeHosts.add(replacement)
+            el.replaceWith(replacement)
+            if (rootEl === el) rootEl = replacement
+            map.set(patch.id, replacement)
+            el = replacement
+            restorePresentation = true
+          }
+          const nextNode = updateTrackedNode(currentNode, patch)
+          nodes.set(patch.id, nextNode)
           if (patch.shortcode) {
             shortcodeInstances.get(patch.id)?.setProps(patch.shortcode.props)
           }
           if (patch.attrs) {
             for (const [k, v] of Object.entries(patch.attrs)) el.setAttribute(k, v)
+          }
+          if (patch.removeAttributes?.length) {
+            const authored = new Set([
+              ...Object.keys(currentNode.attributes ?? {}).map(htmlAttributeName),
+              ...Object.keys(patch.attrs ?? {}).map(htmlAttributeName),
+            ])
+            for (const key of patch.removeAttributes.map(htmlAttributeName)) {
+              if (!authored.has(key)) continue
+              el.removeAttribute(key)
+              if (key === 'data-sigil-id') el.setAttribute('data-sigil-id', patch.id)
+              if (key === 'data-shortcode' && nextNode.shortcode)
+                el.setAttribute('data-shortcode', nextNode.shortcode.name)
+              if (key === 'class' && nextNode.className) el.className = nextNode.className
+              if (['style', 'data-sigil-hidden', 'data-sigil-locked'].includes(key))
+                restorePresentation = true
+            }
           }
           const state = presentation.get(patch.id)
           if (state && patch.style !== undefined) {
@@ -260,6 +363,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
           if (state && patch.hidden !== undefined) state.hidden = patch.hidden
           if (state && patch.locked !== undefined) state.locked = patch.locked
           if (
+            restorePresentation ||
             patch.style !== undefined ||
             patch.responsiveStyles !== undefined ||
             patch.hidden !== undefined ||
@@ -267,8 +371,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
           ) {
             applyPresentation(patch.id)
           }
-          if (nextNode) applyUpdatedContent(nextNode, el, patch.content !== undefined)
-          else if (patch.content !== undefined) el.textContent = patch.content
+          applyUpdatedContent(nextNode, el, patch.content !== undefined)
           if (patch.className !== undefined) el.className = patch.className
           break
         }
@@ -277,6 +380,7 @@ export function createRenderer(opts: RendererOptions = {}): Renderer {
           forgetElement(patch.id, old)
           const el = renderNode(patch.node)
           old?.replaceWith(el)
+          if (old === rootEl) rootEl = el
           break
         }
       }

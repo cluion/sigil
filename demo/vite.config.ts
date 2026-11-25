@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => ({
       '@cluion/sigil-app': src('../packages/app/src/index.ts'),
     },
   },
+  build: {
+    rollupOptions: { input: [src('./index.html'), src('./activity/index.html')] },
+  },
   server:
     mode === 'csp-e2e' ? { headers: { 'Content-Security-Policy': enforcedPolicy } } : undefined,
 }))

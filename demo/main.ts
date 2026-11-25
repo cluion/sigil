@@ -10,7 +10,7 @@ import {
   marketingBlockDefs,
 } from '@cluion/sigil-blocks'
 import { JsonProjectStore, MemoryAssetStore, MemoryTemplateStore } from '@cluion/sigil-store-json'
-import { createId, type ComponentNode, type SigilDoc } from '@cluion/sigil-core'
+import { createId, type ComponentNode, type ProjectStore, type SigilDoc } from '@cluion/sigil-core'
 import { demoRichTextAdapter, sanitizeDemoRichText } from './rich-text'
 import { counterDef } from './shortcodes/counter'
 import { cardDef } from './shortcodes/card'
@@ -26,6 +26,7 @@ import { specDef } from './shortcodes/spec'
 
 const root = document.getElementById('app')
 if (!root) throw new Error('#app 不存在')
+const mountTarget: HTMLElement = root
 
 /** mock API */
 const mockFetchJSON = (url: string, signal?: AbortSignal) =>
@@ -75,6 +76,15 @@ const mockFetchJSON = (url: string, signal?: AbortSignal) =>
   })
 
 const store = new JsonProjectStore()
+const projectStore: ProjectStore = {
+  load() {
+    const json = localStorage.getItem('sigil-demo')
+    return json === null ? null : store.importJSON(json)
+  },
+  save(doc) {
+    localStorage.setItem('sigil-demo', store.exportJSON(doc))
+  },
+}
 const assets = new MemoryAssetStore([
   { id: 'a1', url: 'https://placehold.co/200x120/png?text=A', name: '圖 A' },
   { id: 'a2', url: 'https://placehold.co/200x120/png?text=B', name: '圖 B' },
@@ -261,9 +271,9 @@ function setHookLog(msg: string): void {
 let locale: 'zh' | 'en' = 'zh'
 function mountApp(d: SigilDoc): SigilApp {
   return createApp({
-    mount: root,
+    mount: mountTarget,
     doc: d,
-    store,
+    store: projectStore,
     assets,
     blocks,
     templates,
@@ -332,9 +342,16 @@ loadBtn.addEventListener('click', () => {
 
 const persistBtn = document.createElement('button')
 persistBtn.textContent = '寫入 localStorage'
-persistBtn.addEventListener('click', () => {
-  localStorage.setItem('sigil-demo', store.exportJSON(app.toJSON()))
-  status.textContent = ' 已寫入 LS'
+persistBtn.addEventListener('click', async () => {
+  const currentApp = app
+  try {
+    await currentApp.save()
+    if (app === currentApp) status.textContent = ' 已寫入 LS'
+  } catch (error) {
+    if (app === currentApp) {
+      status.textContent = ` 寫入失敗：${error instanceof Error ? error.message : String(error)}`
+    }
+  }
 })
 
 const localeBtn = document.createElement('button')

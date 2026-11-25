@@ -4,9 +4,12 @@ export {
   blockHero,
   blockPricing,
   blockFAQ,
+  blockAccordionFAQ,
+  blockFAQItem,
   heroBlockDef,
   pricingBlockDef,
   faqBlockDef,
+  accordionFAQBlockDef,
   marketingBlockDefs,
   type HeroBlockOptions,
   type PricingBlockOptions,
@@ -64,12 +67,23 @@ export function blockText(content = '文字'): ComponentNode {
   return { id: createId(), type: 'text', content }
 }
 
+export function blockHeading(content = '標題', level: 1 | 2 | 3 | 4 | 5 | 6 = 2): ComponentNode {
+  if (!Number.isInteger(level) || level < 1 || level > 6) {
+    throw new RangeError('Heading level must be an integer from 1 to 6')
+  }
+  return { ...blockText(content), tagName: `h${level}`, name: '標題' }
+}
+
 export function blockImage(src = 'https://placehold.co/120'): ComponentNode {
   return { id: createId(), type: 'image', attributes: { src } }
 }
 
 export function blockButton(label = '按鈕'): ComponentNode {
   return { id: createId(), type: 'button', content: label }
+}
+
+function blockLink(): ComponentNode {
+  return { ...blockText('連結'), tagName: 'a', attributes: { href: '#' } }
 }
 
 export function blockColumn(): ComponentNode {
@@ -104,8 +118,10 @@ export function templateToBlockDef(tpl: TemplateDef): BlockDefinition {
 export const basicBlocks: Record<string, BlockFactory> = {
   section: blockSection,
   text: blockText,
+  heading: blockHeading,
   image: blockImage,
   button: blockButton,
+  link: blockLink,
   column: blockColumn,
 }
 
@@ -136,6 +152,14 @@ export const basicBlockDefs: BlockDefinition[] = [
     create: () => blockText(),
   }),
   defineBlock({
+    id: 'heading',
+    label: '標題',
+    category: '內容',
+    icon: 'H',
+    keywords: ['heading', 'title', '章節', '標頭', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    create: blockHeading,
+  }),
+  defineBlock({
     id: 'image',
     label: '圖片',
     category: '媒體',
@@ -150,5 +174,13 @@ export const basicBlockDefs: BlockDefinition[] = [
     icon: '▢',
     keywords: ['button', 'btn', 'cta'],
     create: () => blockButton(),
+  }),
+  defineBlock({
+    id: 'link',
+    label: '連結',
+    category: '內容',
+    icon: '↗',
+    keywords: ['link', 'url', 'anchor', '網址'],
+    create: blockLink,
   }),
 ]

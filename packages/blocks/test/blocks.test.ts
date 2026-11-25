@@ -3,6 +3,7 @@ import {
   blockShortcode,
   blockSection,
   blockText,
+  blockHeading,
   defineBlock,
   normalizeBlocks,
   basicBlockDefs,
@@ -11,9 +12,12 @@ import {
   blockHero,
   blockPricing,
   blockFAQ,
+  blockAccordionFAQ,
+  blockFAQItem,
   heroBlockDef,
   pricingBlockDef,
   faqBlockDef,
+  accordionFAQBlockDef,
   marketingBlockDefs,
 } from '../src/index.js'
 import { toHTML, type ComponentNode, type TemplateDef } from '@cluion/sigil-core'
@@ -37,6 +41,18 @@ describe('blocks', () => {
     expect(node.children).toEqual([])
   })
 
+  it('標題預設為第二級，每次從區塊庫插入有獨立 ID', () => {
+    const standalone = blockHeading('交通資訊', 3)
+    const fromRecord = basicBlocks.heading!()
+    const fromLibrary = basicBlockDefs.find((block) => block.id === 'heading')!.create()
+    expect(standalone).toMatchObject({ type: 'text', tagName: 'h3', content: '交通資訊' })
+    for (const heading of [fromRecord, fromLibrary]) {
+      expect(heading).toMatchObject({ type: 'text', tagName: 'h2', content: '標題' })
+    }
+    expect(fromRecord.id).not.toBe(fromLibrary.id)
+    expect(() => blockHeading('Title', 7 as 6)).toThrow(RangeError)
+  })
+
   it('defineBlock 保留欄位', () => {
     const def = defineBlock({
       id: 'x',
@@ -52,7 +68,11 @@ describe('blocks', () => {
 
   it('normalizeBlocks 接受 Record 與陣列', () => {
     const fromRecord = normalizeBlocks(basicBlocks)
-    expect(fromRecord.length).toBe(5)
+    expect(fromRecord.find((block) => block.id === 'link')?.create()).toMatchObject({
+      type: 'text',
+      tagName: 'a',
+      attributes: { href: '#' },
+    })
     expect(fromRecord[0]!.category).toBe('一般')
 
     const fromDefs = normalizeBlocks(basicBlockDefs)
@@ -414,7 +434,82 @@ describe('marketing FAQ', () => {
       category: '行銷',
     })
     expect(faqBlockDef.create().name).toBe('常見問題')
-    expect(marketingBlockDefs).toEqual([heroBlockDef, pricingBlockDef, faqBlockDef])
+    expect(marketingBlockDefs).toEqual([
+      heroBlockDef,
+      pricingBlockDef,
+      faqBlockDef,
+      accordionFAQBlockDef,
+    ])
+  })
+})
+
+describe('折疊式 FAQ', () => {
+  it('可從目錄找到，預設三個問答都能直接編輯', () => {
+    expect(accordionFAQBlockDef).toMatchObject({
+      id: 'marketing-accordion-faq',
+      label: '折疊式 FAQ',
+      category: '行銷',
+      keywords: expect.arrayContaining(['accordion', 'FAQ', '問答']),
+    })
+    const faq = accordionFAQBlockDef.create()
+    expect(faq.attributes).toMatchObject({ 'data-faq-accordion': 'true', 'aria-label': '常見問題' })
+    expect(faq.children?.map((node) => node.tagName)).toEqual([
+      'h2',
+      'details',
+      'details',
+      'details',
+    ])
+    const first = faq.children?.[1]
+    expect(first?.name).toBe('問答項目')
+    expect(first?.children).toMatchObject([
+      {
+        type: 'text',
+        tagName: 'summary',
+        name: '問題',
+        content: '需要自備工具嗎？',
+        style: { 'min-height': '44px' },
+      },
+      { type: 'text', tagName: 'p', name: '答案', content: '活動現場會提供所需工具與材料。' },
+    ])
+  })
+
+  it('單題與整組可重複建立，且明確指定空清單可建立空 FAQ', () => {
+    const item = { question: '何時開始？', answer: '早上十點。' }
+    const first = blockFAQItem(item)
+    const second = blockFAQItem(item)
+    expect(first.tagName).toBe('details')
+    const faq = blockAccordionFAQ({ items: [item, item] })
+    const ids = [...collectIds(first), ...collectIds(second), ...collectIds(faq)]
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(blockAccordionFAQ({ items: [] }).children?.map((node) => node.tagName)).toEqual(['h2'])
+  })
+
+  it('輸出可攜的原生展開控制項，保留文案並預設收合', () => {
+    const item = { question: '可以帶 <工具> 嗎？', answer: '<b>可以</b>。\n請先登記。' }
+    const root = blockAccordionFAQ({
+      eyebrow: '工作坊',
+      title: '行前準備',
+      description: '報到前請確認以下事項。',
+      ariaLabel: '工作坊問答',
+      items: [item, item],
+    })
+    const dom = new DOMParser().parseFromString(toHTML({ version: 1, root }), 'text/html')
+    const section = dom.querySelector('section[data-faq-accordion="true"]')!
+    expect(section.getAttribute('aria-label')).toBe('工作坊問答')
+    expect(section.querySelector('span')?.textContent).toBe('工作坊')
+    expect(section.querySelector('h2')?.textContent).toBe('行前準備')
+    expect(section.querySelector('p')?.textContent).toBe('報到前請確認以下事項。')
+    const details = [...section.children].filter((el) => el.localName === 'details')
+    expect(details).toHaveLength(2)
+    for (const entry of details) {
+      expect(entry.hasAttribute('open')).toBe(false)
+      expect([...entry.children].map((el) => el.localName)).toEqual(['summary', 'p'])
+      expect(entry.firstElementChild?.textContent).toBe(item.question)
+      expect(entry.lastElementChild?.textContent).toBe(item.answer)
+      expect(entry.querySelector('p')?.style.whiteSpace).toBe('pre-line')
+      expect(entry.lastElementChild?.childElementCount).toBe(0)
+    }
+    expect(dom.querySelector('script, [onclick], [aria-expanded]')).toBeNull()
   })
 })
 
